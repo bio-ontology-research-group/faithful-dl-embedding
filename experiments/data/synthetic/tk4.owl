@@ -1,0 +1,214 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://mowl.borg/geo/tk4#"
+     xml:base="http://mowl.borg/geo/tk4"
+     xmlns:owl="http://www.w3.org/2002/07/owl#"
+     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+     xmlns:xml="http://www.w3.org/XML/1998/namespace"
+     xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+    <owl:Ontology rdf:about="http://mowl.borg/geo/tk4"/>
+    
+
+
+    <!-- 
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Classes
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////
+     -->
+
+    
+
+
+    <!-- http://mowl.borg/geo#A1 -->
+
+    <owl:Class rdf:about="http://mowl.borg/geo#A1">
+        <owl:equivalentClass>
+            <owl:Class>
+                <owl:intersectionOf rdf:parseType="Collection">
+                    <rdf:Description rdf:about="http://mowl.borg/geo#Aux_2_3"/>
+                    <rdf:Description rdf:about="http://mowl.borg/geo#X4"/>
+                </owl:intersectionOf>
+            </owl:Class>
+        </owl:equivalentClass>
+    </owl:Class>
+    
+
+
+    <!-- http://mowl.borg/geo#A2 -->
+
+    <owl:Class rdf:about="http://mowl.borg/geo#A2">
+        <owl:equivalentClass>
+            <owl:Class>
+                <owl:intersectionOf rdf:parseType="Collection">
+                    <rdf:Description rdf:about="http://mowl.borg/geo#Aux_1_3"/>
+                    <rdf:Description rdf:about="http://mowl.borg/geo#X4"/>
+                </owl:intersectionOf>
+            </owl:Class>
+        </owl:equivalentClass>
+    </owl:Class>
+    
+
+
+    <!-- http://mowl.borg/geo#A3 -->
+
+    <owl:Class rdf:about="http://mowl.borg/geo#A3">
+        <owl:equivalentClass>
+            <owl:Class>
+                <owl:intersectionOf rdf:parseType="Collection">
+                    <rdf:Description rdf:about="http://mowl.borg/geo#Aux_1_2"/>
+                    <rdf:Description rdf:about="http://mowl.borg/geo#X4"/>
+                </owl:intersectionOf>
+            </owl:Class>
+        </owl:equivalentClass>
+    </owl:Class>
+    
+
+
+    <!-- http://mowl.borg/geo#A4 -->
+
+    <owl:Class rdf:about="http://mowl.borg/geo#A4">
+        <owl:equivalentClass>
+            <owl:Class>
+                <owl:intersectionOf rdf:parseType="Collection">
+                    <rdf:Description rdf:about="http://mowl.borg/geo#Aux_1_2"/>
+                    <rdf:Description rdf:about="http://mowl.borg/geo#X3"/>
+                </owl:intersectionOf>
+            </owl:Class>
+        </owl:equivalentClass>
+    </owl:Class>
+    
+
+
+    <!-- http://mowl.borg/geo#Aux_1_2 -->
+
+    <owl:Class rdf:about="http://mowl.borg/geo#Aux_1_2">
+        <owl:equivalentClass>
+            <owl:Class>
+                <owl:intersectionOf rdf:parseType="Collection">
+                    <rdf:Description rdf:about="http://mowl.borg/geo#X1"/>
+                    <rdf:Description rdf:about="http://mowl.borg/geo#X2"/>
+                </owl:intersectionOf>
+            </owl:Class>
+        </owl:equivalentClass>
+    </owl:Class>
+    
+
+
+    <!-- http://mowl.borg/geo#Aux_1_3 -->
+
+    <owl:Class rdf:about="http://mowl.borg/geo#Aux_1_3">
+        <owl:equivalentClass>
+            <owl:Class>
+                <owl:intersectionOf rdf:parseType="Collection">
+                    <rdf:Description rdf:about="http://mowl.borg/geo#X1"/>
+                    <rdf:Description rdf:about="http://mowl.borg/geo#X3"/>
+                </owl:intersectionOf>
+            </owl:Class>
+        </owl:equivalentClass>
+    </owl:Class>
+    
+
+
+    <!-- http://mowl.borg/geo#Aux_2_3 -->
+
+    <owl:Class rdf:about="http://mowl.borg/geo#Aux_2_3">
+        <owl:equivalentClass>
+            <owl:Class>
+                <owl:intersectionOf rdf:parseType="Collection">
+                    <rdf:Description rdf:about="http://mowl.borg/geo#X2"/>
+                    <rdf:Description rdf:about="http://mowl.borg/geo#X3"/>
+                </owl:intersectionOf>
+            </owl:Class>
+        </owl:equivalentClass>
+    </owl:Class>
+    
+
+
+    <!-- http://mowl.borg/geo#X1 -->
+
+    <owl:Class rdf:about="http://mowl.borg/geo#X1"/>
+    
+
+
+    <!-- http://mowl.borg/geo#X2 -->
+
+    <owl:Class rdf:about="http://mowl.borg/geo#X2"/>
+    
+
+
+    <!-- http://mowl.borg/geo#X3 -->
+
+    <owl:Class rdf:about="http://mowl.borg/geo#X3"/>
+    
+
+
+    <!-- http://mowl.borg/geo#X4 -->
+
+    <owl:Class rdf:about="http://mowl.borg/geo#X4"/>
+    
+
+
+    <!-- http://mowl.borg/geo#Z -->
+
+    <owl:Class rdf:about="http://mowl.borg/geo#Z"/>
+    
+
+
+    <!-- 
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // General axioms
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////
+     -->
+
+    <owl:Class>
+        <owl:intersectionOf rdf:parseType="Collection">
+            <rdf:Description rdf:about="http://mowl.borg/geo#A1"/>
+            <rdf:Description rdf:about="http://mowl.borg/geo#A2"/>
+        </owl:intersectionOf>
+        <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Nothing"/>
+    </owl:Class>
+    <owl:Class>
+        <owl:intersectionOf rdf:parseType="Collection">
+            <rdf:Description rdf:about="http://mowl.borg/geo#A1"/>
+            <rdf:Description rdf:about="http://mowl.borg/geo#A3"/>
+        </owl:intersectionOf>
+        <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Nothing"/>
+    </owl:Class>
+    <owl:Class>
+        <owl:intersectionOf rdf:parseType="Collection">
+            <rdf:Description rdf:about="http://mowl.borg/geo#A1"/>
+            <rdf:Description rdf:about="http://mowl.borg/geo#A4"/>
+        </owl:intersectionOf>
+        <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Nothing"/>
+    </owl:Class>
+    <owl:Class>
+        <owl:intersectionOf rdf:parseType="Collection">
+            <rdf:Description rdf:about="http://mowl.borg/geo#A2"/>
+            <rdf:Description rdf:about="http://mowl.borg/geo#A3"/>
+        </owl:intersectionOf>
+        <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Nothing"/>
+    </owl:Class>
+    <owl:Class>
+        <owl:intersectionOf rdf:parseType="Collection">
+            <rdf:Description rdf:about="http://mowl.borg/geo#A2"/>
+            <rdf:Description rdf:about="http://mowl.borg/geo#A4"/>
+        </owl:intersectionOf>
+        <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Nothing"/>
+    </owl:Class>
+    <owl:Class>
+        <owl:intersectionOf rdf:parseType="Collection">
+            <rdf:Description rdf:about="http://mowl.borg/geo#A3"/>
+            <rdf:Description rdf:about="http://mowl.borg/geo#A4"/>
+        </owl:intersectionOf>
+        <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Nothing"/>
+    </owl:Class>
+</rdf:RDF>
+
+
+
+<!-- Generated by the OWL API (version 4.5.22) https://github.com/owlcs/owlapi -->
+
