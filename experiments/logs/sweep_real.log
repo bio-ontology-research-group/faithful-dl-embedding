@@ -1,0 +1,26 @@
+[2026-10-29 22:01:42] Starting sweep suite=real smoke=False total_cells=22 device=cuda out=/home/leechuck/Public/software/faithful-dl-embedding/experiments/results/raw
+[2026-10-29 22:01:50] Loaded dataset=go and CanonicalModel (56190 names) in 8.33s
+[2026-10-29 22:04:26] [  1/ 22] DONE go__elbe__d50__s0.json | wall=155.31s | train=6.76s | modelness=0.3345 | hvr=null | f_mrr=0.0038 | gpu_mb=223.5 | eff_bs=32768
+[2026-10-29 22:04:44] [  2/ 22] DONE go__elbe-init__d50__s0.json | wall=18.31s | train=4.85s | modelness=0.3769 | hvr=null | f_mrr=0.0066 | gpu_mb=269.9 | eff_bs=32768
+[2026-10-29 22:05:03] [  3/ 22] DONE go__elbe-anchor__d50__s0.json | wall=18.89s | train=4.95s | modelness=0.3770 | hvr=null | f_mrr=0.0066 | gpu_mb=339.9 | eff_bs=32768
+[2026-10-29 22:05:24] [  4/ 22] DONE go__box2el__d50__s0.json | wall=20.61s | train=6.13s | modelness=0.0000 | hvr=null | f_mrr=0.0084 | gpu_mb=373.5 | eff_bs=32768
+[2026-10-29 22:05:44] [  5/ 22] DONE go__box2el-init__d50__s0.json | wall=20.12s | train=5.60s | modelness=0.2167 | hvr=null | f_mrr=0.0141 | gpu_mb=408.0 | eff_bs=32768
+[2026-10-29 22:06:05] [  6/ 22] DONE go__box2el-anchor__d50__s0.json | wall=20.94s | train=6.10s | modelness=0.2167 | hvr=null | f_mrr=0.0141 | gpu_mb=461.0 | eff_bs=32768
+[2026-10-29 22:06:29] [  7/ 22] DONE go__multibox-k1__d50__s0.json | wall=23.93s | train=6.77s | modelness=0.0000 | hvr=null | f_mrr=0.0084 | gpu_mb=396.6 | eff_bs=32768
+[2026-10-29 22:07:47] [  8/ 22] DONE go__multibox-k2__d50__s0.json | wall=78.02s | train=14.80s | modelness=0.0000 | hvr=null | f_mrr=0.0033 | gpu_mb=793.3 | eff_bs=32768
+[2026-10-29 22:10:21] [  9/ 22] DONE go__multibox-k3__d50__s0.json | wall=154.00s | train=26.66s | modelness=0.0000 | hvr=null | f_mrr=0.0026 | gpu_mb=1317.0 | eff_bs=32768
+[2026-10-29 22:15:46] [ 10/ 22] DONE go__multibox-k4__d50__s0.json | wall=325.79s | train=46.65s | modelness=0.0001 | hvr=null | f_mrr=0.0020 | gpu_mb=1902.1 | eff_bs=32768
+[2026-10-29 22:17:35] [ 11/ 22] DONE go__multibox-k2-init__d50__s0.json | wall=108.83s | train=16.79s | modelness=0.2280 | hvr=null | f_mrr=0.0095 | gpu_mb=799.1 | eff_bs=32768
+[2026-10-29 22:17:39] Loaded dataset=foodon and CanonicalModel (29135 names) in 3.74s
+[2026-10-29 22:18:21] [ 12/ 22] DONE foodon__elbe__d50__s0.json | wall=42.37s | train=2.83s | modelness=0.5314 | hvr=null | f_mrr=0.0049 | gpu_mb=121.8 | eff_bs=32768
+[2026-10-29 22:18:30] [ 13/ 22] DONE foodon__elbe-init__d50__s0.json | wall=8.15s | train=3.58s | modelness=0.4345 | hvr=null | f_mrr=0.0051 | gpu_mb=145.6 | eff_bs=32768
+[2026-10-29 22:18:37] [ 14/ 22] DONE foodon__elbe-anchor__d50__s0.json | wall=7.18s | train=2.76s | modelness=0.4345 | hvr=null | f_mrr=0.0052 | gpu_mb=157.2 | eff_bs=32768
+[2026-10-29 22:18:46] [ 15/ 22] DONE foodon__box2el__d50__s0.json | wall=9.07s | train=4.11s | modelness=0.0001 | hvr=null | f_mrr=0.0084 | gpu_mb=201.0 | eff_bs=32768
+[2026-10-29 22:18:54] [ 16/ 22] DONE foodon__box2el-init__d50__s0.json | wall=8.35s | train=3.61s | modelness=0.1668 | hvr=null | f_mrr=0.0062 | gpu_mb=218.7 | eff_bs=32768
+[2026-10-29 22:19:02] [ 17/ 22] DONE foodon__box2el-anchor__d50__s0.json | wall=8.16s | train=3.44s | modelness=0.1668 | hvr=null | f_mrr=0.0063 | gpu_mb=242.1 | eff_bs=32768
+[2026-10-29 22:19:12] [ 18/ 22] DONE foodon__multibox-k1__d50__s0.json | wall=9.40s | train=4.17s | modelness=0.0001 | hvr=null | f_mrr=0.0084 | gpu_mb=273.4 | eff_bs=32768
+[2026-10-29 22:19:39] [ 19/ 22] DONE foodon__multibox-k2__d50__s0.json | wall=27.26s | train=6.16s | modelness=0.0001 | hvr=null | f_mrr=0.0043 | gpu_mb=477.8 | eff_bs=32768
+[2026-10-29 22:20:34] [ 20/ 22] DONE foodon__multibox-k3__d50__s0.json | wall=54.86s | train=10.58s | modelness=0.0001 | hvr=null | f_mrr=0.0033 | gpu_mb=777.2 | eff_bs=32768
+[2026-10-29 22:22:08] [ 21/ 22] DONE foodon__multibox-k4__d50__s0.json | wall=93.84s | train=15.63s | modelness=0.0001 | hvr=null | f_mrr=0.0031 | gpu_mb=985.0 | eff_bs=32768
+[2026-10-29 22:22:37] [ 22/ 22] DONE foodon__multibox-k2-init__d50__s0.json | wall=28.93s | train=5.75s | modelness=0.2220 | hvr=null | f_mrr=0.0054 | gpu_mb=443.2 | eff_bs=32768
+[2026-10-29 22:22:37] Completed sweep suite=real smoke=False: ran=22 skipped=0 total=22 in 1254.60s

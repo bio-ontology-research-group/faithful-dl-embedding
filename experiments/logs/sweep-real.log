@@ -1,0 +1,1196 @@
+[2026-10-29 22:01:42] Starting sweep suite=real smoke=False total_cells=22 device=cuda out=/home/leechuck/Public/software/faithful-dl-embedding/experiments/results/raw
+[2026-10-29 22:01:50] Loaded dataset=go and CanonicalModel (56190 names) in 8.33s
+Loading normalized ontology from cache: /home/leechuck/tmp/gfe-data/mowl/go_subsumption/ontology_mowl_el_normalized_v2.owl
+INFO:mowl.ontology.normalize:Loading normalized ontology from cache: /home/leechuck/tmp/gfe-data/mowl/go_subsumption/ontology_mowl_el_normalized_v2.owl
+44246 named classes, 11945 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:44246 named classes, 11945 auxiliary classes from normalisation
+Loading normalized ontology from cache: /home/leechuck/tmp/gfe-data/mowl/go_subsumption/valid_mowl_el_normalized_v2.owl
+INFO:mowl.ontology.normalize:Loading normalized ontology from cache: /home/leechuck/tmp/gfe-data/mowl/go_subsumption/valid_mowl_el_normalized_v2.owl
+Loading normalized ontology from cache: /home/leechuck/tmp/gfe-data/mowl/go_subsumption/test_mowl_el_normalized_v2.owl
+INFO:mowl.ontology.normalize:Loading normalized ontology from cache: /home/leechuck/tmp/gfe-data/mowl/go_subsumption/test_mowl_el_normalized_v2.owl
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+INFO: Number of ontology classes: 18147
+INFO: Number of ontology classes: 18147
+INFO: Number of ontology classes: 44244
+INFO: Number of ontology classes: 10709
+INFO: Number of ontology classes: 44233
+Epoch 10: Train loss: 9.37447738647461 Valid loss: 1.5771312713623047
+Epoch 20: Train loss: 7.382009983062744 Valid loss: 1.4879674911499023
+Epoch 30: Train loss: 5.8482160568237305 Valid loss: 1.4061938524246216
+Epoch 40: Train loss: 4.674321174621582 Valid loss: 1.3321138620376587
+Epoch 50: Train loss: 3.778599977493286 Valid loss: 1.265580415725708
+Epoch 60: Train loss: 3.0901741981506348 Valid loss: 1.2062052488327026
+Epoch 70: Train loss: 2.558311939239502 Valid loss: 1.15337336063385
+Epoch 80: Train loss: 2.144307851791382 Valid loss: 1.1064945459365845
+Epoch 90: Train loss: 1.819197416305542 Valid loss: 1.0649213790893555
+Epoch 100: Train loss: 1.5562403202056885 Valid loss: 1.028169870376587
+Epoch 110: Train loss: 1.3445507287979126 Valid loss: 0.9957861304283142
+Epoch 120: Train loss: 1.177199125289917 Valid loss: 0.96731036901474
+Epoch 130: Train loss: 1.033823847770691 Valid loss: 0.9422803521156311
+Epoch 140: Train loss: 0.9154691696166992 Valid loss: 0.9203367233276367
+Epoch 150: Train loss: 0.8176671862602234 Valid loss: 0.9011591076850891
+Epoch 160: Train loss: 0.7317826747894287 Valid loss: 0.8844422698020935
+Epoch 170: Train loss: 0.6580591797828674 Valid loss: 0.8698709011077881
+Epoch 180: Train loss: 0.5950884222984314 Valid loss: 0.8572499752044678
+Epoch 190: Train loss: 0.5467550158500671 Valid loss: 0.8463740348815918
+Epoch 200: Train loss: 0.500565230846405 Valid loss: 0.8370221257209778
+Epoch 210: Train loss: 0.4597078859806061 Valid loss: 0.8290181756019592
+Epoch 220: Train loss: 0.4236840009689331 Valid loss: 0.8220964074134827
+Epoch 230: Train loss: 0.3892456591129303 Valid loss: 0.8160731196403503
+Epoch 240: Train loss: 0.36199241876602173 Valid loss: 0.8108192682266235
+Epoch 250: Train loss: 0.3364787697792053 Valid loss: 0.8061750531196594
+Epoch 260: Train loss: 0.309368371963501 Valid loss: 0.802093505859375
+Epoch 270: Train loss: 0.29144859313964844 Valid loss: 0.7984322309494019
+Epoch 280: Train loss: 0.2672404646873474 Valid loss: 0.7950612306594849
+Epoch 290: Train loss: 0.25008535385131836 Valid loss: 0.7919546961784363
+Epoch 300: Train loss: 0.23194552958011627 Valid loss: 0.7890996932983398
+Did not find owl:Nothing in ontology classes. Adding it
+Did not find owl:Thing in classes. Adding it
+[2026-10-29 22:04:26] [  1/ 22] DONE go__elbe__d50__s0.json | wall=155.31s | train=6.76s | modelness=0.3345 | hvr=null | f_mrr=0.0038 | gpu_mb=223.5 | eff_bs=32768
+44246 named classes, 11945 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:44246 named classes, 11945 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+Epoch 10: Train loss: 21.926822662353516 Valid loss: 0.4000828266143799
+Epoch 20: Train loss: 19.091842651367188 Valid loss: 0.3975279629230499
+Epoch 30: Train loss: 16.61585807800293 Valid loss: 0.3981841504573822
+Epoch 40: Train loss: 14.460330963134766 Valid loss: 0.4002578556537628
+Epoch 50: Train loss: 12.59472370147705 Valid loss: 0.40311765670776367
+Epoch 60: Train loss: 11.003118515014648 Valid loss: 0.4071281850337982
+Epoch 70: Train loss: 9.611475944519043 Valid loss: 0.41169291734695435
+Epoch 80: Train loss: 8.405749320983887 Valid loss: 0.4166662395000458
+Epoch 90: Train loss: 7.359005928039551 Valid loss: 0.4222556948661804
+Epoch 100: Train loss: 6.451714038848877 Valid loss: 0.42839768528938293
+Epoch 110: Train loss: 5.6633405685424805 Valid loss: 0.4350541830062866
+Epoch 120: Train loss: 4.975957870483398 Valid loss: 0.4421497881412506
+Epoch 130: Train loss: 4.370689392089844 Valid loss: 0.4493820369243622
+Epoch 140: Train loss: 3.841655969619751 Valid loss: 0.4566354751586914
+Epoch 150: Train loss: 3.379953622817993 Valid loss: 0.46383580565452576
+Epoch 160: Train loss: 2.9712460041046143 Valid loss: 0.4709765613079071
+Epoch 170: Train loss: 2.6116137504577637 Valid loss: 0.47797274589538574
+Epoch 180: Train loss: 2.301335096359253 Valid loss: 0.4847283363342285
+Epoch 190: Train loss: 2.0418319702148438 Valid loss: 0.49130958318710327
+Epoch 200: Train loss: 1.8135614395141602 Valid loss: 0.4977332353591919
+Epoch 210: Train loss: 1.616984248161316 Valid loss: 0.5039820671081543
+Epoch 220: Train loss: 1.446653127670288 Valid loss: 0.5099356174468994
+Epoch 230: Train loss: 1.2924542427062988 Valid loss: 0.5155893564224243
+Epoch 240: Train loss: 1.1599321365356445 Valid loss: 0.5209957957267761
+Epoch 250: Train loss: 1.0355746746063232 Valid loss: 0.5261847376823425
+Epoch 260: Train loss: 0.9274840354919434 Valid loss: 0.5311288833618164
+Epoch 270: Train loss: 0.8311926126480103 Valid loss: 0.5357929468154907
+Epoch 280: Train loss: 0.7414538860321045 Valid loss: 0.5401752591133118
+Epoch 290: Train loss: 0.6640762090682983 Valid loss: 0.5443080067634583
+Epoch 300: Train loss: 0.5941364169120789 Valid loss: 0.5482292175292969
+[2026-10-29 22:04:44] [  2/ 22] DONE go__elbe-init__d50__s0.json | wall=18.31s | train=4.85s | modelness=0.3769 | hvr=null | f_mrr=0.0066 | gpu_mb=269.9 | eff_bs=32768
+44246 named classes, 11945 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:44246 named classes, 11945 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+Epoch 10: Train loss: 21.927358627319336 Valid loss: 0.4001150131225586
+Epoch 20: Train loss: 19.093982696533203 Valid loss: 0.39762380719184875
+Epoch 30: Train loss: 16.620397567749023 Valid loss: 0.3983130156993866
+Epoch 40: Train loss: 14.46779727935791 Valid loss: 0.4003855884075165
+Epoch 50: Train loss: 12.605474472045898 Valid loss: 0.40321680903434753
+Epoch 60: Train loss: 11.01707649230957 Valid loss: 0.4071471691131592
+Epoch 70: Train loss: 9.62874698638916 Valid loss: 0.41155576705932617
+Epoch 80: Train loss: 8.426220893859863 Valid loss: 0.41629865765571594
+Epoch 90: Train loss: 7.382553577423096 Valid loss: 0.4215785562992096
+Epoch 100: Train loss: 6.478152751922607 Valid loss: 0.4273225665092468
+Epoch 110: Train loss: 5.692531108856201 Valid loss: 0.4334781765937805
+Epoch 120: Train loss: 5.00771951675415 Valid loss: 0.4400005340576172
+Epoch 130: Train loss: 4.404860019683838 Valid loss: 0.446625292301178
+Epoch 140: Train loss: 3.878070116043091 Valid loss: 0.45324310660362244
+Epoch 150: Train loss: 3.418557643890381 Valid loss: 0.4597993493080139
+Epoch 160: Train loss: 3.0118162631988525 Valid loss: 0.46624594926834106
+Epoch 170: Train loss: 2.654015064239502 Valid loss: 0.47247204184532166
+Epoch 180: Train loss: 2.3454301357269287 Valid loss: 0.47845888137817383
+Epoch 190: Train loss: 2.087759017944336 Valid loss: 0.4842429459095001
+Epoch 200: Train loss: 1.8611302375793457 Valid loss: 0.48984283208847046
+Epoch 210: Train loss: 1.6660321950912476 Valid loss: 0.4952287971973419
+Epoch 220: Train loss: 1.4970074892044067 Valid loss: 0.5003029108047485
+Epoch 230: Train loss: 1.3439912796020508 Valid loss: 0.5050734877586365
+Epoch 240: Train loss: 1.2129074335098267 Valid loss: 0.5095694065093994
+Epoch 250: Train loss: 1.0895397663116455 Valid loss: 0.5138546228408813
+Epoch 260: Train loss: 0.9825578331947327 Valid loss: 0.51787930727005
+Epoch 270: Train loss: 0.8873680830001831 Valid loss: 0.5216269493103027
+Epoch 280: Train loss: 0.7982449531555176 Valid loss: 0.5251073837280273
+Epoch 290: Train loss: 0.7216663956642151 Valid loss: 0.5283242464065552
+Epoch 300: Train loss: 0.6524045467376709 Valid loss: 0.5313327312469482
+[2026-10-29 22:05:03] [  3/ 22] DONE go__elbe-anchor__d50__s0.json | wall=18.89s | train=4.95s | modelness=0.3770 | hvr=null | f_mrr=0.0066 | gpu_mb=339.9 | eff_bs=32768
+44246 named classes, 11945 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:44246 named classes, 11945 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+Epoch 10: Train loss: 13.937178611755371 Valid loss: 1.90913724899292
+Epoch 20: Train loss: 11.97000789642334 Valid loss: 1.7375588417053223
+Epoch 30: Train loss: 10.358590126037598 Valid loss: 1.5945063829421997
+Epoch 40: Train loss: 9.063728332519531 Valid loss: 1.475142240524292
+Epoch 50: Train loss: 7.975329399108887 Valid loss: 1.3749924898147583
+Epoch 60: Train loss: 7.085880279541016 Valid loss: 1.2904105186462402
+Epoch 70: Train loss: 6.344873905181885 Valid loss: 1.2179421186447144
+Epoch 80: Train loss: 5.731417179107666 Valid loss: 1.1548664569854736
+Epoch 90: Train loss: 5.215402603149414 Valid loss: 1.0991411209106445
+Epoch 100: Train loss: 4.786518096923828 Valid loss: 1.0492950677871704
+Epoch 110: Train loss: 4.436446666717529 Valid loss: 1.0045768022537231
+Epoch 120: Train loss: 4.137539863586426 Valid loss: 0.9640873074531555
+Epoch 130: Train loss: 3.8853912353515625 Valid loss: 0.9272370934486389
+Epoch 140: Train loss: 3.6624338626861572 Valid loss: 0.8936530947685242
+Epoch 150: Train loss: 3.4788362979888916 Valid loss: 0.8632093667984009
+Epoch 160: Train loss: 3.313260078430176 Valid loss: 0.8354879021644592
+Epoch 170: Train loss: 3.165189027786255 Valid loss: 0.8103103041648865
+Epoch 180: Train loss: 3.0276334285736084 Valid loss: 0.7875757813453674
+Epoch 190: Train loss: 2.9118423461914062 Valid loss: 0.7671680450439453
+Epoch 200: Train loss: 2.801093339920044 Valid loss: 0.7487537860870361
+Epoch 210: Train loss: 2.6996593475341797 Valid loss: 0.7322567701339722
+Epoch 220: Train loss: 2.6069986820220947 Valid loss: 0.7175512313842773
+Epoch 230: Train loss: 2.525484561920166 Valid loss: 0.7044195532798767
+Epoch 240: Train loss: 2.451761245727539 Valid loss: 0.6928720474243164
+Epoch 250: Train loss: 2.3829963207244873 Valid loss: 0.6827000975608826
+Epoch 260: Train loss: 2.317194700241089 Valid loss: 0.6738000512123108
+Epoch 270: Train loss: 2.265533447265625 Valid loss: 0.6661158204078674
+Epoch 280: Train loss: 2.2076823711395264 Valid loss: 0.6594318151473999
+Epoch 290: Train loss: 2.1549928188323975 Valid loss: 0.6535552144050598
+Epoch 300: Train loss: 2.113415479660034 Valid loss: 0.6485885381698608
+[2026-10-29 22:05:24] [  4/ 22] DONE go__box2el__d50__s0.json | wall=20.61s | train=6.13s | modelness=0.0000 | hvr=null | f_mrr=0.0084 | gpu_mb=373.5 | eff_bs=32768
+44246 named classes, 11945 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:44246 named classes, 11945 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+Epoch 10: Train loss: 28.12804412841797 Valid loss: 0.2894541323184967
+Epoch 20: Train loss: 25.16216468811035 Valid loss: 0.29823294281959534
+Epoch 30: Train loss: 22.498825073242188 Valid loss: 0.30806514620780945
+Epoch 40: Train loss: 20.117259979248047 Valid loss: 0.3185684382915497
+Epoch 50: Train loss: 18.013532638549805 Valid loss: 0.3293182849884033
+Epoch 60: Train loss: 16.144296646118164 Valid loss: 0.340135782957077
+Epoch 70: Train loss: 14.519318580627441 Valid loss: 0.3510059118270874
+Epoch 80: Train loss: 13.109075546264648 Valid loss: 0.36144983768463135
+Epoch 90: Train loss: 11.844512939453125 Valid loss: 0.37141773104667664
+Epoch 100: Train loss: 10.735962867736816 Valid loss: 0.38076528906822205
+Epoch 110: Train loss: 9.7725830078125 Valid loss: 0.38960546255111694
+Epoch 120: Train loss: 8.920928955078125 Valid loss: 0.3979490399360657
+Epoch 130: Train loss: 8.1729736328125 Valid loss: 0.40592071413993835
+Epoch 140: Train loss: 7.496930122375488 Valid loss: 0.4134570062160492
+Epoch 150: Train loss: 6.916773796081543 Valid loss: 0.42074987292289734
+Epoch 160: Train loss: 6.385951519012451 Valid loss: 0.42782115936279297
+Epoch 170: Train loss: 5.916627407073975 Valid loss: 0.43462592363357544
+Epoch 180: Train loss: 5.489247798919678 Valid loss: 0.4413006603717804
+Epoch 190: Train loss: 5.118663787841797 Valid loss: 0.4479530155658722
+Epoch 200: Train loss: 4.782619953155518 Valid loss: 0.45452967286109924
+Epoch 210: Train loss: 4.467859268188477 Valid loss: 0.4610316753387451
+Epoch 220: Train loss: 4.190455436706543 Valid loss: 0.4675097167491913
+Epoch 230: Train loss: 3.939525604248047 Valid loss: 0.47397691011428833
+Epoch 240: Train loss: 3.7274558544158936 Valid loss: 0.48053306341171265
+Epoch 250: Train loss: 3.5172641277313232 Valid loss: 0.48709776997566223
+Epoch 260: Train loss: 3.330188512802124 Valid loss: 0.4936688244342804
+Epoch 270: Train loss: 3.175751209259033 Valid loss: 0.5002148151397705
+Epoch 280: Train loss: 3.0107409954071045 Valid loss: 0.5067451000213623
+Epoch 290: Train loss: 2.867208480834961 Valid loss: 0.5131117105484009
+Epoch 300: Train loss: 2.7425894737243652 Valid loss: 0.5193877816200256
+[2026-10-29 22:05:44] [  5/ 22] DONE go__box2el-init__d50__s0.json | wall=20.12s | train=5.60s | modelness=0.2167 | hvr=null | f_mrr=0.0141 | gpu_mb=408.0 | eff_bs=32768
+44246 named classes, 11945 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:44246 named classes, 11945 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+Epoch 10: Train loss: 28.128461837768555 Valid loss: 0.2894514501094818
+Epoch 20: Train loss: 25.163843154907227 Valid loss: 0.2982140779495239
+Epoch 30: Train loss: 22.50243377685547 Valid loss: 0.30801206827163696
+Epoch 40: Train loss: 20.123291015625 Valid loss: 0.31845393776893616
+Epoch 50: Train loss: 18.022336959838867 Valid loss: 0.3291018009185791
+Epoch 60: Train loss: 16.15591049194336 Valid loss: 0.3397759199142456
+Epoch 70: Train loss: 14.533613204956055 Valid loss: 0.35045650601387024
+Epoch 80: Train loss: 13.12606430053711 Valid loss: 0.3606700301170349
+Epoch 90: Train loss: 11.864156723022461 Valid loss: 0.37036362290382385
+Epoch 100: Train loss: 10.758151054382324 Valid loss: 0.3793966770172119
+Epoch 110: Train loss: 9.79736328125 Valid loss: 0.3878788352012634
+Epoch 120: Train loss: 8.94807243347168 Valid loss: 0.3958151340484619
+Epoch 130: Train loss: 8.202485084533691 Valid loss: 0.40335559844970703
+Epoch 140: Train loss: 7.529136657714844 Valid loss: 0.4104149341583252
+Epoch 150: Train loss: 6.951544284820557 Valid loss: 0.4171977639198303
+Epoch 160: Train loss: 6.423325538635254 Valid loss: 0.4237363338470459
+Epoch 170: Train loss: 5.956836223602295 Valid loss: 0.4299689829349518
+Epoch 180: Train loss: 5.532235145568848 Valid loss: 0.43604108691215515
+Epoch 190: Train loss: 5.164602756500244 Valid loss: 0.4420612156391144
+Epoch 200: Train loss: 4.831638813018799 Valid loss: 0.44795724749565125
+Epoch 210: Train loss: 4.519968032836914 Valid loss: 0.45377370715141296
+Epoch 220: Train loss: 4.245694637298584 Valid loss: 0.4595264196395874
+Epoch 230: Train loss: 3.9978272914886475 Valid loss: 0.465217649936676
+Epoch 240: Train loss: 3.7889437675476074 Valid loss: 0.47096458077430725
+Epoch 250: Train loss: 3.581969738006592 Valid loss: 0.47668734192848206
+Epoch 260: Train loss: 3.398146629333496 Valid loss: 0.4823979437351227
+Epoch 270: Train loss: 3.2469482421875 Valid loss: 0.488028883934021
+Epoch 280: Train loss: 3.085210084915161 Valid loss: 0.4936344623565674
+Epoch 290: Train loss: 2.9449079036712646 Valid loss: 0.49903327226638794
+Epoch 300: Train loss: 2.823333740234375 Valid loss: 0.5043036937713623
+[2026-10-29 22:06:05] [  6/ 22] DONE go__box2el-anchor__d50__s0.json | wall=20.94s | train=6.10s | modelness=0.2167 | hvr=null | f_mrr=0.0141 | gpu_mb=461.0 | eff_bs=32768
+44246 named classes, 11945 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:44246 named classes, 11945 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+Epoch 10: Train loss: 13.937178611755371 Valid loss: 1.90913724899292
+Epoch 20: Train loss: 11.97000789642334 Valid loss: 1.7375588417053223
+Epoch 30: Train loss: 10.358590126037598 Valid loss: 1.5945063829421997
+Epoch 40: Train loss: 9.063728332519531 Valid loss: 1.4751421213150024
+Epoch 50: Train loss: 7.975329399108887 Valid loss: 1.3749924898147583
+Epoch 60: Train loss: 7.085880279541016 Valid loss: 1.2904105186462402
+Epoch 70: Train loss: 6.344873905181885 Valid loss: 1.2179421186447144
+Epoch 80: Train loss: 5.73141622543335 Valid loss: 1.1548664569854736
+Epoch 90: Train loss: 5.215402126312256 Valid loss: 1.099141001701355
+Epoch 100: Train loss: 4.78651762008667 Valid loss: 1.0492949485778809
+Epoch 110: Train loss: 4.4364471435546875 Valid loss: 1.0045768022537231
+Epoch 120: Train loss: 4.1375412940979 Valid loss: 0.9640876650810242
+Epoch 130: Train loss: 3.885392904281616 Valid loss: 0.9272361993789673
+Epoch 140: Train loss: 3.6624317169189453 Valid loss: 0.8936533331871033
+Epoch 150: Train loss: 3.4788339138031006 Valid loss: 0.8632107973098755
+Epoch 160: Train loss: 3.313262939453125 Valid loss: 0.8354870676994324
+Epoch 170: Train loss: 3.165188789367676 Valid loss: 0.8103132843971252
+Epoch 180: Train loss: 3.0276339054107666 Valid loss: 0.7875770926475525
+Epoch 190: Train loss: 2.911844491958618 Valid loss: 0.7671701908111572
+Epoch 200: Train loss: 2.8010952472686768 Valid loss: 0.7487536072731018
+Epoch 210: Train loss: 2.699658155441284 Valid loss: 0.7322570085525513
+Epoch 220: Train loss: 2.6070048809051514 Valid loss: 0.7175506353378296
+Epoch 230: Train loss: 2.5254833698272705 Valid loss: 0.7044211626052856
+Epoch 240: Train loss: 2.451754570007324 Valid loss: 0.6928691864013672
+Epoch 250: Train loss: 2.3829920291900635 Valid loss: 0.6826976537704468
+Epoch 260: Train loss: 2.317192554473877 Valid loss: 0.673801839351654
+Epoch 270: Train loss: 2.2655344009399414 Valid loss: 0.6661168932914734
+Epoch 280: Train loss: 2.207679510116577 Valid loss: 0.6594327092170715
+Epoch 290: Train loss: 2.1549911499023438 Valid loss: 0.6535546183586121
+Epoch 300: Train loss: 2.1134119033813477 Valid loss: 0.6485840082168579
+[2026-10-29 22:06:29] [  7/ 22] DONE go__multibox-k1__d50__s0.json | wall=23.93s | train=6.77s | modelness=0.0000 | hvr=null | f_mrr=0.0084 | gpu_mb=396.6 | eff_bs=32768
+44246 named classes, 11945 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:44246 named classes, 11945 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+Epoch 10: Train loss: 12.775605201721191 Valid loss: 1.740695834159851
+Epoch 20: Train loss: 10.827693939208984 Valid loss: 1.5773298740386963
+Epoch 30: Train loss: 9.24367904663086 Valid loss: 1.4338595867156982
+Epoch 40: Train loss: 7.942842483520508 Valid loss: 1.3076694011688232
+Epoch 50: Train loss: 6.884980201721191 Valid loss: 1.1970235109329224
+Epoch 60: Train loss: 6.019778251647949 Valid loss: 1.1004481315612793
+Epoch 70: Train loss: 5.3141770362854 Valid loss: 1.016687035560608
+Epoch 80: Train loss: 4.732510566711426 Valid loss: 0.9439260959625244
+Epoch 90: Train loss: 4.271297454833984 Valid loss: 0.8807980418205261
+Epoch 100: Train loss: 3.885662078857422 Valid loss: 0.8261500000953674
+Epoch 110: Train loss: 3.5799970626831055 Valid loss: 0.7789601683616638
+Epoch 120: Train loss: 3.3322408199310303 Valid loss: 0.7379860281944275
+Epoch 130: Train loss: 3.1281511783599854 Valid loss: 0.7025378942489624
+Epoch 140: Train loss: 2.953326463699341 Valid loss: 0.6718180179595947
+Epoch 150: Train loss: 2.8100221157073975 Valid loss: 0.6453059315681458
+Epoch 160: Train loss: 2.682508945465088 Valid loss: 0.6223881840705872
+Epoch 170: Train loss: 2.5709352493286133 Valid loss: 0.6024816036224365
+Epoch 180: Train loss: 2.4715161323547363 Valid loss: 0.5851122736930847
+Epoch 190: Train loss: 2.388333797454834 Valid loss: 0.5699362754821777
+Epoch 200: Train loss: 2.305689573287964 Valid loss: 0.5566819906234741
+Epoch 210: Train loss: 2.2318685054779053 Valid loss: 0.5451709628105164
+Epoch 220: Train loss: 2.165309190750122 Valid loss: 0.5352041721343994
+Epoch 230: Train loss: 2.1052963733673096 Valid loss: 0.5265368223190308
+Epoch 240: Train loss: 2.0505144596099854 Valid loss: 0.5189667344093323
+Epoch 250: Train loss: 1.998692512512207 Valid loss: 0.5123881101608276
+Epoch 260: Train loss: 1.946869134902954 Valid loss: 0.5067786574363708
+Epoch 270: Train loss: 1.904571294784546 Valid loss: 0.5019434094429016
+Epoch 280: Train loss: 1.8583496809005737 Valid loss: 0.4978044331073761
+Epoch 290: Train loss: 1.8144981861114502 Valid loss: 0.494192510843277
+Epoch 300: Train loss: 1.7765566110610962 Valid loss: 0.49122413992881775
+[2026-10-29 22:07:47] [  8/ 22] DONE go__multibox-k2__d50__s0.json | wall=78.02s | train=14.80s | modelness=0.0000 | hvr=null | f_mrr=0.0033 | gpu_mb=793.3 | eff_bs=32768
+44246 named classes, 11945 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:44246 named classes, 11945 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+Epoch 10: Train loss: 12.057804107666016 Valid loss: 1.655851125717163
+Epoch 20: Train loss: 10.204848289489746 Valid loss: 1.4935582876205444
+Epoch 30: Train loss: 8.705487251281738 Valid loss: 1.3483457565307617
+Epoch 40: Train loss: 7.482330322265625 Valid loss: 1.2178566455841064
+Epoch 50: Train loss: 6.47260046005249 Valid loss: 1.1022634506225586
+Epoch 60: Train loss: 5.647710800170898 Valid loss: 1.0013411045074463
+Epoch 70: Train loss: 4.96663761138916 Valid loss: 0.914151668548584
+Epoch 80: Train loss: 4.4145026206970215 Valid loss: 0.8389978408813477
+Epoch 90: Train loss: 3.9695611000061035 Valid loss: 0.7746657133102417
+Epoch 100: Train loss: 3.6054532527923584 Valid loss: 0.7198377251625061
+Epoch 110: Train loss: 3.3129689693450928 Valid loss: 0.6730595827102661
+Epoch 120: Train loss: 3.0740549564361572 Valid loss: 0.6330925822257996
+Epoch 130: Train loss: 2.8802402019500732 Valid loss: 0.5989910960197449
+Epoch 140: Train loss: 2.7118470668792725 Valid loss: 0.5697929263114929
+Epoch 150: Train loss: 2.5697290897369385 Valid loss: 0.544647753238678
+Epoch 160: Train loss: 2.447270631790161 Valid loss: 0.5228380560874939
+Epoch 170: Train loss: 2.3402862548828125 Valid loss: 0.5039031505584717
+Epoch 180: Train loss: 2.244218587875366 Valid loss: 0.48747774958610535
+Epoch 190: Train loss: 2.161526679992676 Valid loss: 0.4731179475784302
+Epoch 200: Train loss: 2.0825765132904053 Valid loss: 0.4606422185897827
+Epoch 210: Train loss: 2.009819269180298 Valid loss: 0.4497021436691284
+Epoch 220: Train loss: 1.9430245161056519 Valid loss: 0.43990686535835266
+Epoch 230: Train loss: 1.8837629556655884 Valid loss: 0.43111878633499146
+Epoch 240: Train loss: 1.8312149047851562 Valid loss: 0.4233764708042145
+Epoch 250: Train loss: 1.7761712074279785 Valid loss: 0.4164860248565674
+Epoch 260: Train loss: 1.7253631353378296 Valid loss: 0.41026169061660767
+Epoch 270: Train loss: 1.6816394329071045 Valid loss: 0.4046744108200073
+Epoch 280: Train loss: 1.6346206665039062 Valid loss: 0.39976584911346436
+Epoch 290: Train loss: 1.5885101556777954 Valid loss: 0.3954276442527771
+Epoch 300: Train loss: 1.5489522218704224 Valid loss: 0.3915073871612549
+[2026-10-29 22:10:21] [  9/ 22] DONE go__multibox-k3__d50__s0.json | wall=154.00s | train=26.66s | modelness=0.0000 | hvr=null | f_mrr=0.0026 | gpu_mb=1317.0 | eff_bs=32768
+44246 named classes, 11945 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:44246 named classes, 11945 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+Epoch 10: Train loss: 11.663080215454102 Valid loss: 1.5995745658874512
+Epoch 20: Train loss: 9.83652114868164 Valid loss: 1.4350292682647705
+Epoch 30: Train loss: 8.360527038574219 Valid loss: 1.2870007753372192
+Epoch 40: Train loss: 7.163087368011475 Valid loss: 1.1542963981628418
+Epoch 50: Train loss: 6.178644180297852 Valid loss: 1.0370773077011108
+Epoch 60: Train loss: 5.381062030792236 Valid loss: 0.935045063495636
+Epoch 70: Train loss: 4.725146293640137 Valid loss: 0.8473284840583801
+Epoch 80: Train loss: 4.200141429901123 Valid loss: 0.7725100517272949
+Epoch 90: Train loss: 3.7720110416412354 Valid loss: 0.7090914845466614
+Epoch 100: Train loss: 3.424455165863037 Valid loss: 0.6556196808815002
+Epoch 110: Train loss: 3.14524507522583 Valid loss: 0.6105147004127502
+Epoch 120: Train loss: 2.9192278385162354 Valid loss: 0.572429895401001
+Epoch 130: Train loss: 2.7287111282348633 Valid loss: 0.5401257276535034
+Epoch 140: Train loss: 2.5707178115844727 Valid loss: 0.5125000476837158
+Epoch 150: Train loss: 2.432741641998291 Valid loss: 0.4888107180595398
+Epoch 160: Train loss: 2.3161871433258057 Valid loss: 0.4683976471424103
+Epoch 170: Train loss: 2.21004056930542 Valid loss: 0.45069625973701477
+Epoch 180: Train loss: 2.1183791160583496 Valid loss: 0.43526583909988403
+Epoch 190: Train loss: 2.035871982574463 Valid loss: 0.4218052923679352
+Epoch 200: Train loss: 1.9558178186416626 Valid loss: 0.4100044071674347
+Epoch 210: Train loss: 1.8847324848175049 Valid loss: 0.39965707063674927
+Epoch 220: Train loss: 1.8191640377044678 Valid loss: 0.39040347933769226
+Epoch 230: Train loss: 1.7588297128677368 Valid loss: 0.3821409046649933
+Epoch 240: Train loss: 1.7010835409164429 Valid loss: 0.37472379207611084
+Epoch 250: Train loss: 1.6495825052261353 Valid loss: 0.3681755065917969
+Epoch 260: Train loss: 1.5957014560699463 Valid loss: 0.36231565475463867
+Epoch 270: Train loss: 1.5489565134048462 Valid loss: 0.35708731412887573
+Epoch 280: Train loss: 1.4993455410003662 Valid loss: 0.35244253277778625
+Epoch 290: Train loss: 1.45449697971344 Valid loss: 0.3482140302658081
+Epoch 300: Train loss: 1.412437915802002 Valid loss: 0.3443736732006073
+[2026-10-29 22:15:46] [ 10/ 22] DONE go__multibox-k4__d50__s0.json | wall=325.79s | train=46.65s | modelness=0.0001 | hvr=null | f_mrr=0.0020 | gpu_mb=1902.1 | eff_bs=32768
+44246 named classes, 11945 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:44246 named classes, 11945 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 61503
+	gci1: 11880
+	gci2: 19996
+	gci3: 11878
+	gci0_bot: 0
+	gci1_bot: 30
+	gci3_bot: 0
+
+Epoch 10: Train loss: 21.860210418701172 Valid loss: 0.35355639457702637
+Epoch 20: Train loss: 19.343900680541992 Valid loss: 0.35938429832458496
+Epoch 30: Train loss: 17.11601448059082 Valid loss: 0.3660873472690582
+Epoch 40: Train loss: 15.148545265197754 Valid loss: 0.373183012008667
+Epoch 50: Train loss: 13.460053443908691 Valid loss: 0.3800802528858185
+Epoch 60: Train loss: 12.00681209564209 Valid loss: 0.3864884078502655
+Epoch 70: Train loss: 10.790909767150879 Valid loss: 0.3931512236595154
+Epoch 80: Train loss: 9.748394966125488 Valid loss: 0.39912182092666626
+Epoch 90: Train loss: 8.84362506866455 Valid loss: 0.4043838381767273
+Epoch 100: Train loss: 8.062663078308105 Valid loss: 0.40897712111473083
+Epoch 110: Train loss: 7.380451679229736 Valid loss: 0.4130483865737915
+Epoch 120: Train loss: 6.781904220581055 Valid loss: 0.416490375995636
+Epoch 130: Train loss: 6.254523754119873 Valid loss: 0.41953423619270325
+Epoch 140: Train loss: 5.775876045227051 Valid loss: 0.4222748577594757
+Epoch 150: Train loss: 5.347143650054932 Valid loss: 0.42489543557167053
+Epoch 160: Train loss: 4.966554164886475 Valid loss: 0.42752647399902344
+Epoch 170: Train loss: 4.628392219543457 Valid loss: 0.4301913380622864
+Epoch 180: Train loss: 4.321691513061523 Valid loss: 0.4328688383102417
+Epoch 190: Train loss: 4.061532020568848 Valid loss: 0.4355270564556122
+Epoch 200: Train loss: 3.81719708442688 Valid loss: 0.43816813826560974
+Epoch 210: Train loss: 3.5938525199890137 Valid loss: 0.44091591238975525
+Epoch 220: Train loss: 3.398092269897461 Valid loss: 0.44389867782592773
+Epoch 230: Train loss: 3.224273204803467 Valid loss: 0.44695666432380676
+Epoch 240: Train loss: 3.067277193069458 Valid loss: 0.45008590817451477
+Epoch 250: Train loss: 2.919050455093384 Valid loss: 0.4533140957355499
+Epoch 260: Train loss: 2.7855777740478516 Valid loss: 0.4566437304019928
+Epoch 270: Train loss: 2.670379161834717 Valid loss: 0.46005645394325256
+Epoch 280: Train loss: 2.5542616844177246 Valid loss: 0.4635462760925293
+Epoch 290: Train loss: 2.4443509578704834 Valid loss: 0.4670967161655426
+Epoch 300: Train loss: 2.3522109985351562 Valid loss: 0.47083616256713867
+[2026-10-29 22:17:35] [ 11/ 22] DONE go__multibox-k2-init__d50__s0.json | wall=108.83s | train=16.79s | modelness=0.2280 | hvr=null | f_mrr=0.0095 | gpu_mb=799.1 | eff_bs=32768
+[2026-10-29 22:17:39] Loaded dataset=foodon and CanonicalModel (29135 names) in 3.74s
+Loading normalized ontology from cache: /home/leechuck/tmp/gfe-data/mowl/foodon_subsumption/ontology_mowl_el_normalized_v2.owl
+INFO:mowl.ontology.normalize:Loading normalized ontology from cache: /home/leechuck/tmp/gfe-data/mowl/foodon_subsumption/ontology_mowl_el_normalized_v2.owl
+28184 named classes, 952 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:28184 named classes, 952 auxiliary classes from normalisation
+Loading normalized ontology from cache: /home/leechuck/tmp/gfe-data/mowl/foodon_subsumption/valid_mowl_el_normalized_v2.owl
+INFO:mowl.ontology.normalize:Loading normalized ontology from cache: /home/leechuck/tmp/gfe-data/mowl/foodon_subsumption/valid_mowl_el_normalized_v2.owl
+Loading normalized ontology from cache: /home/leechuck/tmp/gfe-data/mowl/foodon_subsumption/test_mowl_el_normalized_v2.owl
+INFO:mowl.ontology.normalize:Loading normalized ontology from cache: /home/leechuck/tmp/gfe-data/mowl/foodon_subsumption/test_mowl_el_normalized_v2.owl
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+INFO: Number of ontology classes: 8305
+INFO: Number of ontology classes: 8305
+INFO: Number of ontology classes: 28182
+INFO: Number of ontology classes: 4727
+INFO: Number of ontology classes: 27875
+Epoch 10: Train loss: 9.245198249816895 Valid loss: 1.590078353881836
+Epoch 20: Train loss: 7.092014312744141 Valid loss: 1.5154688358306885
+Epoch 30: Train loss: 5.4545698165893555 Valid loss: 1.4490405321121216
+Epoch 40: Train loss: 4.2276716232299805 Valid loss: 1.3908300399780273
+Epoch 50: Train loss: 3.3057329654693604 Valid loss: 1.340433120727539
+Epoch 60: Train loss: 2.609653949737549 Valid loss: 1.297126293182373
+Epoch 70: Train loss: 2.083550453186035 Valid loss: 1.2600431442260742
+Epoch 80: Train loss: 1.6766799688339233 Valid loss: 1.2284587621688843
+Epoch 90: Train loss: 1.3636804819107056 Valid loss: 1.2017163038253784
+Epoch 100: Train loss: 1.117154836654663 Valid loss: 1.179013729095459
+Epoch 110: Train loss: 0.9228500723838806 Valid loss: 1.159828543663025
+Epoch 120: Train loss: 0.7627286911010742 Valid loss: 1.1437788009643555
+Epoch 130: Train loss: 0.6388503313064575 Valid loss: 1.1303069591522217
+Epoch 140: Train loss: 0.5394525527954102 Valid loss: 1.1189628839492798
+Epoch 150: Train loss: 0.45296019315719604 Valid loss: 1.1094474792480469
+Epoch 160: Train loss: 0.386314332485199 Valid loss: 1.1015293598175049
+Epoch 170: Train loss: 0.32990744709968567 Valid loss: 1.0950130224227905
+Epoch 180: Train loss: 0.284352570772171 Valid loss: 1.0897655487060547
+Epoch 190: Train loss: 0.24808050692081451 Valid loss: 1.0855861902236938
+Epoch 200: Train loss: 0.21761363744735718 Valid loss: 1.082284927368164
+Epoch 210: Train loss: 0.18943366408348083 Valid loss: 1.0797432661056519
+Epoch 220: Train loss: 0.1681334227323532 Valid loss: 1.0776939392089844
+Epoch 230: Train loss: 0.15042726695537567 Valid loss: 1.0760927200317383
+Epoch 240: Train loss: 0.13439494371414185 Valid loss: 1.0747933387756348
+Epoch 250: Train loss: 0.1201113760471344 Valid loss: 1.0737591981887817
+Epoch 260: Train loss: 0.10851702094078064 Valid loss: 1.0728135108947754
+Epoch 270: Train loss: 0.09920850396156311 Valid loss: 1.0720057487487793
+Epoch 280: Train loss: 0.09085763990879059 Valid loss: 1.0713269710540771
+Epoch 290: Train loss: 0.08275631070137024 Valid loss: 1.0706813335418701
+Epoch 300: Train loss: 0.07656250894069672 Valid loss: 1.0700494050979614
+Did not find owl:Nothing in ontology classes. Adding it
+Did not find owl:Thing in classes. Adding it
+[2026-10-29 22:18:21] [ 12/ 22] DONE foodon__elbe__d50__s0.json | wall=42.37s | train=2.83s | modelness=0.5314 | hvr=null | f_mrr=0.0049 | gpu_mb=121.8 | eff_bs=32768
+28184 named classes, 952 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:28184 named classes, 952 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+Epoch 10: Train loss: 3.785090208053589 Valid loss: 0.5633053183555603
+Epoch 20: Train loss: 2.737821102142334 Valid loss: 0.5594884753227234
+Epoch 30: Train loss: 1.9832643270492554 Valid loss: 0.559579074382782
+Epoch 40: Train loss: 1.450188159942627 Valid loss: 0.5614900588989258
+Epoch 50: Train loss: 1.0740388631820679 Valid loss: 0.5642666220664978
+Epoch 60: Train loss: 0.8193889260292053 Valid loss: 0.5685641169548035
+Epoch 70: Train loss: 0.6437557339668274 Valid loss: 0.5730006098747253
+Epoch 80: Train loss: 0.5143932700157166 Valid loss: 0.5774206519126892
+Epoch 90: Train loss: 0.41647621989250183 Valid loss: 0.5818419456481934
+Epoch 100: Train loss: 0.3410715162754059 Valid loss: 0.5861696004867554
+Epoch 110: Train loss: 0.28250280022621155 Valid loss: 0.5903357267379761
+Epoch 120: Train loss: 0.23529039323329926 Valid loss: 0.5944949984550476
+Epoch 130: Train loss: 0.19834187626838684 Valid loss: 0.5983148217201233
+Epoch 140: Train loss: 0.1687919944524765 Valid loss: 0.6016438007354736
+Epoch 150: Train loss: 0.14395610988140106 Valid loss: 0.6050962209701538
+Epoch 160: Train loss: 0.12405655533075333 Valid loss: 0.6082027554512024
+Epoch 170: Train loss: 0.1075124517083168 Valid loss: 0.6108311414718628
+Epoch 180: Train loss: 0.09387189149856567 Valid loss: 0.61346834897995
+Epoch 190: Train loss: 0.08257828652858734 Valid loss: 0.6158267855644226
+Epoch 200: Train loss: 0.07295273244380951 Valid loss: 0.6182117462158203
+Epoch 210: Train loss: 0.06474820524454117 Valid loss: 0.6206929683685303
+Epoch 220: Train loss: 0.057875875383615494 Valid loss: 0.6229419112205505
+Epoch 230: Train loss: 0.05193401128053665 Valid loss: 0.6252515912055969
+Epoch 240: Train loss: 0.04692648723721504 Valid loss: 0.6271449327468872
+Epoch 250: Train loss: 0.04248740151524544 Valid loss: 0.6291239857673645
+Epoch 260: Train loss: 0.03870852664113045 Valid loss: 0.6303492784500122
+Epoch 270: Train loss: 0.035431671887636185 Valid loss: 0.6317204236984253
+Epoch 280: Train loss: 0.032560672610998154 Valid loss: 0.6329359412193298
+Epoch 290: Train loss: 0.029982253909111023 Valid loss: 0.6343914866447449
+Epoch 300: Train loss: 0.02772233448922634 Valid loss: 0.635530948638916
+[2026-10-29 22:18:30] [ 13/ 22] DONE foodon__elbe-init__d50__s0.json | wall=8.15s | train=3.58s | modelness=0.4345 | hvr=null | f_mrr=0.0051 | gpu_mb=145.6 | eff_bs=32768
+28184 named classes, 952 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:28184 named classes, 952 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+Epoch 10: Train loss: 3.7855288982391357 Valid loss: 0.563345193862915
+Epoch 20: Train loss: 2.7394537925720215 Valid loss: 0.5596010088920593
+Epoch 30: Train loss: 1.986599326133728 Valid loss: 0.5596515536308289
+Epoch 40: Train loss: 1.4555184841156006 Valid loss: 0.5613272786140442
+Epoch 50: Train loss: 1.0814849138259888 Valid loss: 0.563709557056427
+Epoch 60: Train loss: 0.8286702036857605 Valid loss: 0.5675108432769775
+Epoch 70: Train loss: 0.6547399759292603 Valid loss: 0.5713599324226379
+Epoch 80: Train loss: 0.5270408987998962 Valid loss: 0.5751239061355591
+Epoch 90: Train loss: 0.4306739866733551 Valid loss: 0.5788522958755493
+Epoch 100: Train loss: 0.35664501786231995 Valid loss: 0.5824248194694519
+Epoch 110: Train loss: 0.2993525266647339 Valid loss: 0.5858066082000732
+Epoch 120: Train loss: 0.2526979148387909 Valid loss: 0.5891513824462891
+Epoch 130: Train loss: 0.21683570742607117 Valid loss: 0.5921742916107178
+Epoch 140: Train loss: 0.18833835422992706 Valid loss: 0.5948290824890137
+Epoch 150: Train loss: 0.1637238711118698 Valid loss: 0.5973818898200989
+Epoch 160: Train loss: 0.14435388147830963 Valid loss: 0.5995641350746155
+Epoch 170: Train loss: 0.1280769407749176 Valid loss: 0.601257860660553
+Epoch 180: Train loss: 0.11485769599676132 Valid loss: 0.602861225605011
+Epoch 190: Train loss: 0.10397223383188248 Valid loss: 0.6043500900268555
+Epoch 200: Train loss: 0.09463497996330261 Valid loss: 0.6058298349380493
+Epoch 210: Train loss: 0.0864013135433197 Valid loss: 0.6073163151741028
+Epoch 220: Train loss: 0.07977736741304398 Valid loss: 0.6085392832756042
+Epoch 230: Train loss: 0.07377869635820389 Valid loss: 0.6096635460853577
+Epoch 240: Train loss: 0.06908342242240906 Valid loss: 0.6105565428733826
+Epoch 250: Train loss: 0.06447525322437286 Valid loss: 0.6113716959953308
+Epoch 260: Train loss: 0.060842446982860565 Valid loss: 0.6116990447044373
+Epoch 270: Train loss: 0.057587817311286926 Valid loss: 0.612070620059967
+Epoch 280: Train loss: 0.05483853071928024 Valid loss: 0.6123576760292053
+Epoch 290: Train loss: 0.052240341901779175 Valid loss: 0.6127702593803406
+Epoch 300: Train loss: 0.04991123825311661 Valid loss: 0.6128926277160645
+[2026-10-29 22:18:37] [ 14/ 22] DONE foodon__elbe-anchor__d50__s0.json | wall=7.18s | train=2.76s | modelness=0.4345 | hvr=null | f_mrr=0.0052 | gpu_mb=157.2 | eff_bs=32768
+28184 named classes, 952 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:28184 named classes, 952 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+Epoch 10: Train loss: 13.880724906921387 Valid loss: 1.9398170709609985
+Epoch 20: Train loss: 11.661399841308594 Valid loss: 1.797120213508606
+Epoch 30: Train loss: 9.869355201721191 Valid loss: 1.6808868646621704
+Epoch 40: Train loss: 8.436572074890137 Valid loss: 1.5862982273101807
+Epoch 50: Train loss: 7.278130531311035 Valid loss: 1.5095062255859375
+Epoch 60: Train loss: 6.32719087600708 Valid loss: 1.4471616744995117
+Epoch 70: Train loss: 5.557010650634766 Valid loss: 1.3955789804458618
+Epoch 80: Train loss: 4.937989234924316 Valid loss: 1.352349042892456
+Epoch 90: Train loss: 4.4324750900268555 Valid loss: 1.3161518573760986
+Epoch 100: Train loss: 4.026195526123047 Valid loss: 1.2848687171936035
+Epoch 110: Train loss: 3.69631028175354 Valid loss: 1.2576615810394287
+Epoch 120: Train loss: 3.415755033493042 Valid loss: 1.2343883514404297
+Epoch 130: Train loss: 3.193544387817383 Valid loss: 1.2140566110610962
+Epoch 140: Train loss: 3.0141167640686035 Valid loss: 1.1961338520050049
+Epoch 150: Train loss: 2.8498647212982178 Valid loss: 1.1804448366165161
+Epoch 160: Train loss: 2.7043604850769043 Valid loss: 1.1665765047073364
+Epoch 170: Train loss: 2.5756125450134277 Valid loss: 1.1544173955917358
+Epoch 180: Train loss: 2.4644534587860107 Valid loss: 1.143804669380188
+Epoch 190: Train loss: 2.3601222038269043 Valid loss: 1.134818434715271
+Epoch 200: Train loss: 2.2714357376098633 Valid loss: 1.1273738145828247
+Epoch 210: Train loss: 2.1762540340423584 Valid loss: 1.121358036994934
+Epoch 220: Train loss: 2.0989327430725098 Valid loss: 1.1164145469665527
+Epoch 230: Train loss: 2.0266048908233643 Valid loss: 1.1123735904693604
+Epoch 240: Train loss: 1.9615708589553833 Valid loss: 1.109367847442627
+Epoch 250: Train loss: 1.892915964126587 Valid loss: 1.1070582866668701
+Epoch 260: Train loss: 1.8358241319656372 Valid loss: 1.1052579879760742
+Epoch 270: Train loss: 1.776326060295105 Valid loss: 1.1040781736373901
+Epoch 280: Train loss: 1.7210689783096313 Valid loss: 1.1036334037780762
+Epoch 290: Train loss: 1.669253945350647 Valid loss: 1.1036120653152466
+Epoch 300: Train loss: 1.6156461238861084 Valid loss: 1.1039550304412842
+[2026-10-29 22:18:46] [ 15/ 22] DONE foodon__box2el__d50__s0.json | wall=9.07s | train=4.11s | modelness=0.0001 | hvr=null | f_mrr=0.0084 | gpu_mb=201.0 | eff_bs=32768
+28184 named classes, 952 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:28184 named classes, 952 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+Epoch 10: Train loss: 11.07836627960205 Valid loss: 0.4359416663646698
+Epoch 20: Train loss: 9.383148193359375 Valid loss: 0.44855260848999023
+Epoch 30: Train loss: 7.963771343231201 Valid loss: 0.46203380823135376
+Epoch 40: Train loss: 6.808140754699707 Valid loss: 0.47593939304351807
+Epoch 50: Train loss: 5.882538795471191 Valid loss: 0.4899400472640991
+Epoch 60: Train loss: 5.147292613983154 Valid loss: 0.5041391849517822
+Epoch 70: Train loss: 4.596533298492432 Valid loss: 0.5189391374588013
+Epoch 80: Train loss: 4.168846607208252 Valid loss: 0.533133327960968
+Epoch 90: Train loss: 3.8246803283691406 Valid loss: 0.5468742847442627
+Epoch 100: Train loss: 3.559258460998535 Valid loss: 0.5595189929008484
+Epoch 110: Train loss: 3.3383381366729736 Valid loss: 0.5713722705841064
+Epoch 120: Train loss: 3.133173704147339 Valid loss: 0.5827291011810303
+Epoch 130: Train loss: 2.9741172790527344 Valid loss: 0.5935637950897217
+Epoch 140: Train loss: 2.851442813873291 Valid loss: 0.6035771369934082
+Epoch 150: Train loss: 2.705353260040283 Valid loss: 0.6129801869392395
+Epoch 160: Train loss: 2.585630416870117 Valid loss: 0.6218181252479553
+Epoch 170: Train loss: 2.4838240146636963 Valid loss: 0.6303094625473022
+Epoch 180: Train loss: 2.388078451156616 Valid loss: 0.63862544298172
+Epoch 190: Train loss: 2.296816110610962 Valid loss: 0.6467202305793762
+Epoch 200: Train loss: 2.225857734680176 Valid loss: 0.6546645164489746
+Epoch 210: Train loss: 2.133852481842041 Valid loss: 0.6624679565429688
+Epoch 220: Train loss: 2.0620205402374268 Valid loss: 0.6700665950775146
+Epoch 230: Train loss: 1.9943840503692627 Valid loss: 0.6774693131446838
+Epoch 240: Train loss: 1.936202049255371 Valid loss: 0.6847782731056213
+Epoch 250: Train loss: 1.863728404045105 Valid loss: 0.6918377876281738
+Epoch 260: Train loss: 1.814548373222351 Valid loss: 0.6988797187805176
+Epoch 270: Train loss: 1.7522433996200562 Valid loss: 0.705729603767395
+Epoch 280: Train loss: 1.6995376348495483 Valid loss: 0.712425708770752
+Epoch 290: Train loss: 1.644871473312378 Valid loss: 0.7189562916755676
+Epoch 300: Train loss: 1.5915905237197876 Valid loss: 0.7253621220588684
+[2026-10-29 22:18:54] [ 16/ 22] DONE foodon__box2el-init__d50__s0.json | wall=8.35s | train=3.61s | modelness=0.1668 | hvr=null | f_mrr=0.0062 | gpu_mb=218.7 | eff_bs=32768
+28184 named classes, 952 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:28184 named classes, 952 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+Epoch 10: Train loss: 11.078657150268555 Valid loss: 0.43593403697013855
+Epoch 20: Train loss: 9.384366989135742 Valid loss: 0.44851282238960266
+Epoch 30: Train loss: 7.96652364730835 Valid loss: 0.4619308114051819
+Epoch 40: Train loss: 6.812954902648926 Valid loss: 0.475736528635025
+Epoch 50: Train loss: 5.889827251434326 Valid loss: 0.48960283398628235
+Epoch 60: Train loss: 5.156896591186523 Valid loss: 0.5036191344261169
+Epoch 70: Train loss: 4.608030796051025 Valid loss: 0.5181863307952881
+Epoch 80: Train loss: 4.182300567626953 Valid loss: 0.5321004986763
+Epoch 90: Train loss: 3.8399131298065186 Valid loss: 0.5455275774002075
+Epoch 100: Train loss: 3.576080560684204 Valid loss: 0.5578017830848694
+Epoch 110: Train loss: 3.3566806316375732 Valid loss: 0.5692431926727295
+Epoch 120: Train loss: 3.152851104736328 Valid loss: 0.5801491737365723
+Epoch 130: Train loss: 2.99504017829895 Valid loss: 0.5904991626739502
+Epoch 140: Train loss: 2.8735430240631104 Valid loss: 0.6000178456306458
+Epoch 150: Train loss: 2.7286887168884277 Valid loss: 0.6089012026786804
+Epoch 160: Train loss: 2.6102709770202637 Valid loss: 0.6171830892562866
+Epoch 170: Train loss: 2.5097694396972656 Valid loss: 0.6250908970832825
+Epoch 180: Train loss: 2.4153285026550293 Valid loss: 0.6328324675559998
+Epoch 190: Train loss: 2.3253543376922607 Valid loss: 0.6402950882911682
+Epoch 200: Train loss: 2.255779266357422 Valid loss: 0.6476089358329773
+Epoch 210: Train loss: 2.1650853157043457 Valid loss: 0.6547757983207703
+Epoch 220: Train loss: 2.0948445796966553 Valid loss: 0.6616995930671692
+Epoch 230: Train loss: 2.02858567237854 Valid loss: 0.668456494808197
+Epoch 240: Train loss: 1.971886396408081 Valid loss: 0.6750838756561279
+Epoch 250: Train loss: 1.9009860754013062 Valid loss: 0.6813936829566956
+Epoch 260: Train loss: 1.8534455299377441 Valid loss: 0.6876898407936096
+Epoch 270: Train loss: 1.7927488088607788 Valid loss: 0.6937589645385742
+Epoch 280: Train loss: 1.741800308227539 Valid loss: 0.6996040344238281
+Epoch 290: Train loss: 1.688913345336914 Valid loss: 0.7052735090255737
+Epoch 300: Train loss: 1.6374530792236328 Valid loss: 0.7107910513877869
+[2026-10-29 22:19:02] [ 17/ 22] DONE foodon__box2el-anchor__d50__s0.json | wall=8.16s | train=3.44s | modelness=0.1668 | hvr=null | f_mrr=0.0063 | gpu_mb=242.1 | eff_bs=32768
+28184 named classes, 952 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:28184 named classes, 952 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+Epoch 10: Train loss: 13.880724906921387 Valid loss: 1.9398170709609985
+Epoch 20: Train loss: 11.661399841308594 Valid loss: 1.7971200942993164
+Epoch 30: Train loss: 9.869355201721191 Valid loss: 1.6808868646621704
+Epoch 40: Train loss: 8.436572074890137 Valid loss: 1.5862982273101807
+Epoch 50: Train loss: 7.278130531311035 Valid loss: 1.5095062255859375
+Epoch 60: Train loss: 6.32719087600708 Valid loss: 1.4471616744995117
+Epoch 70: Train loss: 5.557010173797607 Valid loss: 1.3955789804458618
+Epoch 80: Train loss: 4.937989234924316 Valid loss: 1.3523492813110352
+Epoch 90: Train loss: 4.4324750900268555 Valid loss: 1.316151738166809
+Epoch 100: Train loss: 4.026196002960205 Valid loss: 1.2848678827285767
+Epoch 110: Train loss: 3.696310043334961 Valid loss: 1.2576619386672974
+Epoch 120: Train loss: 3.415754556655884 Valid loss: 1.2343883514404297
+Epoch 130: Train loss: 3.193544387817383 Valid loss: 1.214057207107544
+Epoch 140: Train loss: 3.0141103267669678 Valid loss: 1.1961342096328735
+Epoch 150: Train loss: 2.8498663902282715 Valid loss: 1.1804457902908325
+Epoch 160: Train loss: 2.7043721675872803 Valid loss: 1.1665757894515991
+Epoch 170: Train loss: 2.575617790222168 Valid loss: 1.1544183492660522
+Epoch 180: Train loss: 2.46445369720459 Valid loss: 1.1438053846359253
+Epoch 190: Train loss: 2.360123872756958 Valid loss: 1.1348178386688232
+Epoch 200: Train loss: 2.271434783935547 Valid loss: 1.1273761987686157
+Epoch 210: Train loss: 2.176253318786621 Valid loss: 1.1213569641113281
+Epoch 220: Train loss: 2.0989320278167725 Valid loss: 1.1164144277572632
+Epoch 230: Train loss: 2.0266051292419434 Valid loss: 1.1123732328414917
+Epoch 240: Train loss: 1.9615715742111206 Valid loss: 1.1093683242797852
+Epoch 250: Train loss: 1.892911434173584 Valid loss: 1.1070592403411865
+Epoch 260: Train loss: 1.8358230590820312 Valid loss: 1.1052569150924683
+Epoch 270: Train loss: 1.7763235569000244 Valid loss: 1.104080080986023
+Epoch 280: Train loss: 1.7210677862167358 Valid loss: 1.1036335229873657
+Epoch 290: Train loss: 1.6692509651184082 Valid loss: 1.103610634803772
+Epoch 300: Train loss: 1.6156474351882935 Valid loss: 1.1039522886276245
+[2026-10-29 22:19:12] [ 18/ 22] DONE foodon__multibox-k1__d50__s0.json | wall=9.40s | train=4.17s | modelness=0.0001 | hvr=null | f_mrr=0.0084 | gpu_mb=273.4 | eff_bs=32768
+28184 named classes, 952 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:28184 named classes, 952 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+Epoch 10: Train loss: 12.575620651245117 Valid loss: 1.7671303749084473
+Epoch 20: Train loss: 10.51420783996582 Valid loss: 1.6264491081237793
+Epoch 30: Train loss: 8.857412338256836 Valid loss: 1.5057013034820557
+Epoch 40: Train loss: 7.537321090698242 Valid loss: 1.4017130136489868
+Epoch 50: Train loss: 6.465423107147217 Valid loss: 1.3124011754989624
+Epoch 60: Train loss: 5.594834327697754 Valid loss: 1.2352303266525269
+Epoch 70: Train loss: 4.8863043785095215 Valid loss: 1.1683521270751953
+Epoch 80: Train loss: 4.316052436828613 Valid loss: 1.110059142112732
+Epoch 90: Train loss: 3.8479766845703125 Valid loss: 1.0591150522232056
+Epoch 100: Train loss: 3.4748661518096924 Valid loss: 1.0144176483154297
+Epoch 110: Train loss: 3.178395986557007 Valid loss: 0.9753620624542236
+Epoch 120: Train loss: 2.9257237911224365 Valid loss: 0.9412479996681213
+Epoch 130: Train loss: 2.728606700897217 Valid loss: 0.9115643501281738
+Epoch 140: Train loss: 2.5570638179779053 Valid loss: 0.8856801986694336
+Epoch 150: Train loss: 2.4069414138793945 Valid loss: 0.8630944490432739
+Epoch 160: Train loss: 2.274822473526001 Valid loss: 0.8428016901016235
+Epoch 170: Train loss: 2.1566832065582275 Valid loss: 0.8247119784355164
+Epoch 180: Train loss: 2.0522043704986572 Valid loss: 0.8086919188499451
+Epoch 190: Train loss: 1.9559834003448486 Valid loss: 0.7944850921630859
+Epoch 200: Train loss: 1.8712894916534424 Valid loss: 0.7816615104675293
+Epoch 210: Train loss: 1.792691707611084 Valid loss: 0.7703500390052795
+Epoch 220: Train loss: 1.7216589450836182 Valid loss: 0.760534942150116
+Epoch 230: Train loss: 1.6520230770111084 Valid loss: 0.7517574429512024
+Epoch 240: Train loss: 1.5904392004013062 Valid loss: 0.7438029050827026
+Epoch 250: Train loss: 1.5326145887374878 Valid loss: 0.7366253137588501
+Epoch 260: Train loss: 1.4803063869476318 Valid loss: 0.7299754619598389
+Epoch 270: Train loss: 1.4234071969985962 Valid loss: 0.7240331768989563
+Epoch 280: Train loss: 1.3719807863235474 Valid loss: 0.718824565410614
+Epoch 290: Train loss: 1.3287984132766724 Valid loss: 0.7141199707984924
+Epoch 300: Train loss: 1.2780311107635498 Valid loss: 0.7098550796508789
+[2026-10-29 22:19:39] [ 19/ 22] DONE foodon__multibox-k2__d50__s0.json | wall=27.26s | train=6.16s | modelness=0.0001 | hvr=null | f_mrr=0.0043 | gpu_mb=477.8 | eff_bs=32768
+28184 named classes, 952 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:28184 named classes, 952 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+Epoch 10: Train loss: 12.003093719482422 Valid loss: 1.6851541996002197
+Epoch 20: Train loss: 10.019165992736816 Valid loss: 1.5450141429901123
+Epoch 30: Train loss: 8.438445091247559 Valid loss: 1.4231730699539185
+Epoch 40: Train loss: 7.168650150299072 Valid loss: 1.316925287246704
+Epoch 50: Train loss: 6.138898849487305 Valid loss: 1.2243854999542236
+Epoch 60: Train loss: 5.306180000305176 Valid loss: 1.1435171365737915
+Epoch 70: Train loss: 4.637345314025879 Valid loss: 1.0729492902755737
+Epoch 80: Train loss: 4.090705394744873 Valid loss: 1.011518955230713
+Epoch 90: Train loss: 3.653787851333618 Valid loss: 0.9585608839988708
+Epoch 100: Train loss: 3.2906687259674072 Valid loss: 0.9124419689178467
+Epoch 110: Train loss: 2.9983108043670654 Valid loss: 0.8725479245185852
+Epoch 120: Train loss: 2.753546714782715 Valid loss: 0.8381523489952087
+Epoch 130: Train loss: 2.559724807739258 Valid loss: 0.808233916759491
+Epoch 140: Train loss: 2.396407127380371 Valid loss: 0.7820345163345337
+Epoch 150: Train loss: 2.249542236328125 Valid loss: 0.7590113282203674
+Epoch 160: Train loss: 2.118283748626709 Valid loss: 0.7387475967407227
+Epoch 170: Train loss: 1.9996438026428223 Valid loss: 0.7210825085639954
+Epoch 180: Train loss: 1.899462103843689 Valid loss: 0.7056645154953003
+Epoch 190: Train loss: 1.803415298461914 Valid loss: 0.6921887993812561
+Epoch 200: Train loss: 1.714609146118164 Valid loss: 0.6802435517311096
+Epoch 210: Train loss: 1.6358633041381836 Valid loss: 0.6695671081542969
+Epoch 220: Train loss: 1.5673203468322754 Valid loss: 0.6599496603012085
+Epoch 230: Train loss: 1.504799723625183 Valid loss: 0.6514302492141724
+Epoch 240: Train loss: 1.4417212009429932 Valid loss: 0.6437845230102539
+Epoch 250: Train loss: 1.3812949657440186 Valid loss: 0.6368244886398315
+Epoch 260: Train loss: 1.3296990394592285 Valid loss: 0.6304550170898438
+Epoch 270: Train loss: 1.2766618728637695 Valid loss: 0.6246310472488403
+Epoch 280: Train loss: 1.2247511148452759 Valid loss: 0.6193722486495972
+Epoch 290: Train loss: 1.1768510341644287 Valid loss: 0.6146662831306458
+Epoch 300: Train loss: 1.1291136741638184 Valid loss: 0.6103801727294922
+[2026-10-29 22:20:34] [ 20/ 22] DONE foodon__multibox-k3__d50__s0.json | wall=54.86s | train=10.58s | modelness=0.0001 | hvr=null | f_mrr=0.0033 | gpu_mb=777.2 | eff_bs=32768
+28184 named classes, 952 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:28184 named classes, 952 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+Epoch 10: Train loss: 11.661396980285645 Valid loss: 1.6271047592163086
+Epoch 20: Train loss: 9.707694053649902 Valid loss: 1.485923171043396
+Epoch 30: Train loss: 8.148322105407715 Valid loss: 1.3620470762252808
+Epoch 40: Train loss: 6.915586471557617 Valid loss: 1.2529667615890503
+Epoch 50: Train loss: 5.914987087249756 Valid loss: 1.1576749086380005
+Epoch 60: Train loss: 5.110526084899902 Valid loss: 1.074567198753357
+Epoch 70: Train loss: 4.451748371124268 Valid loss: 1.0024473667144775
+Epoch 80: Train loss: 3.9398815631866455 Valid loss: 0.9400627017021179
+Epoch 90: Train loss: 3.5168538093566895 Valid loss: 0.8865288496017456
+Epoch 100: Train loss: 3.161839008331299 Valid loss: 0.8409834504127502
+Epoch 110: Train loss: 2.882817268371582 Valid loss: 0.8018484711647034
+Epoch 120: Train loss: 2.643378734588623 Valid loss: 0.7683148980140686
+Epoch 130: Train loss: 2.449188470840454 Valid loss: 0.7396243810653687
+Epoch 140: Train loss: 2.2863993644714355 Valid loss: 0.7148935198783875
+Epoch 150: Train loss: 2.1375961303710938 Valid loss: 0.6933281421661377
+Epoch 160: Train loss: 2.014892816543579 Valid loss: 0.6743215918540955
+Epoch 170: Train loss: 1.9001661539077759 Valid loss: 0.6578218936920166
+Epoch 180: Train loss: 1.797418236732483 Valid loss: 0.6435438990592957
+Epoch 190: Train loss: 1.7039999961853027 Valid loss: 0.6310005784034729
+Epoch 200: Train loss: 1.6176650524139404 Valid loss: 0.6199228763580322
+Epoch 210: Train loss: 1.5406274795532227 Valid loss: 0.6100325584411621
+Epoch 220: Train loss: 1.466673731803894 Valid loss: 0.6011638045310974
+Epoch 230: Train loss: 1.4044005870819092 Valid loss: 0.5932251811027527
+Epoch 240: Train loss: 1.3422297239303589 Valid loss: 0.5861517786979675
+Epoch 250: Train loss: 1.2820175886154175 Valid loss: 0.5798146724700928
+Epoch 260: Train loss: 1.229520320892334 Valid loss: 0.5739859342575073
+Epoch 270: Train loss: 1.1743324995040894 Valid loss: 0.5687867403030396
+Epoch 280: Train loss: 1.1239770650863647 Valid loss: 0.5641024112701416
+Epoch 290: Train loss: 1.078031063079834 Valid loss: 0.5597744584083557
+Epoch 300: Train loss: 1.0283974409103394 Valid loss: 0.5558101534843445
+[2026-10-29 22:22:08] [ 21/ 22] DONE foodon__multibox-k4__d50__s0.json | wall=93.84s | train=15.63s | modelness=0.0001 | hvr=null | f_mrr=0.0031 | gpu_mb=985.0 | eff_bs=32768
+28184 named classes, 952 auxiliary classes from normalisation
+INFO:mowl.base_models.elmodel:28184 named classes, 952 auxiliary classes from normalisation
+You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+WARNING:mowl.base_models.elmodel:You are using the default training method. If you want to use a customized training method (e.g., different negative sampling, etc.), please override the appropriate methods in a subclass.
+Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+INFO:mowl.base_models.elmodel:Training datasets: 
+	gci0: 21795
+	gci1: 1267
+	gci2: 10719
+	gci3: 897
+	gci0_bot: 0
+	gci1_bot: 495
+	gci3_bot: 0
+
+Epoch 10: Train loss: 9.491430282592773 Valid loss: 0.5273551940917969
+Epoch 20: Train loss: 7.916416168212891 Valid loss: 0.533912181854248
+Epoch 30: Train loss: 6.6294050216674805 Valid loss: 0.5414392948150635
+Epoch 40: Train loss: 5.609150409698486 Valid loss: 0.5492132306098938
+Epoch 50: Train loss: 4.778715133666992 Valid loss: 0.5566104650497437
+Epoch 60: Train loss: 4.155462265014648 Valid loss: 0.5640757083892822
+Epoch 70: Train loss: 3.702941417694092 Valid loss: 0.5720651149749756
+Epoch 80: Train loss: 3.3518483638763428 Valid loss: 0.579017698764801
+Epoch 90: Train loss: 3.081007957458496 Valid loss: 0.5853500962257385
+Epoch 100: Train loss: 2.8752782344818115 Valid loss: 0.5905174016952515
+Epoch 110: Train loss: 2.696690559387207 Valid loss: 0.5948922634124756
+Epoch 120: Train loss: 2.5434696674346924 Valid loss: 0.5984891653060913
+Epoch 130: Train loss: 2.4244043827056885 Valid loss: 0.6015565991401672
+Epoch 140: Train loss: 2.321216106414795 Valid loss: 0.6040472984313965
+Epoch 150: Train loss: 2.2104365825653076 Valid loss: 0.6060988903045654
+Epoch 160: Train loss: 2.119710922241211 Valid loss: 0.6078752875328064
+Epoch 170: Train loss: 2.0337975025177 Valid loss: 0.6092141270637512
+Epoch 180: Train loss: 1.9578204154968262 Valid loss: 0.6102926731109619
+Epoch 190: Train loss: 1.8891730308532715 Valid loss: 0.6113569140434265
+Epoch 200: Train loss: 1.8293862342834473 Valid loss: 0.6123934388160706
+Epoch 210: Train loss: 1.7580639123916626 Valid loss: 0.6135764718055725
+Epoch 220: Train loss: 1.6993038654327393 Valid loss: 0.614677369594574
+Epoch 230: Train loss: 1.647086262702942 Valid loss: 0.6157262921333313
+Epoch 240: Train loss: 1.5930829048156738 Valid loss: 0.616844117641449
+Epoch 250: Train loss: 1.5427501201629639 Valid loss: 0.6177898049354553
+Epoch 260: Train loss: 1.4955604076385498 Valid loss: 0.6186732053756714
+Epoch 270: Train loss: 1.451635479927063 Valid loss: 0.6197298169136047
+Epoch 280: Train loss: 1.4049707651138306 Valid loss: 0.6209259033203125
+Epoch 290: Train loss: 1.3602315187454224 Valid loss: 0.6220237612724304
+Epoch 300: Train loss: 1.3175222873687744 Valid loss: 0.6230388283729553
+[2026-10-29 22:22:37] [ 22/ 22] DONE foodon__multibox-k2-init__d50__s0.json | wall=28.93s | train=5.75s | modelness=0.2220 | hvr=null | f_mrr=0.0054 | gpu_mb=443.2 | eff_bs=32768
+[2026-10-29 22:22:37] Completed sweep suite=real smoke=False: ran=22 skipped=0 total=22 in 1254.60s
