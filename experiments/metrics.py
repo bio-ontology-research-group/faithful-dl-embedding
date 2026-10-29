@@ -31,7 +31,7 @@ from scipy.stats import rankdata
 import torch
 
 from mowl.geometric.helly import HellyCertificate, certificate_triangles
-from mowl.geometric.normal_forms import AUX_NS, BOTTOM, NF2, TOP
+from mowl.geometric.normal_forms import BOTTOM, NF2, TOP
 
 from experiments.cm_cache import get_canonical_model
 from experiments.datasets import DatasetBundle
@@ -39,16 +39,17 @@ from experiments.datasets import DatasetBundle
 if TYPE_CHECKING:  # pragma: no cover
     from mowl.geometric import CanonicalModel
 
-AUXILIARY_IRI_BASE = "http://mowl.borg/aux/"
+AUXILIARY_IRI_PREFIXES = (
+    "http://mowl.borg/aux/",
+    "http://mowl.borg/aux#",
+)
 
 
 def _is_named_class(iri: str) -> bool:
     """Return ``True`` iff ``iri`` is a named ontology class (not ``TOP``, ``BOTTOM``, or auxiliary)."""
     if iri in (TOP, BOTTOM):
         return False
-    if iri.startswith(AUXILIARY_IRI_BASE) or iri.startswith(AUX_NS):
-        return False
-    if "/aux" in iri or "aux#" in iri:
+    if iri.startswith(AUXILIARY_IRI_PREFIXES):
         return False
     return True
 
@@ -132,8 +133,9 @@ def class_regions(model: Any) -> Tuple[np.ndarray, np.ndarray]:
 def ranking_metrics(
     model: Any,
     bundle: DatasetBundle,
-    device: str = "cpu",
+    device: Optional[str] = None,
     batch_size: int = 16,
+    evaluator: Optional[Any] = None,
 ) -> Dict[str, float]:
     """Compute mOWL subsumption ranking metrics on ``bundle.dataset.testing``, prefixed with ``rank_``.
 
@@ -145,10 +147,15 @@ def ranking_metrics(
         Experiment dataset bundle. Returns ``{}`` when ``bundle.task != "subsumption"``
         or ``bundle.dataset.testing is None``.
     device : str, optional
-        Evaluation device string (default: ``"cpu"``).
+        Evaluation device string. Defaults to ``module``'s own parameter device,
+        and restores ``module``'s original device and ``train``/``eval`` mode
+        after evaluation.
     batch_size : int, optional
         Test-tuple batch size for :class:`~mowl.evaluation.SubsumptionEvaluator`
         (default: ``16``).
+    evaluator : SubsumptionEvaluator, optional
+        Pre-constructed evaluator for ``bundle.dataset`` (avoids re-projecting
+        large filter ontologies across runs when cached on ``bundle``).
 
     Returns
     -------
@@ -162,6 +169,10 @@ def ranking_metrics(
     from mowl.evaluation import SubsumptionEvaluator
 
     module = getattr(model, "module", model)
+    orig_device = _module_device(module)
+    was_training = module.training
+    resolved_device = str(orig_device) if device is None else str(device)
+
     filter_ontologies = [
         ont
         for ont in (
@@ -171,14 +182,56 @@ def ranking_metrics(
         )
         if ont is not None
     ]
-    evaluator = SubsumptionEvaluator(
-        bundle.dataset, batch_size=batch_size, device=device
-    )
-    raw_metrics = evaluator.evaluate(
-        module,
-        bundle.dataset.testing,
-        filter_ontologies=filter_ontologies,
-    )
+
+    cached_eval = evaluator
+    if cached_eval is None:
+        cached_eval = getattr(bundle, "_subsumption_evaluator", None)
+        if (
+            cached_eval is not None
+            and (
+                str(getattr(cached_eval, "device", None)) != resolved_device
+                or getattr(cached_eval, "batch_size", None) != batch_size
+            )
+        ):
+            cached_eval = None
+
+    if cached_eval is None:
+        cached_eval = SubsumptionEvaluator(
+            bundle.dataset, batch_size=batch_size, device=resolved_device
+        )
+        testing_data = cached_eval.create_tuples(bundle.dataset.testing)
+        filter_data = None
+        if filter_ontologies:
+            import torch as th
+
+            filter_data = th.cat(
+                [cached_eval.create_tuples(ont) for ont in filter_ontologies], dim=0
+            )
+            cached_eval.update_filtering_labels(filter_data)
+        setattr(cached_eval, "_cached_testing_data", testing_data)
+        setattr(bundle, "_subsumption_evaluator", cached_eval)
+
+    try:
+        if hasattr(cached_eval, "_cached_testing_data"):
+            raw_metrics = cached_eval.compute_ranking_metrics(
+                module,
+                getattr(cached_eval, "_cached_testing_data"),
+                filter_data=None,
+                mode="head_centric",
+            )
+        else:
+            raw_metrics = cached_eval.evaluate(
+                module,
+                bundle.dataset.testing,
+                filter_ontologies=filter_ontologies,
+            )
+    finally:
+        module.to(orig_device)
+        if was_training:
+            module.train()
+        else:
+            module.eval()
+
     return {f"rank_{k}": float(v) for k, v in raw_metrics.items()}
 
 
@@ -197,6 +250,9 @@ def _build_nf2_index(cm: "CanonicalModel") -> Dict[str, List[NF2]]:
     return nf2_by_sub
 
 
+# NOTE: _fast_joint_satisfiable intentionally remains in experiments/metrics.py
+# rather than moving upstream because it directly inspects and populates
+# CanonicalModel's private _conjunction_cache and _joint_sat_cache dicts.
 def _fast_joint_satisfiable(
     cm: "CanonicalModel",
     nf2_by_sub: Dict[str, List[NF2]],
@@ -296,6 +352,22 @@ def build_faithfulness_sets(
     if cm is None:
         cm = get_canonical_model(bundle)
 
+    cached_sets = getattr(bundle, "_faithfulness_sets_cache", None)
+    cache_key = (int(seed), int(n_sample))
+    if (
+        cached_sets is not None
+        and cached_sets[0] == cache_key
+        and (
+            class_index_dict is None
+            or all(
+                a in class_index_dict and b in class_index_dict
+                for s in cached_sets[1]
+                for a, b in s
+            )
+        )
+    ):
+        return cached_sets[1]
+
     candidates = [
         c
         for c in cm.names
@@ -352,6 +424,7 @@ def build_faithfulness_sets(
             if len(t_und) < n_sample:
                 t_und.append(pair)
 
+    setattr(bundle, "_faithfulness_sets_cache", (cache_key, (t_pos, t_und, t_neg)))
     return t_pos, t_und, t_neg
 
 
@@ -591,7 +664,11 @@ def helly_metrics(
     Returns
     -------
     Dict[str, Any]
-        ``{"helly_violation_rate": float, "degeneracy_rate": float, "n_certificates": int}``.
+        ``{"helly_violation_rate": float, "degeneracy_rate": float, "n_certificates": int, "n_certificates_unmapped": int}``.
+        Certificates with any concept name missing from ``model.class_index_dict``
+        are counted in ``n_certificates_unmapped`` and excluded from the violation
+        and degeneracy rates; raises ``ValueError`` if all non-empty certificates
+        are unmapped.
     """
     if certificates is None:
         if cm is None:
@@ -608,6 +685,7 @@ def helly_metrics(
             "helly_violation_rate": 0.0,
             "degeneracy_rate": 0.0,
             "n_certificates": 0,
+            "n_certificates_unmapped": 0,
         }
 
     centers, offsets = class_regions(model)
@@ -618,35 +696,42 @@ def helly_metrics(
 
     violations = 0
     degeneracies = 0
+    n_unmapped = 0
 
     for cert in certificates:
         all_names = list(
             dict.fromkeys(list(cert.c1) + list(cert.c2) + list(cert.c3))
         )
-        if all(name in c2i for name in all_names) and len(all_names) > 0:
-            first_idx = c2i[all_names[0]]
-            active: List[Tuple[np.ndarray, np.ndarray]] = [
-                (lo_all[first_idx, m], hi_all[first_idx, m]) for m in range(k)
-            ]
-            for name in all_names[1:]:
-                idx_u = c2i[name]
-                next_active: List[Tuple[np.ndarray, np.ndarray]] = []
-                for cur_lo, cur_hi in active:
-                    for m in range(k):
-                        new_lo = np.maximum(cur_lo, lo_all[idx_u, m])
-                        new_hi = np.minimum(cur_hi, hi_all[idx_u, m])
-                        if bool(np.all(new_lo <= new_hi + tol)):
-                            next_active.append((new_lo, new_hi))
-                active = next_active
-                if not active:
-                    break
-            if len(active) > 0:
-                violations += 1
+        pw_names = [p for p in cert.pairwise_names if p is not None]
+        if (
+            len(all_names) == 0
+            or any(name not in c2i for name in all_names)
+            or any(p_name not in c2i for p_name in pw_names)
+        ):
+            n_unmapped += 1
+            continue
+
+        first_idx = c2i[all_names[0]]
+        active: List[Tuple[np.ndarray, np.ndarray]] = [
+            (lo_all[first_idx, m], hi_all[first_idx, m]) for m in range(k)
+        ]
+        for name in all_names[1:]:
+            idx_u = c2i[name]
+            next_active: List[Tuple[np.ndarray, np.ndarray]] = []
+            for cur_lo, cur_hi in active:
+                for m in range(k):
+                    new_lo = np.maximum(cur_lo, lo_all[idx_u, m])
+                    new_hi = np.minimum(cur_hi, hi_all[idx_u, m])
+                    if bool(np.all(new_lo <= new_hi + tol)):
+                        next_active.append((new_lo, new_hi))
+            active = next_active
+            if not active:
+                break
+        if len(active) > 0:
+            violations += 1
 
         is_deg = False
-        for p_name in cert.pairwise_names:
-            if p_name is None or p_name not in c2i:
-                continue
+        for p_name in pw_names:
             off_p = offsets[c2i[p_name]]  # (k, d)
             valid_comps = np.all(off_p > deg_eps, axis=-1)  # (k,)
             if not bool(np.any(valid_comps)):
@@ -655,10 +740,18 @@ def helly_metrics(
         if is_deg:
             degeneracies += 1
 
+    n_mapped = n_certs - n_unmapped
+    if n_mapped == 0:
+        raise ValueError(
+            f"All {n_certs} Helly certificates have concept names missing from "
+            f"model.class_index_dict; the CanonicalModel cache or model is inconsistent."
+        )
+
     return {
-        "helly_violation_rate": float(violations / n_certs),
-        "degeneracy_rate": float(degeneracies / n_certs),
+        "helly_violation_rate": float(violations / n_mapped),
+        "degeneracy_rate": float(degeneracies / n_mapped),
         "n_certificates": int(n_certs),
+        "n_certificates_unmapped": int(n_unmapped),
     }
 
 

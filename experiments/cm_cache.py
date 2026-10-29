@@ -13,11 +13,16 @@ directly with ``pickle`` protocol 5.
 Guarantees
 ----------
 - ``get_canonical_model(bundle)`` caches the built model at
-  ``~/tmp/gfe-data/cm-cache/<dataset-id>-<sha1 of the training ontology file>.pkl``
+  ``~/tmp/gfe-data/cm-cache/<dataset-id>-<sha1 of the training ontology file>-<12-hex code/version tag>.pkl``
   using ``pickle`` protocol 5 and atomic rename (``os.replace``), and reloads it
   on subsequent calls when the file is present.
-- Also caches the loaded model in memory on ``bundle._canonical_model`` so
-  repeated metric calls in the same process do not re-read disk.
+- The 12-hex-character code/version tag hashes the ontology file SHA-1,
+  ``mowl.__version__`` (if available), and the installed source contents of
+  ``mowl/geometric/completion.py``, ``mowl/geometric/normal_forms.py``, and
+  ``mowl/ontology/normalize.py`` (resolved via :mod:`importlib`), so stale
+  pickles from older normaliser or completion code are ignored automatically.
+- Also caches the loaded model in memory on ``bundle._canonical_model`` and
+  checks the in-memory cache before hashing the ontology file on disk.
 - Provides a CLI ``python -m experiments.cm_cache --dataset <id>`` (or
   ``--dataset all``) to pre-build caches.
 
@@ -30,11 +35,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import os
 from pathlib import Path
 import pickle
 import time
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import mowl
 
@@ -45,6 +51,11 @@ if TYPE_CHECKING:  # pragma: no cover
     from mowl.geometric import CanonicalModel
 
 CM_CACHE_DIR: Path = RAW_DATA_ROOT / "cm-cache"
+_CODE_TAG_MODULES: Tuple[str, ...] = (
+    "mowl.geometric.completion",
+    "mowl.geometric.normal_forms",
+    "mowl.ontology.normalize",
+)
 
 
 def _sha1_file(path: Path) -> str:
@@ -57,6 +68,26 @@ def _sha1_file(path: Path) -> str:
                 break
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _code_version_tag(ont_sha1: str) -> str:
+    """Compute a 12-hex-char SHA-1 tag over ``ont_sha1``, ``mowl.__version__``, and normaliser/completion sources."""
+    digest = hashlib.sha1()
+    digest.update(ont_sha1.encode("utf-8"))
+    digest.update(b"\x00")
+    version_str = str(getattr(mowl, "__version__", ""))
+    digest.update(version_str.encode("utf-8"))
+    digest.update(b"\x00")
+    for mod_name in _CODE_TAG_MODULES:
+        spec = importlib.util.find_spec(mod_name)
+        if spec is None or spec.origin is None:
+            raise RuntimeError(f"Cannot locate module source via importlib for {mod_name!r}")
+        mod_path = Path(spec.origin).resolve()
+        digest.update(mod_name.encode("utf-8"))
+        digest.update(b"\x00")
+        digest.update(mod_path.read_bytes())
+        digest.update(b"\x00")
+    return digest.hexdigest()[:12]
 
 
 def _resolve_ontology_path(bundle: DatasetBundle) -> Path:
@@ -81,11 +112,12 @@ def _resolve_ontology_path(bundle: DatasetBundle) -> Path:
 def cache_path_for_bundle(
     bundle: DatasetBundle, cache_dir: Path | str = CM_CACHE_DIR
 ) -> Path:
-    """Return ``<cache_dir>/<dataset-id>-<sha1>.pkl`` for ``bundle``."""
+    """Return ``<cache_dir>/<dataset-id>-<sha1>-<code_tag_12>.pkl`` for ``bundle``."""
     ont_path = _resolve_ontology_path(bundle)
     sha1_hex = _sha1_file(ont_path)
+    code_tag = _code_version_tag(sha1_hex)
     out_dir = Path(cache_dir).expanduser().resolve()
-    return out_dir / f"{bundle.name}-{sha1_hex}.pkl"
+    return out_dir / f"{bundle.name}-{sha1_hex}-{code_tag}.pkl"
 
 
 def get_canonical_model(
@@ -110,25 +142,26 @@ def get_canonical_model(
     mowl.geometric.CanonicalModel
         Saturated canonical model of ``bundle.dataset``.
     """
+    resolved_cache_dir = str(Path(cache_dir).expanduser().resolve())
+    if (
+        not force_rebuild
+        and getattr(bundle, "_canonical_model", None) is not None
+        and getattr(bundle, "_canonical_model_cache_dir", None) == resolved_cache_dir
+    ):
+        return getattr(bundle, "_canonical_model")
+
     mowl.init_jvm("8g")
     from mowl.geometric import CanonicalModel
 
     pkl_path = cache_path_for_bundle(bundle, cache_dir=cache_dir)
     pkl_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if (
-        not force_rebuild
-        and pkl_path.exists()
-        and getattr(bundle, "_canonical_model", None) is not None
-        and getattr(bundle, "_canonical_model_path", None) == str(pkl_path)
-    ):
-        return getattr(bundle, "_canonical_model")
-
     if not force_rebuild and pkl_path.exists():
         with pkl_path.open("rb") as f:
             cm: CanonicalModel = pickle.load(f)
         setattr(bundle, "_canonical_model", cm)
         setattr(bundle, "_canonical_model_path", str(pkl_path))
+        setattr(bundle, "_canonical_model_cache_dir", resolved_cache_dir)
         return cm
 
     cm = CanonicalModel.from_dataset(bundle.dataset)
@@ -144,6 +177,7 @@ def get_canonical_model(
 
     setattr(bundle, "_canonical_model", cm)
     setattr(bundle, "_canonical_model_path", str(pkl_path))
+    setattr(bundle, "_canonical_model_cache_dir", resolved_cache_dir)
     return cm
 
 

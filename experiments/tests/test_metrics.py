@@ -1,6 +1,7 @@
 """Tests for experiment evaluation metrics and canonical model cache (Task 7)."""
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -16,14 +17,22 @@ from mowl.geometric import (
     BOTTOM,
     TOP,
     CanonicalModel,
+    HellyCertificate,
     certificate_triangles,
     helly_check,
 )
 from mowl.models import BoxSquaredEL, ELBE, MultiBoxEL
 
-from experiments.cm_cache import get_canonical_model, main as cm_cache_main
+import experiments.cm_cache as cm_cache_mod
+from experiments.cm_cache import (
+    cache_path_for_bundle,
+    get_canonical_model,
+    main as cm_cache_main,
+)
+from experiments.config import RAW_DATA_ROOT
 from experiments.datasets import DatasetBundle, load_dataset
 from experiments.metrics import (
+    _is_named_class,
     build_faithfulness_sets,
     class_regions,
     cost_metrics,
@@ -125,7 +134,7 @@ def test_modelness_restores_margin(t3_bundle: DatasetBundle) -> None:
 
 
 def test_helly_metrics_box2el_random_init_violates_t3(t3_bundle: DatasetBundle) -> None:
-    """Verify helly_metrics on random-init BoxSquaredEL on T3 returns valid rates and 1 cert."""
+    """Verify helly_metrics on BoxSquaredEL on T3: random init, positive controls, and unmapped certs."""
     cm = get_canonical_model(t3_bundle)
     certs = certificate_triangles(cm)
     assert len(certs) == 1
@@ -134,8 +143,42 @@ def test_helly_metrics_box2el_random_init_violates_t3(t3_bundle: DatasetBundle) 
     b2 = BoxSquaredEL(t3_bundle.dataset, embed_dim=4)
     res = helly_metrics(b2, t3_bundle, cm, certs)
     assert res["n_certificates"] == 1
+    assert res["n_certificates_unmapped"] == 0
     assert 0.0 <= res["helly_violation_rate"] <= 1.0
     assert 0.0 <= res["degeneracy_rate"] <= 1.0
+
+    # Positive control 1: identical non-degenerate boxes -> helly_violation_rate 1.0, degeneracy 0.0
+    with torch.no_grad():
+        b2.module.class_center.weight.zero_()
+        b2.module.class_offset.weight.fill_(1.0)
+    res_ident = helly_metrics(b2, t3_bundle, cm, certs)
+    assert res_ident["n_certificates"] == 1
+    assert res_ident["n_certificates_unmapped"] == 0
+    assert res_ident["helly_violation_rate"] == pytest.approx(1.0)
+    assert res_ident["degeneracy_rate"] == pytest.approx(0.0)
+
+    # Positive control 2: all offsets 0 -> degeneracy_rate 1.0
+    with torch.no_grad():
+        b2.module.class_offset.weight.zero_()
+    res_zero_off = helly_metrics(b2, t3_bundle, cm, certs)
+    assert res_zero_off["n_certificates"] == 1
+    assert res_zero_off["n_certificates_unmapped"] == 0
+    assert res_zero_off["degeneracy_rate"] == pytest.approx(1.0)
+
+    # Unmapped certificate handling: excluded from rates, counted in n_certificates_unmapped;
+    # ValueError when all certificates are unmapped.
+    unmapped_cert = replace(certs[0], c1=(f"{NS}Unmapped1",))
+    with torch.no_grad():
+        b2.module.class_center.weight.zero_()
+        b2.module.class_offset.weight.fill_(1.0)
+    res_mixed = helly_metrics(b2, t3_bundle, cm, [certs[0], unmapped_cert])
+    assert res_mixed["n_certificates"] == 2
+    assert res_mixed["n_certificates_unmapped"] == 1
+    assert res_mixed["helly_violation_rate"] == pytest.approx(1.0)
+    assert res_mixed["degeneracy_rate"] == pytest.approx(0.0)
+
+    with pytest.raises(ValueError, match="missing from model.class_index_dict"):
+        helly_metrics(b2, t3_bundle, cm, [unmapped_cert])
 
 
 def test_helly_metrics_handmade_multibox_zero(t3_bundle: DatasetBundle) -> None:
@@ -190,10 +233,16 @@ def test_faithfulness_sets_are_disjoint_and_sized() -> None:
     for a, b in set_pos | set_und | set_neg:
         assert a not in (TOP, BOTTOM)
         assert b not in (TOP, BOTTOM)
-        assert "/aux" not in a and "aux#" not in a
-        assert "/aux" not in b and "aux#" not in b
+        assert not a.startswith(("http://mowl.borg/aux/", "http://mowl.borg/aux#"))
+        assert not b.startswith(("http://mowl.borg/aux/", "http://mowl.borg/aux#"))
         assert a in model.named_class_index_dict
         assert b in model.named_class_index_dict
+
+    # Prefix-only auxiliary filter check: substring '/aux' in a domain IRI is NOT filtered out
+    assert not _is_named_class("http://mowl.borg/aux/3f2a9c01be#AuxiliaryEntity1")
+    assert not _is_named_class("http://mowl.borg/aux#AuxiliaryEntity1")
+    assert _is_named_class("http://example.org/onto/auxin_response")
+    assert _is_named_class("http://example.org/onto/aux#ClassA")
 
     for a, b in t_neg:
         assert not cm.joint_satisfiable((a, b))
@@ -237,10 +286,23 @@ def test_class_regions_shapes(t3_bundle: DatasetBundle) -> None:
 
 
 def test_ranking_and_cost_metrics() -> None:
-    """Verify ranking_metrics prefixes keys with rank_ and cost_metrics reports parameters and components."""
+    """Verify ranking_metrics prefixes keys with rank_, restores mode/device, and cost_metrics reports parameters."""
     bundle = load_dataset("pizza")
-    mb = MultiBoxEL(bundle.dataset, embed_dim=8, n_components=2)
-    rank = ranking_metrics(mb, bundle, device="cpu")
+    mb = MultiBoxEL(bundle.dataset, embed_dim=8, n_components=2, device="cpu")
+    mb.module.train()
+    assert mb.module.training is True
+    orig_device = next(mb.module.parameters()).device
+
+    # Default device (None -> module's own device) and restore train mode + device
+    rank = ranking_metrics(mb, bundle)
+    assert mb.module.training is True
+    assert next(mb.module.parameters()).device == orig_device
+
+    mb.module.eval()
+    rank_eval = ranking_metrics(mb, bundle, device="cpu")
+    assert mb.module.training is False
+    assert rank_eval == rank
+
     assert len(rank) > 0
     assert all(k.startswith("rank_") for k in rank)
     for expected_key in (
@@ -268,16 +330,49 @@ def test_ranking_and_cost_metrics() -> None:
     assert cost["total_train_time_s"] == pytest.approx(0.4)
 
 
-def test_cm_cache_roundtrip_and_cli() -> None:
-    """Verify get_canonical_model writes a protocol-5 pickle cache and reloads it."""
-    b = load_dataset("tk3")
-    cm1 = get_canonical_model(b)
-    assert isinstance(cm1, CanonicalModel)
+def test_cm_cache_roundtrip_and_cli(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify get_canonical_model writes a protocol-5 pickle with code-tag key, checks memory first, and reloads."""
+    import shutil
+    import uuid
 
-    b_fresh = load_dataset("tk3")
-    cm2 = get_canonical_model(b_fresh)
-    assert cm2.names == cm1.names
-    assert cm2.entails(f"{NS}A1", f"{NS}X2")
+    tmp_path = (RAW_DATA_ROOT / "test-cm-cache" / uuid.uuid4().hex).resolve()
+    assert not str(tmp_path).startswith("/tmp")
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    try:
+        b = load_dataset("tk3")
+        expected_pkl = cache_path_for_bundle(b, cache_dir=tmp_path)
+        # Key format: <dataset>-<40-hex-ont-sha1>-<12-hex-code-tag>.pkl
+        parts = expected_pkl.stem.split("-")
+        assert parts[0] == "tk3"
+        assert len(parts[1]) == 40
+        assert len(parts[2]) == 12
 
-    # CLI invocation
-    cm_cache_main(["--dataset", "tk3"])
+        cm1 = get_canonical_model(b, cache_dir=tmp_path, force_rebuild=True)
+        assert isinstance(cm1, CanonicalModel)
+        assert expected_pkl.exists()
+        with expected_pkl.open("rb") as f:
+            header = f.read(2)
+        assert header == b"\x80\x05"
+
+        # In-memory cache hit must return before hashing the ontology file
+        def _forbid_sha1(_p: Path) -> str:
+            raise AssertionError("_sha1_file should not be called on in-memory cache hit")
+
+        monkeypatch.setattr(cm_cache_mod, "_sha1_file", _forbid_sha1)
+        cm_mem = get_canonical_model(b, cache_dir=tmp_path, force_rebuild=False)
+        assert cm_mem is cm1
+        monkeypatch.undo()
+
+        # Reload from protocol-5 pickle on a fresh bundle (no in-memory cache)
+        b_fresh = load_dataset("tk3")
+        cm2 = get_canonical_model(b_fresh, cache_dir=tmp_path, force_rebuild=False)
+        assert cm2 is not cm1
+        assert cm2.names == cm1.names
+        assert cm2.axioms == cm1.axioms
+        assert cm2.completion == cm1.completion
+        assert cm2.entails(f"{NS}A1", f"{NS}X2")
+
+        # CLI invocation into the isolated cache_dir
+        cm_cache_main(["--dataset", "tk3", "--cache-dir", str(tmp_path)])
+    finally:
+        shutil.rmtree(tmp_path, ignore_errors=True)
