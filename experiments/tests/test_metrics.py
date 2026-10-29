@@ -32,6 +32,8 @@ from experiments.cm_cache import (
 from experiments.config import RAW_DATA_ROOT
 from experiments.datasets import DatasetBundle, load_dataset
 from experiments.metrics import (
+    _CPUFilteredRowLookup,
+    _compute_fast_head_centric_ranking_metrics,
     _is_named_class,
     build_faithfulness_sets,
     class_regions,
@@ -179,6 +181,13 @@ def test_helly_metrics_box2el_random_init_violates_t3(t3_bundle: DatasetBundle) 
 
     with pytest.raises(ValueError, match="missing from model.class_index_dict"):
         helly_metrics(b2, t3_bundle, cm, [unmapped_cert])
+
+    # Fix 5: When n_certificates == 0, helly_violation_rate and degeneracy_rate must be None (null)
+    res_empty = helly_metrics(b2, t3_bundle, cm, [])
+    assert res_empty["n_certificates"] == 0
+    assert res_empty["n_certificates_unmapped"] == 0
+    assert res_empty["helly_violation_rate"] is None
+    assert res_empty["degeneracy_rate"] is None
 
 
 def test_helly_metrics_handmade_multibox_zero(t3_bundle: DatasetBundle) -> None:
@@ -376,3 +385,67 @@ def test_cm_cache_roundtrip_and_cli(monkeypatch: pytest.MonkeyPatch) -> None:
         cm_cache_main(["--dataset", "tk3", "--cache-dir", str(tmp_path)])
     finally:
         shutil.rmtree(tmp_path, ignore_errors=True)
+
+
+def test_filtered_ranking_does_not_filter_test_tuple() -> None:
+    """Fix 1(b): Verify filtered ranking resets the test tuple's own filter label to 1 before ranking."""
+    from mowl.evaluation.base import BaseRankingEvaluator
+
+    class _HandScoreEvaluator(BaseRankingEvaluator):
+        def __init__(self, score_matrix: torch.Tensor) -> None:
+            heads = torch.tensor([0, 1], dtype=torch.long)
+            tails = torch.tensor([0, 1, 2, 3], dtype=torch.long)
+            super().__init__(heads, tails, batch_size=2, device="cpu")
+            self._score_matrix = score_matrix
+
+        def get_expanded_scores(self, evaluation_model, batch, mode):
+            h_indices = batch[:, 0].tolist()
+            return self._score_matrix[h_indices], None
+
+    # 2 test tuples: (head=0, tail=2) and (head=1, tail=1)
+    # Row 0 scores: tail 0 has 0.1 (other known positive), tail 2 (target) has 0.2, tail 1 has 0.5, tail 3 has 0.9.
+    #   Unfiltered order: [0, 2, 1, 3] -> target tail 2 has rank 2.
+    #   Filtered order (when (0,0) is filtered and target (0,2) is NOT filtered even if marked 10000 in filtering_labels):
+    #     filtered scores = [1000.0, 0.5, 0.2, 0.9] -> order [2, 1, 3, 0] -> target tail 2 has rank 1.
+    # Row 1 scores: tail 2 has 0.1 (other known positive), tail 0 has 0.3, tail 1 (target) has 0.4, tail 3 has 0.8.
+    #   Unfiltered order: [2, 0, 1, 3] -> target tail 1 has rank 3.
+    #   Filtered order (when (1,2) is filtered and target (1,1) is NOT filtered even if marked 10000 in filtering_labels):
+    #     filtered scores = [0.3, 0.4, 1000.0, 0.8] -> order [0, 1, 3, 2] -> target tail 1 has rank 2.
+    scores = torch.tensor(
+        [
+            [0.1, 0.5, 0.2, 0.9],
+            [0.3, 0.4, 0.1, 0.8],
+        ],
+        dtype=torch.float32,
+    )
+    test_data = torch.tensor([[0, 2], [1, 1]], dtype=torch.long)
+    # Mark both the other known positives (0,0), (1,2) AND the test tuples themselves (0,2), (1,1) as 10000
+    filter_data = torch.tensor([[0, 0], [0, 2], [1, 2], [1, 1]], dtype=torch.long)
+    dummy_module = torch.nn.Linear(1, 1)
+
+    for use_cpu_lookup in (False, True):
+        ev = _HandScoreEvaluator(scores)
+        ev.update_filtering_labels(filter_data)
+        raw_labels = ev.filtering_labels.clone()
+        assert raw_labels[0, 2].item() == pytest.approx(10000.0)
+        assert raw_labels[1, 1].item() == pytest.approx(10000.0)
+        if use_cpu_lookup:
+            ev.filtering_labels = _CPUFilteredRowLookup(raw_labels, "cpu")  # type: ignore[assignment]
+
+        res = _compute_fast_head_centric_ranking_metrics(ev, dummy_module, test_data)
+        # Unfiltered: ranks [2, 3] -> mr = 2.5, mrr = (1/2 + 1/3)/2 = 5/12, hits@1 = 0.0, hits@3 = 1.0
+        assert res["mr"] == pytest.approx(2.5)
+        assert res["mrr"] == pytest.approx((0.5 + 1.0 / 3.0) / 2.0)
+        assert res["hits@1"] == pytest.approx(0.0)
+        assert res["hits@3"] == pytest.approx(1.0)
+
+        # Filtered: ranks [1, 2] -> f_mr = 1.5, f_mrr = (1.0 + 0.5)/2 = 0.75, f_hits@1 = 0.5, f_hits@3 = 1.0
+        assert res["f_mr"] == pytest.approx(1.5)
+        assert res["f_mrr"] == pytest.approx(0.75)
+        assert res["f_hits@1"] == pytest.approx(0.5)
+        assert res["f_hits@3"] == pytest.approx(1.0)
+
+        # Underlying filter matrix must not have been mutated in place
+        stored = ev.filtering_labels._cpu_labels if use_cpu_lookup else ev.filtering_labels
+        assert stored[0, 2].item() == pytest.approx(10000.0)
+        assert stored[1, 1].item() == pytest.approx(10000.0)

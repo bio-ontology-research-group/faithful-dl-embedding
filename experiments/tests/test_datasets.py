@@ -98,21 +98,38 @@ def test_pizza_split_disjoint_and_closed():
 
     assert len(valid_pairs) == 16
     assert len(test_pairs) == 16
-    assert len(dc_pairs) == 365
+    assert len(dc_pairs) == 224
 
     # Train/valid/test atomic subsumptions must be pairwise disjoint
     assert train_pairs.isdisjoint(valid_pairs)
     assert train_pairs.isdisjoint(test_pairs)
     assert valid_pairs.isdisjoint(test_pairs)
 
-    # Every valid/test axiom must be present in the deductive closure and non-auxiliary
+    # Fix 1(a): ontology_deductive_closure.owl is the deductive closure of the training
+    # ontology (cm_train); since 0/16 valid and 0/16 test axioms are entailed by train,
+    # none appears in dc_pairs.
+    cm_train = CanonicalModel.from_normalised(train_no)
+    sat_non_aux = {
+        n
+        for n in (set(cm_train.names) - {TOP, BOTTOM})
+        if not is_auxiliary_iri(n)
+    }
+    expected_train_dc = {
+        (a, b)
+        for a in sat_non_aux
+        for b in sat_non_aux
+        if a != b and cm_train.entails(a, b)
+    }
+    assert dc_pairs == expected_train_dc
+    assert dc_pairs.isdisjoint(valid_pairs)
+    assert dc_pairs.isdisjoint(test_pairs)
+
     for sub, sup in valid_pairs | test_pairs:
         assert sub not in (TOP, BOTTOM)
         assert sup not in (TOP, BOTTOM)
         assert sub != sup
         assert not is_auxiliary_iri(sub)
         assert not is_auxiliary_iri(sup)
-        assert (sub, sup) in dc_pairs
 
     # I1: No deductive closure axiom is auxiliary or involves TOP/BOTTOM
     for sub, sup in dc_pairs:
@@ -206,13 +223,15 @@ def test_pizza_raw_entailment_and_asserted_candidates():
         assert full_cm.is_satisfiable(sup)
         assert full_cm.entails(sub, sup)
 
+    train_cm = CanonicalModel.from_dataset(ds)
     expected_dc = {
         (a, b)
         for a in sat_non_aux
         for b in sat_non_aux
-        if a != b and full_cm.entails(a, b)
+        if a != b and train_cm.entails(a, b)
     }
     assert dc_pairs == expected_dc
+    assert dc_pairs.isdisjoint(valid_pairs | test_pairs)
 
 
 @pytest.mark.parametrize(

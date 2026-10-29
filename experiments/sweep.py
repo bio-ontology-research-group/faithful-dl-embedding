@@ -9,9 +9,10 @@ CLI usage
 Guarantees
 ----------
 - ``enumerate_cells(suite, smoke=False)`` enumerates ``(dataset, method, dim, seed)``
-  tuples in deterministic order across ``METHODS`` (11 methods), suite datasets,
-  ``DATASET_DIMS[dataset]``, and ``DATASET_SEEDS[dataset]`` (or ``[0]`` when
-  ``smoke=True``).
+  tuples in deterministic order across ``methods_for_dataset(dataset)`` (11 methods
+  for ``tk3..tk6``, ``go``, ``foodon``; 12 methods including ``box2el-milp`` for
+  ``pizza``), suite datasets, ``DATASET_DIMS[dataset]``, and
+  ``DATASET_SEEDS[dataset]`` (or ``[0]`` when ``smoke=True``).
 - Skips any cell whose output JSON ``{dataset}__{method}__d{dim}__s{seed}.json``
   already exists in ``--out`` (unless ``--force`` is passed).
 - Reuses the loaded :class:`~experiments.datasets.DatasetBundle` and cached
@@ -42,6 +43,7 @@ from experiments.config import (
     RUNS_DIR,
     SMOKE_RESULTS_DIR,
     SYNTHETIC_DATASETS,
+    methods_for_dataset,
 )
 from experiments.datasets import load_dataset
 from experiments.run import execute_run, run_filename
@@ -93,7 +95,7 @@ def enumerate_cells(
         )
         for dim in dims:
             for seed in seeds:
-                for method_id in METHODS:
+                for method_id in methods_for_dataset(ds_name):
                     cells.append(
                         SweepCell(
                             dataset=ds_name,
@@ -279,12 +281,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         m = payload["metrics"]
         cfg = payload["config"]
         elapsed = time.monotonic() - t_cell0
+        hvr_val = m.get("helly_violation_rate")
+        hvr_str = f"{hvr_val:.4f}" if hvr_val is not None else "null"
+        fmrr_val = m.get("rank_f_mrr")
+        fmrr_str = f"{fmrr_val:.4f}" if fmrr_val is not None else "null"
         _log(
             f"[{idx:3d}/{len(cells):3d}] DONE {cell.filename} | "
             f"wall={elapsed:.2f}s | train={payload['timings']['total_train_time_s']:.2f}s | "
             f"modelness={m.get('modelness_all', 0.0):.4f} | "
-            f"hvr={m.get('helly_violation_rate', 0.0):.4f} | "
-            f"f_mrr={m.get('rank_f_mrr', float('nan')):.4f} | "
+            f"hvr={hvr_str} | "
+            f"f_mrr={fmrr_str} | "
             f"gpu_mb={m.get('peak_gpu_memory_mb', 0.0):.1f} | "
             f"eff_bs={cfg['effective_batch_size']}"
         )

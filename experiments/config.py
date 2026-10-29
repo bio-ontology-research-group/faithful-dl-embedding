@@ -138,6 +138,14 @@ METHODS: Dict[str, Dict[str, Any]] = {
         "init": "projected",
         "anchor_weight": 0.1,
     },
+    "box2el-milp": {
+        "model": "BoxSquaredEL",
+        "n_components": 1,
+        "init": "milp",
+        "milp_time_limit": 120.0,
+        "anchor_weight": 0.0,
+        "datasets": ["pizza"],
+    },
     "multibox-k1": {
         "model": "MultiBoxEL",
         "n_components": 1,
@@ -169,3 +177,12 @@ METHODS: Dict[str, Dict[str, Any]] = {
         "anchor_weight": 0.0,
     },
 }
+
+
+def methods_for_dataset(dataset: str) -> List[str]:
+    """Return ordered method identifiers applicable to ``dataset``."""
+    return [
+        m_id
+        for m_id, spec in METHODS.items()
+        if spec.get("datasets") is None or dataset in spec["datasets"]
+    ]

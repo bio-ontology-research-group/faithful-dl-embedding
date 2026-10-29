@@ -11,9 +11,9 @@ Guarantees
 - Writes ``<out>/{dataset}__{method}__d{dim}__s{seed}.json`` atomically via a
   temporary file and ``os.replace`` only after all metrics succeed; if any metric
   raises, no JSON file is written and the runner exits non-zero.
-- Seeds both ``torch.manual_seed(seed)`` (and ``torch.cuda.manual_seed_all(seed)``)
-  and ``np.random.seed(seed)`` before model construction and before each training
-  retry.
+- Seeds ``random.seed(seed)``, ``np.random.seed(seed)``, and ``torch.manual_seed(seed)``
+  (plus ``torch.cuda.manual_seed_all(seed)``) before model construction and before each
+  training attempt.
 - Uses cached :class:`~mowl.geometric.CanonicalModel` via
   :func:`~experiments.cm_cache.get_canonical_model` for both ``ExactBoxInit``
   (passing ``model.class_index_dict`` so auxiliary normaliser classes are
@@ -25,19 +25,26 @@ Guarantees
 - For satisfaction datasets (``tk3``..``tk6``), trains for the fixed number of
   epochs without validation and evaluates the final parameters.
 - Handles ``torch.cuda.OutOfMemoryError`` per Spec §7: halves ``batch_size`` and
-  retries up to 3 times, recording ``config["effective_batch_size"]`` and
-  ``config["oom_retries"]``. When ``effective_batch_size`` has been halved below
-  the full-batch default, chunks GCI scoring inside the module's ``forward`` call
-  into slices of ``effective_batch_size`` rows because upstream
-  ``EmbeddingELModel.train`` passes ``gci_dataset[:]`` in one tensor per GCI.
+  retries up to 3 times (``max_oom_retries = 3``), recording
+  ``config["effective_batch_size"]`` and ``config["oom_retries"]``. When
+  ``effective_batch_size`` has been halved below the full-batch default, chunks
+  GCI scoring inside the module's ``forward`` call into slices of
+  ``effective_batch_size`` rows. Note that because upstream
+  ``EmbeddingELModel.train`` calls ``backward()`` once on the concatenated
+  full-batch GCI loss without gradient checkpointing, forward chunking bounds
+  only peak non-saved intermediate tensor allocations inside each chunk's
+  forward pass, not autograd saved activations across chunks (no OOM occurred in
+  the smoke sweep; max GPU memory was 3.7 GB).
 """
 from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
+from dataclasses import replace
 import json
 import os
 from pathlib import Path
+import random
 import subprocess
 import time
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional
@@ -87,6 +94,35 @@ def _git_rev_parse(repo_dir: Path) -> str:
         return "unknown"
 
 
+def _git_is_dirty(repo_dir: Path) -> bool:
+    """Return ``True`` iff ``git status --porcelain`` in ``repo_dir`` has entries outside untracked ``results/`` and ``logs/``."""
+    try:
+        res = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(repo_dir),
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5.0,
+        )
+        for line in res.stdout.splitlines():
+            if not line.strip():
+                continue
+            if line.startswith("?? "):
+                rel = line[3:].strip().strip('"')
+                norm = "/" + rel.lstrip("/")
+                if (
+                    "/results/" in norm
+                    or "/logs/" in norm
+                    or norm.endswith(("/results", "/logs"))
+                ):
+                    continue
+            return True
+        return False
+    except Exception:  # pragma: no cover
+        return True
+
+
 def _mowl_repo_root() -> Path:
     """Resolve the git worktree root of the imported ``mowl`` package."""
     mowl_init = Path(mowl.__file__).resolve()
@@ -94,7 +130,7 @@ def _mowl_repo_root() -> Path:
 
 
 def collect_env_info(device: str) -> Dict[str, Any]:
-    """Collect git hashes of both repositories, torch/CUDA versions, and GPU name."""
+    """Collect git hashes and dirty flags of both repositories, torch/CUDA versions, and GPU name."""
     cuda_avail = torch.cuda.is_available()
     gpu_name: Optional[str] = None
     if cuda_avail:
@@ -103,9 +139,12 @@ def collect_env_info(device: str) -> Dict[str, Any]:
         except Exception:  # pragma: no cover
             gpu_name = None
 
+    mowl_root = _mowl_repo_root()
     return {
         "git_hash_experiments": _git_rev_parse(REPO_ROOT),
-        "git_hash_mowl": _git_rev_parse(_mowl_repo_root()),
+        "git_hash_mowl": _git_rev_parse(mowl_root),
+        "git_dirty_experiments": _git_is_dirty(REPO_ROOT),
+        "git_dirty_mowl": _git_is_dirty(mowl_root),
         "torch_version": str(torch.__version__),
         "cuda_version": str(torch.version.cuda),
         "cuda_available": bool(cuda_avail),
@@ -115,11 +154,12 @@ def collect_env_info(device: str) -> Dict[str, Any]:
 
 
 def _seed_everything(seed: int) -> None:
-    """Seed PyTorch (CPU + CUDA) and NumPy legacy RNG."""
+    """Seed Python ``random``, NumPy legacy RNG, and PyTorch (CPU + CUDA)."""
+    random.seed(seed)
+    np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
 
 
 def run_filename(dataset: str, method: str, dim: int, seed: int) -> str:
@@ -279,22 +319,56 @@ def _build_model(
 
     init_report: Optional[Dict[str, Any]] = None
     if init_method is not None:
+        from mowl.geometric.errors import UnsupportedAxiom
+
         if cm is None:
             cm = get_canonical_model(bundle)
         init_cache: Dict[Any, Any] = getattr(bundle, "_exact_box_init_cache", None) or {}
         setattr(bundle, "_exact_box_init_cache", init_cache)
-        init_key = (int(dim), int(k), str(init_method), int(seed), len(model.class_index_dict))
+        milp_time_limit = float(spec.get("milp_time_limit", 120.0))
+        init_key = (
+            int(dim),
+            int(k),
+            str(init_method),
+            int(seed),
+            len(model.class_index_dict),
+            milp_time_limit if init_method == "milp" else None,
+        )
         if init_key in init_cache:
             init_boxes = init_cache[init_key]
         else:
-            init_boxes = ExactBoxInit.from_canonical_model(
-                cm,
-                model.class_index_dict,
-                embed_dim=dim,
-                n_components=k,
-                method=init_method,
-                seed=seed,
-            )
+            init_kwargs: Dict[str, Any] = {
+                "embed_dim": dim,
+                "n_components": k,
+                "method": init_method,
+                "seed": seed,
+            }
+            if init_method == "milp":
+                init_kwargs["milp_time_limit"] = milp_time_limit
+            try:
+                init_boxes = ExactBoxInit.from_canonical_model(
+                    cm,
+                    model.class_index_dict,
+                    **init_kwargs,
+                )
+            except UnsupportedAxiom as exc:
+                t_fb0 = time.monotonic()
+                proj_boxes = ExactBoxInit.from_canonical_model(
+                    cm,
+                    model.class_index_dict,
+                    embed_dim=dim,
+                    n_components=k,
+                    method="projected",
+                    seed=seed,
+                )
+                fb_report = dict(proj_boxes.report)
+                fb_report["requested_method"] = init_method
+                fb_report["method"] = "projected"
+                fb_report["fallback"] = f"{type(exc).__name__}: {exc}"
+                fb_report["elapsed_s"] = float(
+                    proj_boxes.report.get("elapsed_s", time.monotonic() - t_fb0)
+                )
+                init_boxes = replace(proj_boxes, report=fb_report)
             init_cache[init_key] = init_boxes
         model.init_boxes = init_boxes
         init_boxes.apply_to_module(model.module)
@@ -314,10 +388,11 @@ def _chunked_module_forward(
     Upstream ``EmbeddingELModel.train`` evaluates ``self.module(gci_dataset[:], gci_name)``
     in a single full-batch call per GCI normal form rather than iterating over
     ``training_dataloaders``. Wrapping ``module.forward`` to slice inputs along
-    axis 0 when ``len(gci_tensor) > chunk_size`` makes ``batch_size`` halving on
-    CUDA OOM genuinely bound the peak intermediate tensor size (such as the
-    ``(B, k, k, k, d)`` ``gci1`` tensor in ``MultiBoxELModule``) while preserving
-    exact full-batch mean losses and gradients.
+    axis 0 when ``len(gci_tensor) > chunk_size`` bounds peak *non-saved*
+    intermediate tensor allocations inside a single chunk's forward pass (though
+    not autograd saved activations across chunks, because ``backward()`` is
+    called once on the concatenated loss per GCI normal form without gradient
+    checkpointing) while preserving exact full-batch mean losses and gradients.
     """
     if not enabled:
         yield
@@ -354,6 +429,7 @@ def _train_model_with_chunking(
 ) -> None:
     """Run ``model.train(epochs, validate_every)`` recording per-epoch wall-clock times."""
     epoch_times.clear()
+    _ = model.training_datasets
     t_last = [time.monotonic()]
 
     def _on_epoch(epoch_idx: int, _m: Any) -> None:
@@ -427,7 +503,7 @@ def execute_run(
 
     effective_batch_size = int(batch_size)
     oom_retries = 0
-    max_oom_retries = 5
+    max_oom_retries = 3
     epoch_times: List[float] = []
     model: Any = None
     init_report: Optional[Dict[str, Any]] = None
@@ -449,6 +525,9 @@ def execute_run(
             device=resolved_device,
             checkpoint_path=ckpt_path,
         )
+        # Ensure training/validation/testing ELDatasets are loaded before starting the training timer
+        # so the first cell of a dataset does not absorb ontology/ELDataset loading time.
+        _ = model.training_datasets
         model_init_time_s = time.monotonic() - t_init0
 
         if bundle.task == "subsumption" and bundle.dataset.validation is not None:

@@ -52,6 +52,7 @@ SUBSUMPTION_COLUMNS: List[Tuple[str, str]] = [
     ("modelness_all", "Modelness"),
     ("helly_violation_rate", "HVR"),
     ("degeneracy_rate", "DegRate"),
+    ("n_certificates", "Certs"),
     ("mean_effective_components", "Eff-k"),
     ("mean_epoch_time_s", "Epoch(s)"),
     ("total_train_time_s", "Train(s)"),
@@ -94,22 +95,72 @@ def load_raw_runs(raw_dir: Path) -> List[Dict[str, Any]]:
     return records
 
 
-def _format_mean_sd(values: Sequence[Optional[float]], decimals: int = 4) -> str:
-    """Format numeric values as ``mean ± sd`` (or ``mean`` when ``n == 1``, ``—`` when empty/null)."""
-    clean = [
-        float(v)
-        for v in values
-        if v is not None and not (isinstance(v, float) and np.isnan(v))
+_STRUCTURAL_KEYS = frozenset(
+    {
+        "n_certificates",
+        "param_count",
+        "n_components",
+        "mean_effective_components",
+        "mean_epoch_time_s",
+        "total_train_time_s",
+        "peak_gpu_memory_mb",
+        "peak_gpu_memory_bytes",
+    }
+)
+
+
+def _is_valid_number(v: Any) -> bool:
+    """Return ``True`` iff ``v`` is a non-``None``, non-``NaN`` numeric value."""
+    if v is None or isinstance(v, bool):
+        return False
+    try:
+        return not bool(np.isnan(float(v)))
+    except (TypeError, ValueError):
+        return False
+
+
+def _format_row_n(
+    cell_runs: Sequence[Dict[str, Any]],
+    metric_keys: Sequence[str],
+) -> str:
+    """Format the row ``n`` column as ``'k/n'`` (non-null over total runs)."""
+    n_total = len(cell_runs)
+    if n_total == 0:
+        return "0/0"
+    eval_keys = [mk for mk in metric_keys if mk not in _STRUCTURAL_KEYS]
+    check_keys = eval_keys if eval_keys else list(metric_keys)
+    counts = [
+        sum(1 for cr in cell_runs if _is_valid_number(cr.get("metrics", {}).get(mk)))
+        for mk in check_keys
     ]
-    if not clean:
+    non_zero_counts = [c for c in counts if c > 0]
+    k_valid = min(non_zero_counts) if non_zero_counts else 0
+    return f"{k_valid}/{n_total}"
+
+
+def _format_mean_sd(values: Sequence[Optional[float]], decimals: int = 4) -> str:
+    """Format numeric values as ``mean ± sd`` (``ddof=1`` when ``k >= 2``, ``mean`` when ``k == 1``, ``—`` when all null).
+
+    When ``0 < k < n`` (some runs are ``None``/``NaN``), appends `` (k/n)`` so
+    missing/NaN values are never silently dropped.
+    """
+    n_total = len(values)
+    clean = [float(v) for v in values if _is_valid_number(v)]
+    k_valid = len(clean)
+    if k_valid == 0:
         return "—"
     mean_v = float(np.mean(clean))
-    if len(clean) == 1:
+    if k_valid == 1:
         if all(float(v).is_integer() for v in clean) and decimals == 0:
-            return f"{int(round(mean_v))}"
-        return f"{mean_v:.{decimals}f}"
-    sd_v = float(np.std(clean, ddof=0))
-    return f"{mean_v:.{decimals}f} ± {sd_v:.{decimals}f}"
+            base = f"{int(round(mean_v))}"
+        else:
+            base = f"{mean_v:.{decimals}f}"
+    else:
+        sd_v = float(np.std(clean, ddof=1))
+        base = f"{mean_v:.{decimals}f} ± {sd_v:.{decimals}f}"
+    if k_valid < n_total:
+        return f"{base} ({k_valid}/{n_total})"
+    return base
 
 
 def _decimals_for_key(metric_key: str) -> int:
@@ -169,7 +220,7 @@ def render_dataset_markdown(
             k_val = str(cfg0.get("n_components", METHODS.get(m_id, {}).get("n_components", "—")))
             init_val = str(cfg0.get("init") or "random")
             anchor_val = f"{float(cfg0.get('anchor_weight', 0.0)):g}"
-            n_seeds = str(len(cell_runs))
+            n_seeds = _format_row_n(cell_runs, [mk for mk, _ in cols])
 
             row_cells = [f"`{m_id}`", k_val, init_val, anchor_val, n_seeds]
             for metric_key, _ in cols:
@@ -229,7 +280,7 @@ def render_multibox_curve_markdown(runs: Sequence[Dict[str, Any]]) -> str:
                 continue
             cfg0 = cell_runs[0]["config"]
             k_val = str(cfg0.get("n_components", "—"))
-            n_seeds = str(len(cell_runs))
+            n_seeds = _format_row_n(cell_runs, [mk for mk, _ in curve_keys])
             row = [f"`{ds}`", str(dim), f"`{m_id}`", k_val, n_seeds]
             for m_key, dec in curve_keys:
                 vals = [cr["metrics"].get(m_key) for cr in cell_runs]
@@ -267,6 +318,8 @@ def write_all_runs_csv(runs: Sequence[Dict[str, Any]], csv_path: Path) -> None:
     env_fields = [
         "git_hash_experiments",
         "git_hash_mowl",
+        "git_dirty_experiments",
+        "git_dirty_mowl",
         "torch_version",
         "cuda_version",
         "gpu_name",

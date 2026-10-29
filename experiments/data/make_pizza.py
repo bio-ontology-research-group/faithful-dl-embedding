@@ -11,7 +11,8 @@ fewer than 20 test axioms, per Spec §7), and writes:
 - ``valid.owl`` (held-out validation atomic subsumptions)
 - ``test.owl`` (held-out test atomic subsumptions)
 - ``ontology_deductive_closure.owl`` (all non-trivial entailed atomic subsumptions
-  between satisfiable non-auxiliary concept names in the full EL fragment)
+  between satisfiable non-auxiliary concept names in the training ontology
+  ``ontology.owl``, matching mOWL's GO/FoodOn convention)
 
 Guarantees
 ----------
@@ -20,7 +21,10 @@ Guarantees
   of ``EquivalentClasses`` definitions such as ``SpicyPizza ⊑ Pizza``).
 - Training, validation, and testing atomic subsumptions are pairwise disjoint.
 - Every validation and testing axiom is entailed by the canonical model of the
-  full EL fragment and present in ``ontology_deductive_closure.owl``.
+  full EL fragment; ``ontology_deductive_closure.owl`` is the deductive closure of
+  the training ontology ``ontology.owl`` (since ``0 / 16`` validation and ``0 / 16``
+  test axioms are entailed by ``ontology.owl``, none appears in
+  ``ontology_deductive_closure.owl``).
 - No auxiliary normalisation class (``http://mowl.borg/aux/...`` or ``...aux#...``)
   occurs in ``valid.owl``, ``test.owl``, or ``ontology_deductive_closure.owl``.
 - Every class appearing in ``valid.owl``, ``test.owl``, or
@@ -229,12 +233,12 @@ def build_pizza_el(
         1 for ax in test_axioms if cm_train.entails(ax.sub, ax.sup)
     )
 
-    # I1 & M2: Full EL fragment deductive closure over satisfiable non-auxiliary names
+    # I1, M2 & Fix 1(a): Training ontology deductive closure over satisfiable non-auxiliary names
     dc_axioms = [
         NF1(a, b)
         for a in sat_non_aux_names
         for b in sat_non_aux_names
-        if a != b and cm_full.entails(a, b)
+        if a != b and cm_train.entails(a, b)
     ]
 
     train_ont = to_owl(no_train)

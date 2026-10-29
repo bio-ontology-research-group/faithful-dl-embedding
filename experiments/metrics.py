@@ -147,8 +147,14 @@ def _compute_fast_head_centric_ranking_metrics(
     test_data: torch.Tensor,
     eval_chunk_size: int = 65536,
 ) -> Dict[str, float]:
-    """Compute head-centric ranking metrics identically to ``BaseRankingEvaluator.compute_ranking_metrics``
-    while batching host-device transfers and chunking large ``gci0`` score expansions.
+    """Compute head-centric ranking metrics while batching host-device transfers and chunking large ``gci0`` score expansions.
+
+    Deliberate deviation from upstream ``BaseRankingEvaluator.compute_ranking_metrics``
+    (Task 8 Fix 1b): before applying ``filtering_labels`` to a test tuple ``(head, tail)``,
+    the filter multiplier of ``(head, tail)`` itself is reset to ``1.0`` on the cloned
+    batch filter row so that standard filtered ranking removes only *other* known
+    positives and never masks the target test tuple being ranked. Unfiltered metrics
+    (``mr``, ``mrr``, ``auc``, ``hits@k``) are computed on the unmasked scores as usual.
     """
     from mowl.evaluation.base import compute_rank_roc
     from mowl.utils.data import FastTensorDataLoader
@@ -228,12 +234,21 @@ def _compute_fast_head_centric_ranking_metrics(
                         head_scores.device, non_blocking=True
                     )
                 else:
-                    batch_filter = filt[head_indices]
+                    batch_filter = filt[head_indices].to(head_scores.device)
+                batch_filter = batch_filter.clone()
 
-                batch_f_scores = head_scores * batch_filter
                 tail_idx_tensor = torch.tensor(
                     tail_indices, device=head_scores.device, dtype=torch.long
                 )
+                row_idx_tensor = torch.arange(
+                    len(tail_indices), device=head_scores.device, dtype=torch.long
+                )
+                # Deliberate deviation from upstream BaseRankingEvaluator (Task 8 Fix 1b):
+                # reset the filter label of the test tuple (head_i, tail_i) itself to 1.0
+                # before ranking so standard filtered ranking removes OTHER known positives
+                # and never multiplies the target test tuple's score by 10000.
+                batch_filter[row_idx_tensor, tail_idx_tensor] = 1.0
+                batch_f_scores = head_scores * batch_filter
 
                 rank_tensors = []
                 frank_tensors = []
@@ -377,18 +392,23 @@ def ranking_metrics(
     try:
         while True:
             try:
-                if hasattr(cached_eval, "_cached_testing_data"):
-                    raw_metrics = _compute_fast_head_centric_ranking_metrics(
-                        cached_eval,
-                        module,
-                        getattr(cached_eval, "_cached_testing_data"),
-                    )
-                else:
-                    raw_metrics = cached_eval.evaluate(
-                        module,
-                        bundle.dataset.testing,
-                        filter_ontologies=filter_ontologies,
-                    )
+                testing_data = getattr(cached_eval, "_cached_testing_data", None)
+                if testing_data is None:
+                    testing_data = cached_eval.create_tuples(bundle.dataset.testing)
+                    if filter_ontologies:
+                        import torch as th
+
+                        filter_data = th.cat(
+                            [cached_eval.create_tuples(ont) for ont in filter_ontologies],
+                            dim=0,
+                        )
+                        cached_eval.update_filtering_labels(filter_data)
+                    setattr(cached_eval, "_cached_testing_data", testing_data)
+                raw_metrics = _compute_fast_head_centric_ranking_metrics(
+                    cached_eval,
+                    module,
+                    testing_data,
+                )
                 break
             except torch.cuda.OutOfMemoryError:
                 if eval_oom_retries >= 4 or cached_eval.batch_size <= 1:
@@ -836,8 +856,9 @@ def helly_metrics(
     Returns
     -------
     Dict[str, Any]
-        ``{"helly_violation_rate": float, "degeneracy_rate": float, "n_certificates": int, "n_certificates_unmapped": int}``.
-        Certificates with any concept name missing from ``model.class_index_dict``
+        ``{"helly_violation_rate": Optional[float], "degeneracy_rate": Optional[float], "n_certificates": int, "n_certificates_unmapped": int}``.
+        When ``n_certificates == 0``, both ``helly_violation_rate`` and ``degeneracy_rate``
+        are ``None``. Certificates with any concept name missing from ``model.class_index_dict``
         are counted in ``n_certificates_unmapped`` and excluded from the violation
         and degeneracy rates; raises ``ValueError`` if all non-empty certificates
         are unmapped.
@@ -854,8 +875,8 @@ def helly_metrics(
     n_certs = len(certificates)
     if n_certs == 0:
         return {
-            "helly_violation_rate": 0.0,
-            "degeneracy_rate": 0.0,
+            "helly_violation_rate": None,
+            "degeneracy_rate": None,
             "n_certificates": 0,
             "n_certificates_unmapped": 0,
         }
