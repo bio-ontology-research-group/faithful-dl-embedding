@@ -1,0 +1,18 @@
+name = "GeometricFaithful"
+defaultTargets = ["GeometricFaithful"]
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.30.0-rc2"
+
+# Description-logic semantics (EL++ normal forms, interpretations, `models`)
+# from the kobayashi-marust reasoner's Lean certification library.
+# On ws, `~/lean-work/km-lean` is an rsync snapshot (without .lake) of
+# `~/Public/software/kobayashi-marust/lean` (its own .lake is a dangling symlink).
+[[require]]
+name = "ContextCalculus"
+path = "/home/leechuck/lean-work/km-lean"
+
+[[lean_lib]]
+name = "GeometricFaithful"

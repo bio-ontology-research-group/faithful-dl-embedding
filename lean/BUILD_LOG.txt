@@ -1,0 +1,21 @@
+# Lean build log, ws, 2026-10-29T10:19:37+03:00
+# toolchain: leanprover/lean4:v4.30.0-rc2
+# packages: ContextCalculus@/home/leechu, mathlib@5450b53e5ddc, plausible@86210d4ad1b0, LeanSearchClient@c5d5b8fe6e51, importGraph@cdab3938ccab, proofwidgets@2db6054a4432, aesop@f0c6e183ea26, Qq@1cc7e819b9b9, batteries@5c57f3857ba8, Cli@13567aed1ac4
+# kobayashi-marust snapshot commit: 0b0549ceb492150caa21403af978a4ca1b90aea6
+
+## lake build
+✔ [8318/8320] Built GeometricFaithful.Boxes (6.3s)
+✔ [8319/8320] Built GeometricFaithful (5.2s)
+Build completed successfully (8320 jobs).
+
+## axiom audit (lake env lean GeometricFaithful/Check.lean)
+'GeometricFaithful.no_nondegenerate_model_of_helly2' depends on axioms: [propext, Quot.sound]
+'GeometricFaithful.no_box_model' depends on axioms: [propext, Classical.choice, Quot.sound]
+'GeometricFaithful.no_convex_model_dim1' depends on axioms: [propext, Classical.choice, Quot.sound]
+'GeometricFaithful.no_ball_model' depends on axioms: [propext, Classical.choice, Quot.sound]
+'GeometricFaithful.no_ball_model_euclidean' depends on axioms: [propext, Classical.choice, Quot.sound]
+'GeometricFaithful.planeModel_models' depends on axioms: [propext, Classical.choice, Quot.sound]
+'GeometricFaithful.planeModel_nondegenerate' depends on axioms: [propext, Classical.choice, Quot.sound]
+'GeometricFaithful.planeModel_convex' depends on axioms: [propext, Classical.choice, Quot.sound]
+'GeometricFaithful.helly_dimension_bound' depends on axioms: [propext, Classical.choice, Quot.sound]
+'GeometricFaithful.threeElementModel_models' depends on axioms: [propext, Quot.sound]
