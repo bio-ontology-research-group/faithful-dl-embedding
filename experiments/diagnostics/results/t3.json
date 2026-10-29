@@ -1,0 +1,107 @@
+{
+  "name": "t3",
+  "ontology_path": "/home/leechuck/Public/software/mowl/tests/geometric/fixtures/t3.owl",
+  "status": "completed",
+  "load_wall_seconds": 0.08138908600085415,
+  "normalise": {
+    "wall_seconds": 0.09115684300195426,
+    "concept_names_count": 9,
+    "concept_names_excluding_top_bottom": 7,
+    "role_names_count": 0,
+    "total_axioms": 12,
+    "axioms_by_normal_form": {
+      "NF1": 6,
+      "NF2": 6,
+      "NF3": 0,
+      "NF4": 0,
+      "NF5": 0,
+      "NF6": 0,
+      "NF7": 0
+    },
+    "bottom_axioms_count": 3,
+    "bottom_axioms_by_nf": {
+      "NF1": 0,
+      "NF2": 3,
+      "NF4": 0
+    },
+    "dropped_axioms": 0
+  },
+  "canonical_model": {
+    "wall_seconds": 0.09128264198079705,
+    "completion_wall_seconds": 0.0001257989788427949,
+    "inconsistent": false,
+    "names_count": 8,
+    "unsatisfiable_names_count": 0
+  },
+  "bottom_relevant_all_names_count": 6,
+  "bottom_relevant_satisfiable_names_count": 6,
+  "helly_check": {
+    "timed_out": false,
+    "timeout_seconds": 900,
+    "wall_seconds": 0.0012502259924076498,
+    "spawn_and_wall_seconds": 2.815973310993286,
+    "complete": true,
+    "has_roles": false,
+    "k_max": 4,
+    "max_certificates": 100000,
+    "box_representable_strong": false,
+    "box_representable_nondegenerate": false,
+    "strong_certificates_count": 1,
+    "nondegenerate_certificates_count": 1,
+    "minimal_unsatisfiable_set_size_distribution": {
+      "3": 1
+    }
+  },
+  "targeted_triangle_search": {
+    "wall_seconds": 0.00021257801563479006,
+    "graph_stats_wall_seconds": 2.9444025130942464e-05,
+    "named_conjunctions_count": 3,
+    "graph_triangles_count": 1,
+    "certificate_triangles_count": 1,
+    "certificate_triangles_sample": [
+      {
+        "c1": [
+          "http://mowl.borg/geo#X1"
+        ],
+        "c2": [
+          "http://mowl.borg/geo#X2"
+        ],
+        "c3": [
+          "http://mowl.borg/geo#X3"
+        ],
+        "pairwise_names": {
+          "p12": "http://mowl.borg/geo#A",
+          "p13": "http://mowl.borg/geo#C",
+          "p23": "http://mowl.borg/geo#B"
+        },
+        "labels": {
+          "c1": "X1",
+          "c2": "X2",
+          "c3": "X3",
+          "p12": "A",
+          "p13": "C",
+          "p23": "B"
+        },
+        "rdfs_labels": {
+          "c1": null,
+          "c2": null,
+          "c3": null,
+          "p12": null,
+          "p13": null,
+          "p23": null
+        }
+      }
+    ]
+  },
+  "cross_check": {
+    "checked": true,
+    "helly_singleton_nondegenerate_count": 1,
+    "helly_non_singleton_nondegenerate_count": 0,
+    "certificate_triangles_count": 1,
+    "missing_from_triangles_count": 0,
+    "extra_in_triangles_count": 0,
+    "missing_from_triangles": [],
+    "extra_in_triangles": []
+  },
+  "discrepancies": []
+}
