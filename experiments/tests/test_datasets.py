@@ -21,6 +21,7 @@ from mowl.geometric import (
 from mowl.projection import TaxonomyProjector
 
 from experiments.config import DATASETS, PIZZA_RAW_PATH
+from experiments.data.make_pizza import is_auxiliary_iri
 from experiments.datasets import DatasetBundle, load_dataset
 
 NS = "http://mowl.borg/geo#"
@@ -83,7 +84,7 @@ def test_tk_has_expected_certificates():
 
 
 def test_pizza_split_disjoint_and_closed():
-    """Verify Pizza-EL train/valid/test split invariants and deductive closure."""
+    """Verify Pizza-EL train/valid/test split invariants, closure, and non-auxiliary filtering."""
     bundle = load_dataset("pizza")
     assert bundle.task == "subsumption"
     assert bundle.deductive_closure_ontology is not None
@@ -95,26 +96,43 @@ def test_pizza_split_disjoint_and_closed():
     test_pairs = _subsumption_pairs(ds.testing)
     dc_pairs = _subsumption_pairs(bundle.deductive_closure_ontology)
 
-    assert len(valid_pairs) > 0
-    assert len(test_pairs) > 0
+    assert len(valid_pairs) == 16
+    assert len(test_pairs) == 16
+    assert len(dc_pairs) == 365
 
     # Train/valid/test atomic subsumptions must be pairwise disjoint
     assert train_pairs.isdisjoint(valid_pairs)
     assert train_pairs.isdisjoint(test_pairs)
     assert valid_pairs.isdisjoint(test_pairs)
 
-    # Every valid/test axiom must be entailed by the deductive closure of the full EL fragment
-    full_cm = CanonicalModel.from_dataset(PathDataset(str(PIZZA_RAW_PATH)))
+    # Every valid/test axiom must be present in the deductive closure and non-auxiliary
     for sub, sup in valid_pairs | test_pairs:
         assert sub not in (TOP, BOTTOM)
         assert sup not in (TOP, BOTTOM)
         assert sub != sup
-        assert "/aux" not in sub and "aux#" not in sub
-        assert "/aux" not in sup and "aux#" not in sup
-        assert full_cm.is_satisfiable(sub)
-        assert full_cm.is_satisfiable(sup)
-        assert full_cm.entails(sub, sup)
+        assert not is_auxiliary_iri(sub)
+        assert not is_auxiliary_iri(sup)
         assert (sub, sup) in dc_pairs
+
+    # I1: No deductive closure axiom is auxiliary or involves TOP/BOTTOM
+    for sub, sup in dc_pairs:
+        assert sub not in (TOP, BOTTOM)
+        assert sup not in (TOP, BOTTOM)
+        assert sub != sup
+        assert not is_auxiliary_iri(sub), f"Auxiliary subclass in closure: {sub}"
+        assert not is_auxiliary_iri(sup), f"Auxiliary superclass in closure: {sup}"
+
+    # I2: Equivalence-derived NF1s must never be held out
+    pizza_ns = "http://www.co-ode.org/ontologies/pizza/pizza.owl#"
+    equiv_nf1s = {
+        (f"{pizza_ns}SpicyPizza", f"{pizza_ns}Pizza"),
+        (f"{pizza_ns}CheeseyPizza", f"{pizza_ns}Pizza"),
+        (f"{pizza_ns}MeatyPizza", f"{pizza_ns}Pizza"),
+        (f"{pizza_ns}SpicyPizzaEquivalent", f"{pizza_ns}Pizza"),
+        (f"{pizza_ns}SpicyTopping", f"{pizza_ns}PizzaTopping"),
+    }
+    assert (valid_pairs | test_pairs).isdisjoint(equiv_nf1s)
+    assert equiv_nf1s <= train_pairs
 
     # All classes of valid, test, and deductive_closure must occur in train
     train_classes = {str(c.toStringID()) for c in ds.ontology.getClassesInSignature()}
@@ -126,34 +144,107 @@ def test_pizza_split_disjoint_and_closed():
     assert valid_classes <= train_classes
     assert test_classes <= train_classes
     assert dc_classes <= train_classes
+    assert any(is_auxiliary_iri(c) for c in train_classes)
+    assert not any(is_auxiliary_iri(c) for c in dc_classes)
 
-    # Verify evaluation_classes property works as required by SubsumptionEvaluator
+    # I1: Verify evaluation_classes property excludes auxiliary classes
     eval_heads, eval_tails = ds.evaluation_classes
     assert len(eval_heads) > 0
     assert len(eval_tails) == len(eval_heads)
+    for cls_iri in list(eval_heads.as_str) + list(eval_tails.as_str):
+        assert not is_auxiliary_iri(cls_iri), f"Auxiliary class in evaluation_classes: {cls_iri}"
 
 
-def test_load_dataset_all():
+@pytest.mark.slow
+@pytest.mark.skipif(
+    not PIZZA_RAW_PATH.expanduser().exists(),
+    reason=f"Raw pizza.owl absent at {PIZZA_RAW_PATH}",
+)
+def test_pizza_raw_entailment_and_asserted_candidates():
+    """Verify held-out Pizza axioms come from raw asserted SubClassOf(named, named) and are entailed by raw pizza.owl."""
+    from org.semanticweb.owlapi.model import AxiomType, ClassExpressionType
+
+    bundle = load_dataset("pizza")
+    ds = bundle.dataset
+    valid_pairs = _subsumption_pairs(ds.validation)
+    test_pairs = _subsumption_pairs(ds.testing)
+    dc_pairs = _subsumption_pairs(bundle.deductive_closure_ontology)
+
+    raw_ds = PathDataset(str(PIZZA_RAW_PATH.expanduser().resolve()))
+    raw_asserted_pairs = set()
+    for owl_ax in raw_ds.ontology.getAxioms(AxiomType.SUBCLASS_OF):
+        sub_expr = owl_ax.getSubClass()
+        sup_expr = owl_ax.getSuperClass()
+        if (
+            sub_expr.getClassExpressionType() == ClassExpressionType.OWL_CLASS
+            and sup_expr.getClassExpressionType() == ClassExpressionType.OWL_CLASS
+        ):
+            raw_asserted_pairs.add(
+                (
+                    str(sub_expr.asOWLClass().toStringID()),
+                    str(sup_expr.asOWLClass().toStringID()),
+                )
+            )
+    assert len(raw_asserted_pairs) == 84
+
+    full_cm = CanonicalModel.from_dataset(raw_ds)
+    sat_non_aux = {
+        n
+        for n in (set(full_cm.names) - {TOP, BOTTOM})
+        if not is_auxiliary_iri(n)
+    }
+    valid_candidates = {
+        (s, t)
+        for s, t in raw_asserted_pairs
+        if s in sat_non_aux and t in sat_non_aux and s != t
+    }
+    assert len(valid_candidates) == 81
+
+    for sub, sup in valid_pairs | test_pairs:
+        assert (sub, sup) in valid_candidates
+        assert full_cm.is_satisfiable(sub)
+        assert full_cm.is_satisfiable(sup)
+        assert full_cm.entails(sub, sup)
+
+    expected_dc = {
+        (a, b)
+        for a in sat_non_aux
+        for b in sat_non_aux
+        if a != b and full_cm.entails(a, b)
+    }
+    assert dc_pairs == expected_dc
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param(
+            d,
+            marks=pytest.mark.slow if d in ("go", "foodon") else (),
+        )
+        for d in DATASETS
+    ],
+)
+def test_load_dataset_all(name: str):
     """Verify every dataset id in DATASETS loads and exposes the expected DatasetBundle contract."""
     assert DATASETS == ["tk3", "tk4", "tk5", "tk6", "pizza", "go", "foodon"]
-    for name in DATASETS:
-        bundle = load_dataset(name)
-        assert isinstance(bundle, DatasetBundle)
-        assert bundle.name == name
-        assert bundle.dataset is not None
-        assert bundle.dataset.ontology is not None
-        assert len(bundle.paths) > 0
-        for p in bundle.paths.values():
-            assert os.path.exists(p), f"Missing path {p} for dataset {name}"
+    bundle = load_dataset(name)
+    assert isinstance(bundle, DatasetBundle)
+    assert bundle.name == name
+    assert bundle.dataset is not None
+    assert bundle.dataset.ontology is not None
+    assert len(bundle.paths) > 0
+    for p in bundle.paths.values():
+        assert os.path.exists(p), f"Missing path {p} for dataset {name}"
 
-        if name.startswith("tk"):
-            assert bundle.task == "satisfaction"
-            assert bundle.deductive_closure_ontology is None
-        else:
-            assert bundle.task == "subsumption"
-            assert bundle.deductive_closure_ontology is not None
-            assert bundle.dataset.validation is not None
-            assert bundle.dataset.testing is not None
-            eval_heads, eval_tails = bundle.dataset.evaluation_classes
-            assert len(eval_heads) > 0
-            assert len(eval_tails) > 0
+    if name.startswith("tk"):
+        assert bundle.task == "satisfaction"
+        assert bundle.deductive_closure_ontology is None
+    else:
+        assert bundle.task == "subsumption"
+        assert bundle.deductive_closure_ontology is not None
+        assert bundle.dataset.validation is not None
+        assert bundle.dataset.testing is not None
+        eval_heads, eval_tails = bundle.dataset.evaluation_classes
+        assert len(eval_heads) > 0
+        assert len(eval_tails) > 0

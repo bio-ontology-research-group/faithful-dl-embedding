@@ -18,6 +18,7 @@ Non-guarantees
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 import shutil
 from typing import TYPE_CHECKING, Dict, Literal, Optional
@@ -32,6 +33,7 @@ from experiments.config import (
     PIZZA_REPO_DIR,
     SYNTHETIC_DIR,
 )
+from experiments.data.make_pizza import is_auxiliary_iri
 
 if TYPE_CHECKING:  # pragma: no cover
     from org.semanticweb.owlapi.model import OWLOntology
@@ -146,7 +148,12 @@ def _make_path_subsumption_dataset(
                     f"Deductive closure classes not in train: {set(dc_classes) - set(train_classes)}"
                 )
 
-                classes = self.ontology.getClassesInSignature()
+                # I1: Exclude auxiliary normaliser classes from evaluation_classes
+                classes = {
+                    cls
+                    for cls in self.ontology.getClassesInSignature()
+                    if not is_auxiliary_iri(str(cls.toStringID()))
+                }
                 bot_in_classes = any(cls.isOWLNothing() for cls in classes)
                 top_in_classes = any(cls.isOWLThing() for cls in classes)
                 df = self.ontology.getOWLOntologyManager().getOWLDataFactory()
@@ -164,27 +171,41 @@ def _make_path_subsumption_dataset(
     )
 
 
-def _ensure_pizza_files(pizza_dir: Path = PIZZA_EL_DIR) -> Dict[str, str]:
-    """Ensure the four Pizza-EL OWL files exist in ``pizza_dir`` and return their paths."""
-    required = {
-        "ontology": pizza_dir / "ontology.owl",
-        "valid": pizza_dir / "valid.owl",
-        "test": pizza_dir / "test.owl",
-        "deductive_closure": pizza_dir / "ontology_deductive_closure.owl",
-    }
-    if all(p.exists() for p in required.values()):
-        return {k: str(p.resolve()) for k, p in required.items()}
+def _file_sha256(path: Path) -> str:
+    """Compute hex SHA-256 digest of ``path``."""
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
-    # If committed mirror exists in experiments/data/pizza-el, copy to pizza_dir
-    mirror_files = {
-        k: PIZZA_REPO_DIR / p.name for k, p in required.items()
+
+def _ensure_pizza_files(pizza_dir: Path = PIZZA_EL_DIR) -> Dict[str, str]:
+    """Ensure the four Pizza-EL OWL files exist and return their paths.
+
+    Prefers the committed repository mirror ``experiments/data/pizza-el`` over any
+    copy in ``pizza_dir`` (M4), syncing ``pizza_dir`` whenever a file is missing or
+    its SHA-256 checksum differs from the committed mirror.
+    """
+    filenames = {
+        "ontology": "ontology.owl",
+        "valid": "valid.owl",
+        "test": "test.owl",
+        "deductive_closure": "ontology_deductive_closure.owl",
     }
+    mirror_files = {k: PIZZA_REPO_DIR / fname for k, fname in filenames.items()}
+    required = {k: pizza_dir / fname for k, fname in filenames.items()}
+
     if all(p.exists() for p in mirror_files.values()):
         pizza_dir.mkdir(parents=True, exist_ok=True)
         for k, src in mirror_files.items():
             dst = required[k]
             if src.resolve() != dst.resolve():
-                shutil.copy2(src, dst)
+                if not dst.exists() or _file_sha256(src) != _file_sha256(dst):
+                    shutil.copy2(src, dst)
+        return {k: str(src.resolve()) for k, src in mirror_files.items()}
+
+    if all(p.exists() for p in required.values()):
         return {k: str(p.resolve()) for k, p in required.items()}
 
     from experiments.data.make_pizza import build_pizza_el
