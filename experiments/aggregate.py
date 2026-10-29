@@ -50,6 +50,7 @@ SUBSUMPTION_COLUMNS: List[Tuple[str, str]] = [
     ("pair_fvr", "Pair-FVR"),
     ("fvr", "FVR"),
     ("modelness_all", "Modelness"),
+    ("modelness_train_margin", "Mod@γ"),
     ("helly_violation_rate", "HVR"),
     ("degeneracy_rate", "DegRate"),
     ("n_certificates", "Certs"),
@@ -61,6 +62,7 @@ SUBSUMPTION_COLUMNS: List[Tuple[str, str]] = [
 
 SATISFACTION_COLUMNS: List[Tuple[str, str]] = [
     ("modelness_all", "Modelness"),
+    ("modelness_train_margin", "Mod@γ"),
     ("modelness_gci0", "Mod(gci0)"),
     ("modelness_gci1", "Mod(gci1)"),
     ("modelness_gci1_bot", "Mod(gci1_bot)"),
@@ -256,12 +258,13 @@ def render_multibox_curve_markdown(runs: Sequence[Dict[str, Any]]) -> str:
     lines: List[str] = [
         "# MultiBoxEL Relaxation Curve (`k ∈ {1, 2, 3, 4}`)",
         "",
-        "| Dataset | d | Method | k | n | Modelness | HVR | DegRate | Eff-k | F-MRR | F-H@10 | AUC(+/-) | Pair-FVR | FVR | Train(s) |",
-        "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Dataset | d | Method | k | n | Modelness | Mod@γ | HVR | DegRate | Eff-k | F-MRR | F-H@10 | AUC(+/-) | Pair-FVR | FVR | Train(s) |",
+        "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
 
     curve_keys = [
         ("modelness_all", 4),
+        ("modelness_train_margin", 4),
         ("helly_violation_rate", 4),
         ("degeneracy_rate", 4),
         ("mean_effective_components", 2),

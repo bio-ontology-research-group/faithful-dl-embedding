@@ -744,12 +744,14 @@ def modelness(
     *,
     tol: float = 1e-6,
     batch_size: int = 32768,
+    margin: float = 0.0,
 ) -> Dict[str, float]:
-    """Compute per-GCI and overall fraction of training axioms with loss ``<= tol`` at margin 0.
+    """Compute per-GCI and overall fraction of training axioms with loss ``<= tol`` at ``margin``.
 
     Temporarily sets the module's margin attribute (``margin`` for ELBE, ``gamma``
-    for Box²EL and MultiBoxEL) to ``0.0`` during the measurement and restores the
-    exact original value afterwards in a ``finally`` block.
+    for Box²EL and MultiBoxEL) to ``margin`` (default ``0.0``) during the
+    measurement and restores the exact original value afterwards in a ``finally``
+    block.
 
     Parameters
     ----------
@@ -759,6 +761,8 @@ def modelness(
         Loss threshold for an axiom to be considered satisfied (default: ``1e-6``).
     batch_size : int, optional
         Chunk size for scoring large GCI datasets (default: ``32768``).
+    margin : float, optional
+        Margin value set on the module during evaluation (default: ``0.0``).
 
     Returns
     -------
@@ -769,6 +773,7 @@ def modelness(
     """
     module = model.module
     device = _module_device(module)
+    eval_margin = float(margin)
 
     saved_module_attrs: Dict[str, Any] = {}
     for attr in ("gamma", "margin"):
@@ -784,9 +789,9 @@ def modelness(
 
     try:
         for attr in saved_module_attrs:
-            setattr(module, attr, 0.0)
+            setattr(module, attr, eval_margin)
         if has_model_margin:
-            setattr(model, "margin", 0.0)
+            setattr(model, "margin", eval_margin)
         module.eval()
 
         with torch.no_grad():

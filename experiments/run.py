@@ -562,13 +562,16 @@ def execute_run(
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-    # Load best validation checkpoint for subsumption datasets
+    # Load best validation checkpoint for subsumption datasets; for satisfaction
+    # datasets (no validation split), persist the final state dict to ckpt_path.
     if (
         bundle.task == "subsumption"
         and bundle.dataset.validation is not None
         and ckpt_path.exists()
     ):
         model.load_best_model()
+    else:
+        torch.save(model.module.state_dict(), ckpt_path)
 
     peak_gpu_bytes = (
         int(torch.cuda.max_memory_allocated())
