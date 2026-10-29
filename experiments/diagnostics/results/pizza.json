@@ -1,0 +1,72 @@
+{
+  "name": "pizza",
+  "ontology_path": "/home/leechuck/tmp/gfe-data/pizza/pizza.owl",
+  "status": "completed",
+  "load_wall_seconds": 0.1964301519910805,
+  "normalise": {
+    "wall_seconds": 0.15628140899934806,
+    "concept_names_count": 101,
+    "concept_names_excluding_top_bottom": 99,
+    "role_names_count": 8,
+    "total_axioms": 662,
+    "axioms_by_normal_form": {
+      "NF1": 90,
+      "NF2": 404,
+      "NF3": 153,
+      "NF4": 9,
+      "NF5": 0,
+      "NF6": 4,
+      "NF7": 2
+    },
+    "bottom_axioms_count": 398,
+    "bottom_axioms_by_nf": {
+      "NF1": 0,
+      "NF2": 398,
+      "NF4": 0
+    },
+    "dropped_axioms": 52
+  },
+  "canonical_model": {
+    "wall_seconds": 0.1982646780088544,
+    "completion_wall_seconds": 0.04198326900950633,
+    "inconsistent": false,
+    "names_count": 65,
+    "unsatisfiable_names_count": 35
+  },
+  "bottom_relevant_all_names_count": 92,
+  "bottom_relevant_satisfiable_names_count": 57,
+  "helly_check": {
+    "timed_out": false,
+    "timeout_seconds": 900,
+    "wall_seconds": 101.37249458697625,
+    "spawn_and_wall_seconds": 104.40801858398481,
+    "complete": false,
+    "has_roles": true,
+    "k_max": 4,
+    "max_certificates": 100000,
+    "box_representable_strong": null,
+    "box_representable_nondegenerate": null,
+    "strong_certificates_count": 0,
+    "nondegenerate_certificates_count": 0,
+    "minimal_unsatisfiable_set_size_distribution": {}
+  },
+  "targeted_triangle_search": {
+    "wall_seconds": 3.883001045323908e-05,
+    "graph_stats_wall_seconds": 4.1391991544514894e-05,
+    "named_conjunctions_count": 0,
+    "graph_triangles_count": 0,
+    "certificate_triangles_count": 0,
+    "certificate_triangles_sample": []
+  },
+  "cross_check": {
+    "checked": true,
+    "helly_singleton_nondegenerate_count": 0,
+    "helly_non_singleton_nondegenerate_count": 0,
+    "certificate_triangles_count": 0,
+    "missing_from_triangles_count": 0,
+    "extra_in_triangles_count": 0,
+    "missing_from_triangles": [],
+    "extra_in_triangles": []
+  },
+  "discrepancies": []
+}

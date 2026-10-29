@@ -1,0 +1,72 @@
+{
+  "name": "food-w3c",
+  "ontology_path": "/home/leechuck/tmp/gfe-data/food/food-w3c.owl",
+  "status": "completed",
+  "load_wall_seconds": 5.157478526001796,
+  "normalise": {
+    "wall_seconds": 0.05830206102109514,
+    "concept_names_count": 139,
+    "concept_names_excluding_top_bottom": 137,
+    "role_names_count": 16,
+    "total_axioms": 129,
+    "axioms_by_normal_form": {
+      "NF1": 66,
+      "NF2": 46,
+      "NF3": 1,
+      "NF4": 10,
+      "NF5": 0,
+      "NF6": 5,
+      "NF7": 1
+    },
+    "bottom_axioms_count": 39,
+    "bottom_axioms_by_nf": {
+      "NF1": 0,
+      "NF2": 39,
+      "NF4": 0
+    },
+    "dropped_axioms": 281
+  },
+  "canonical_model": {
+    "wall_seconds": 0.06069083802867681,
+    "completion_wall_seconds": 0.002388777007581666,
+    "inconsistent": false,
+    "names_count": 138,
+    "unsatisfiable_names_count": 0
+  },
+  "bottom_relevant_all_names_count": 44,
+  "bottom_relevant_satisfiable_names_count": 44,
+  "helly_check": {
+    "timed_out": false,
+    "timeout_seconds": 900,
+    "wall_seconds": 1.096110407001106,
+    "spawn_and_wall_seconds": 3.7352565900073387,
+    "complete": false,
+    "has_roles": true,
+    "k_max": 4,
+    "max_certificates": 100000,
+    "box_representable_strong": null,
+    "box_representable_nondegenerate": null,
+    "strong_certificates_count": 0,
+    "nondegenerate_certificates_count": 0,
+    "minimal_unsatisfiable_set_size_distribution": {}
+  },
+  "targeted_triangle_search": {
+    "wall_seconds": 6.349600153043866e-05,
+    "graph_stats_wall_seconds": 3.71570058632642e-05,
+    "named_conjunctions_count": 7,
+    "graph_triangles_count": 0,
+    "certificate_triangles_count": 0,
+    "certificate_triangles_sample": []
+  },
+  "cross_check": {
+    "checked": true,
+    "helly_singleton_nondegenerate_count": 0,
+    "helly_non_singleton_nondegenerate_count": 0,
+    "certificate_triangles_count": 0,
+    "missing_from_triangles_count": 0,
+    "extra_in_triangles_count": 0,
+    "missing_from_triangles": [],
+    "extra_in_triangles": []
+  },
+  "discrepancies": []
+}
