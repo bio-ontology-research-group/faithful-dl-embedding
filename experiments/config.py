@@ -81,8 +81,8 @@ DATASET_SEEDS: Dict[str, List[int]] = {
     "tk5": [0, 1, 2],
     "tk6": [0, 1, 2],
     "pizza": [0, 1, 2],
-    "go": [0],
-    "foodon": [0],
+    "go": [0, 1, 2],
+    "foodon": [0, 1, 2],
 }
 
 # Spec §5.2 fixed hyperparameters.

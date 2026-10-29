@@ -24,3 +24,73 @@
 [2026-10-29 22:22:08] [ 21/ 22] DONE foodon__multibox-k4__d50__s0.json | wall=93.84s | train=15.63s | modelness=0.0001 | hvr=null | f_mrr=0.0031 | gpu_mb=985.0 | eff_bs=32768
 [2026-10-29 22:22:37] [ 22/ 22] DONE foodon__multibox-k2-init__d50__s0.json | wall=28.93s | train=5.75s | modelness=0.2220 | hvr=null | f_mrr=0.0054 | gpu_mb=443.2 | eff_bs=32768
 [2026-10-29 22:22:37] Completed sweep suite=real smoke=False: ran=22 skipped=0 total=22 in 1254.60s
+[2026-10-29 22:34:24] Starting sweep suite=real smoke=False total_cells=66 device=cuda out=/home/leechuck/Public/software/faithful-dl-embedding/experiments/results/raw
+[2026-10-29 22:34:24] [  1/ 66] SKIP go__elbe__d50__s0.json (exists)
+[2026-10-29 22:34:24] [  2/ 66] SKIP go__elbe-init__d50__s0.json (exists)
+[2026-10-29 22:34:24] [  3/ 66] SKIP go__elbe-anchor__d50__s0.json (exists)
+[2026-10-29 22:34:24] [  4/ 66] SKIP go__box2el__d50__s0.json (exists)
+[2026-10-29 22:34:24] [  5/ 66] SKIP go__box2el-init__d50__s0.json (exists)
+[2026-10-29 22:34:24] [  6/ 66] SKIP go__box2el-anchor__d50__s0.json (exists)
+[2026-10-29 22:34:24] [  7/ 66] SKIP go__multibox-k1__d50__s0.json (exists)
+[2026-10-29 22:34:24] [  8/ 66] SKIP go__multibox-k2__d50__s0.json (exists)
+[2026-10-29 22:34:24] [  9/ 66] SKIP go__multibox-k3__d50__s0.json (exists)
+[2026-10-29 22:34:24] [ 10/ 66] SKIP go__multibox-k4__d50__s0.json (exists)
+[2026-10-29 22:34:24] [ 11/ 66] SKIP go__multibox-k2-init__d50__s0.json (exists)
+[2026-10-29 22:34:53] Loaded dataset=go and CanonicalModel (56190 names) in 29.99s
+[2026-10-29 22:37:24] [ 12/ 66] DONE go__elbe__d50__s1.json | wall=150.74s | train=6.02s | modelness=0.3345 | hvr=null | f_mrr=0.0043 | gpu_mb=223.5 | eff_bs=32768
+[2026-10-29 22:37:42] [ 13/ 66] DONE go__elbe-init__d50__s1.json | wall=17.69s | train=4.29s | modelness=0.3767 | hvr=null | f_mrr=0.0064 | gpu_mb=269.9 | eff_bs=32768
+[2026-10-29 22:38:01] [ 14/ 66] DONE go__elbe-anchor__d50__s1.json | wall=19.14s | train=5.31s | modelness=0.3770 | hvr=null | f_mrr=0.0064 | gpu_mb=339.9 | eff_bs=32768
+[2026-10-29 22:38:22] [ 15/ 66] DONE go__box2el__d50__s1.json | wall=21.07s | train=6.40s | modelness=0.0000 | hvr=null | f_mrr=0.0084 | gpu_mb=373.5 | eff_bs=32768
+[2026-10-29 22:38:42] [ 16/ 66] DONE go__box2el-init__d50__s1.json | wall=19.99s | train=5.55s | modelness=0.2152 | hvr=null | f_mrr=0.0140 | gpu_mb=408.0 | eff_bs=32768
+[2026-10-29 22:39:04] [ 17/ 66] DONE go__box2el-anchor__d50__s1.json | wall=21.74s | train=6.30s | modelness=0.2153 | hvr=null | f_mrr=0.0141 | gpu_mb=461.0 | eff_bs=32768
+[2026-10-29 22:39:29] [ 18/ 66] DONE go__multibox-k1__d50__s1.json | wall=25.06s | train=7.45s | modelness=0.0000 | hvr=null | f_mrr=0.0084 | gpu_mb=396.6 | eff_bs=32768
+[2026-10-29 22:40:48] [ 19/ 66] DONE go__multibox-k2__d50__s1.json | wall=78.61s | train=15.30s | modelness=0.0000 | hvr=null | f_mrr=0.0034 | gpu_mb=793.3 | eff_bs=32768
+[2026-10-29 22:43:13] [ 20/ 66] DONE go__multibox-k3__d50__s1.json | wall=145.14s | train=26.64s | modelness=0.0000 | hvr=null | f_mrr=0.0026 | gpu_mb=1317.0 | eff_bs=32768
+[2026-10-29 22:47:30] [ 21/ 66] DONE go__multibox-k4__d50__s1.json | wall=257.64s | train=56.51s | modelness=0.0001 | hvr=null | f_mrr=0.0023 | gpu_mb=1902.1 | eff_bs=32768
+[2026-10-29 22:48:51] [ 22/ 66] DONE go__multibox-k2-init__d50__s1.json | wall=80.29s | train=13.11s | modelness=0.2276 | hvr=null | f_mrr=0.0097 | gpu_mb=799.1 | eff_bs=32768
+[2026-10-29 22:49:08] [ 23/ 66] DONE go__elbe__d50__s2.json | wall=16.91s | train=4.53s | modelness=0.3285 | hvr=null | f_mrr=0.0042 | gpu_mb=347.2 | eff_bs=32768
+[2026-10-29 22:49:25] [ 24/ 66] DONE go__elbe-init__d50__s2.json | wall=17.32s | train=4.20s | modelness=0.3767 | hvr=null | f_mrr=0.0067 | gpu_mb=392.4 | eff_bs=32768
+[2026-10-29 22:49:43] [ 25/ 66] DONE go__elbe-anchor__d50__s2.json | wall=17.76s | train=4.65s | modelness=0.3770 | hvr=null | f_mrr=0.0068 | gpu_mb=359.2 | eff_bs=32768
+[2026-10-29 22:50:03] [ 26/ 66] DONE go__box2el__d50__s2.json | wall=19.97s | train=5.87s | modelness=0.0000 | hvr=null | f_mrr=0.0088 | gpu_mb=439.5 | eff_bs=32768
+[2026-10-29 22:50:22] [ 27/ 66] DONE go__box2el-init__d50__s2.json | wall=19.45s | train=5.38s | modelness=0.2152 | hvr=null | f_mrr=0.0144 | gpu_mb=474.0 | eff_bs=32768
+[2026-10-29 22:50:42] [ 28/ 66] DONE go__box2el-anchor__d50__s2.json | wall=20.01s | train=5.96s | modelness=0.2151 | hvr=null | f_mrr=0.0144 | gpu_mb=527.0 | eff_bs=32768
+[2026-10-29 22:51:05] [ 29/ 66] DONE go__multibox-k1__d50__s2.json | wall=22.89s | train=6.47s | modelness=0.0000 | hvr=null | f_mrr=0.0088 | gpu_mb=463.8 | eff_bs=32768
+[2026-10-29 22:52:17] [ 30/ 66] DONE go__multibox-k2__d50__s2.json | wall=71.99s | train=14.16s | modelness=0.0000 | hvr=null | f_mrr=0.0032 | gpu_mb=859.3 | eff_bs=32768
+[2026-10-29 22:54:43] [ 31/ 66] DONE go__multibox-k3__d50__s2.json | wall=146.24s | train=27.98s | modelness=0.0000 | hvr=null | f_mrr=0.0030 | gpu_mb=1382.8 | eff_bs=32768
+[2026-10-29 22:58:38] [ 32/ 66] DONE go__multibox-k4__d50__s2.json | wall=234.91s | train=40.66s | modelness=0.0000 | hvr=null | f_mrr=0.0024 | gpu_mb=1968.1 | eff_bs=32768
+[2026-10-29 22:59:59] [ 33/ 66] DONE go__multibox-k2-init__d50__s2.json | wall=80.78s | train=13.07s | modelness=0.2279 | hvr=null | f_mrr=0.0099 | gpu_mb=967.4 | eff_bs=32768
+[2026-10-29 22:59:59] [ 34/ 66] SKIP foodon__elbe__d50__s0.json (exists)
+[2026-10-29 22:59:59] [ 35/ 66] SKIP foodon__elbe-init__d50__s0.json (exists)
+[2026-10-29 22:59:59] [ 36/ 66] SKIP foodon__elbe-anchor__d50__s0.json (exists)
+[2026-10-29 22:59:59] [ 37/ 66] SKIP foodon__box2el__d50__s0.json (exists)
+[2026-10-29 22:59:59] [ 38/ 66] SKIP foodon__box2el-init__d50__s0.json (exists)
+[2026-10-29 22:59:59] [ 39/ 66] SKIP foodon__box2el-anchor__d50__s0.json (exists)
+[2026-10-29 22:59:59] [ 40/ 66] SKIP foodon__multibox-k1__d50__s0.json (exists)
+[2026-10-29 22:59:59] [ 41/ 66] SKIP foodon__multibox-k2__d50__s0.json (exists)
+[2026-10-29 22:59:59] [ 42/ 66] SKIP foodon__multibox-k3__d50__s0.json (exists)
+[2026-10-29 22:59:59] [ 43/ 66] SKIP foodon__multibox-k4__d50__s0.json (exists)
+[2026-10-29 22:59:59] [ 44/ 66] SKIP foodon__multibox-k2-init__d50__s0.json (exists)
+[2026-10-29 23:00:04] Loaded dataset=foodon and CanonicalModel (29135 names) in 5.34s
+[2026-10-29 23:00:41] [ 45/ 66] DONE foodon__elbe__d50__s1.json | wall=36.93s | train=2.33s | modelness=0.5340 | hvr=null | f_mrr=0.0046 | gpu_mb=121.8 | eff_bs=32768
+[2026-10-29 23:00:47] [ 46/ 66] DONE foodon__elbe-init__d50__s1.json | wall=5.87s | train=2.05s | modelness=0.4329 | hvr=null | f_mrr=0.0055 | gpu_mb=145.6 | eff_bs=32768
+[2026-10-29 23:00:53] [ 47/ 66] DONE foodon__elbe-anchor__d50__s1.json | wall=5.72s | train=2.17s | modelness=0.4331 | hvr=null | f_mrr=0.0055 | gpu_mb=157.2 | eff_bs=32768
+[2026-10-29 23:01:00] [ 48/ 66] DONE foodon__box2el__d50__s1.json | wall=7.00s | train=3.06s | modelness=0.0001 | hvr=null | f_mrr=0.0080 | gpu_mb=201.0 | eff_bs=32768
+[2026-10-29 23:01:07] [ 49/ 66] DONE foodon__box2el-init__d50__s1.json | wall=6.70s | train=2.76s | modelness=0.1574 | hvr=null | f_mrr=0.0063 | gpu_mb=218.7 | eff_bs=32768
+[2026-10-29 23:01:13] [ 50/ 66] DONE foodon__box2el-anchor__d50__s1.json | wall=6.89s | train=2.91s | modelness=0.1573 | hvr=null | f_mrr=0.0064 | gpu_mb=242.1 | eff_bs=32768
+[2026-10-29 23:01:21] [ 51/ 66] DONE foodon__multibox-k1__d50__s1.json | wall=7.90s | train=3.46s | modelness=0.0001 | hvr=null | f_mrr=0.0080 | gpu_mb=273.4 | eff_bs=32768
+[2026-10-29 23:01:42] [ 52/ 66] DONE foodon__multibox-k2__d50__s1.json | wall=20.51s | train=5.34s | modelness=0.0001 | hvr=null | f_mrr=0.0039 | gpu_mb=477.8 | eff_bs=32768
+[2026-10-29 23:02:22] [ 53/ 66] DONE foodon__multibox-k3__d50__s1.json | wall=39.83s | train=8.39s | modelness=0.0001 | hvr=null | f_mrr=0.0032 | gpu_mb=777.2 | eff_bs=32768
+[2026-10-29 23:03:26] [ 54/ 66] DONE foodon__multibox-k4__d50__s1.json | wall=64.66s | train=12.40s | modelness=0.0001 | hvr=null | f_mrr=0.0030 | gpu_mb=985.0 | eff_bs=32768
+[2026-10-29 23:03:49] [ 55/ 66] DONE foodon__multibox-k2-init__d50__s1.json | wall=22.32s | train=4.93s | modelness=0.2153 | hvr=null | f_mrr=0.0054 | gpu_mb=443.2 | eff_bs=32768
+[2026-10-29 23:03:55] [ 56/ 66] DONE foodon__elbe__d50__s2.json | wall=5.98s | train=2.41s | modelness=0.5331 | hvr=null | f_mrr=0.0053 | gpu_mb=237.5 | eff_bs=32768
+[2026-10-29 23:04:01] [ 57/ 66] DONE foodon__elbe-init__d50__s2.json | wall=6.03s | train=2.22s | modelness=0.4309 | hvr=null | f_mrr=0.0051 | gpu_mb=260.0 | eff_bs=32768
+[2026-10-29 23:04:07] [ 58/ 66] DONE foodon__elbe-anchor__d50__s2.json | wall=5.85s | train=2.23s | modelness=0.4310 | hvr=null | f_mrr=0.0051 | gpu_mb=272.0 | eff_bs=32768
+[2026-10-29 23:04:14] [ 59/ 66] DONE foodon__box2el__d50__s2.json | wall=7.05s | train=3.04s | modelness=0.0001 | hvr=null | f_mrr=0.0084 | gpu_mb=314.9 | eff_bs=32768
+[2026-10-29 23:04:20] [ 60/ 66] DONE foodon__box2el-init__d50__s2.json | wall=6.73s | train=2.77s | modelness=0.1627 | hvr=null | f_mrr=0.0059 | gpu_mb=332.4 | eff_bs=32768
+[2026-10-29 23:04:27] [ 61/ 66] DONE foodon__box2el-anchor__d50__s2.json | wall=6.92s | train=2.94s | modelness=0.1627 | hvr=null | f_mrr=0.0059 | gpu_mb=354.6 | eff_bs=32768
+[2026-10-29 23:04:35] [ 62/ 66] DONE foodon__multibox-k1__d50__s2.json | wall=7.90s | train=3.45s | modelness=0.0001 | hvr=null | f_mrr=0.0084 | gpu_mb=386.8 | eff_bs=32768
+[2026-10-29 23:04:56] [ 63/ 66] DONE foodon__multibox-k2__d50__s2.json | wall=21.15s | train=5.38s | modelness=0.0001 | hvr=null | f_mrr=0.0039 | gpu_mb=592.8 | eff_bs=32768
+[2026-10-29 23:05:35] [ 64/ 66] DONE foodon__multibox-k3__d50__s2.json | wall=38.56s | train=8.47s | modelness=0.0001 | hvr=null | f_mrr=0.0028 | gpu_mb=671.7 | eff_bs=32768
+[2026-10-29 23:06:40] [ 65/ 66] DONE foodon__multibox-k4__d50__s2.json | wall=65.42s | train=12.56s | modelness=0.0001 | hvr=null | f_mrr=0.0030 | gpu_mb=1057.3 | eff_bs=32768
+[2026-10-29 23:07:03] [ 66/ 66] DONE foodon__multibox-k2-init__d50__s2.json | wall=22.44s | train=4.93s | modelness=0.2222 | hvr=null | f_mrr=0.0050 | gpu_mb=515.2 | eff_bs=32768
+[2026-10-29 23:07:03] Completed sweep suite=real smoke=False: ran=44 skipped=22 total=66 in 1959.22s

@@ -191,10 +191,10 @@ def test_sweep_dry_run_lists_all_cells(scratch_dir: Path) -> None:
     assert len(cells_pizza) == _expected_count(["pizza"], smoke=False) == 12 * 1 * 1 * 3
 
     cells_real = sweep.enumerate_cells("real", smoke=False)
-    assert len(cells_real) == _expected_count(["go", "foodon"], smoke=False) == 11 * 2 * 1 * 1
+    assert len(cells_real) == _expected_count(["go", "foodon"], smoke=False) == 11 * 2 * 1 * 3
 
     cells_all = sweep.enumerate_cells("all", smoke=False)
-    assert len(cells_all) == _expected_count(DATASETS, smoke=False) == 264 + 36 + 22
+    assert len(cells_all) == _expected_count(DATASETS, smoke=False) == 264 + 36 + 66
 
     cells_smoke = sweep.enumerate_cells("all", smoke=True)
     assert len(cells_smoke) == _expected_count(DATASETS, smoke=True) == 88 + 12 + 22 == 122
