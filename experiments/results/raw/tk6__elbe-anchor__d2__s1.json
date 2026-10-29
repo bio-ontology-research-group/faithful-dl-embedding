@@ -25,6 +25,7 @@
     },
     "learning_rate": 0.001,
     "margin": 0.02,
+    "margin_semantics": "tightening",
     "method": "elbe-anchor",
     "model": "ELBE",
     "n_components": 1,
@@ -57,6 +58,10 @@
     "modelness_gci0": 0.7222222222222222,
     "modelness_gci1": 0.2777777777777778,
     "modelness_gci1_bot": 0.8666666666666667,
+    "modelness_train_margin": 0.4057971014492754,
+    "modelness_train_margin_gci0": 0.5277777777777778,
+    "modelness_train_margin_gci1": 0.05555555555555555,
+    "modelness_train_margin_gci1_bot": 0.5333333333333333,
     "n_certificates": 20,
     "n_certificates_unmapped": 0,
     "n_components": 1,
@@ -67,6 +72,10 @@
     "param_count": 108,
     "peak_gpu_memory_bytes": 57856,
     "peak_gpu_memory_mb": 0.05517578125,
+    "posthoc": {
+      "git": "d4ea50ea8f188b567589e3e06d5095c779cd63a2",
+      "version": 1
+    },
     "total_train_time_s": 5.117734415000086
   },
   "timings": {

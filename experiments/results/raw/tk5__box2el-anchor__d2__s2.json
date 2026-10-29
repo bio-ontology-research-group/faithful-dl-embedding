@@ -25,6 +25,7 @@
     },
     "learning_rate": 0.001,
     "margin": 0.02,
+    "margin_semantics": "relaxing",
     "method": "box2el-anchor",
     "model": "BoxSquaredEL",
     "n_components": 1,
@@ -57,6 +58,10 @@
     "modelness_gci0": 0.7083333333333334,
     "modelness_gci1": 0.08333333333333333,
     "modelness_gci1_bot": 0.5,
+    "modelness_train_margin": 0.5434782608695652,
+    "modelness_train_margin_gci0": 0.75,
+    "modelness_train_margin_gci1": 0.08333333333333333,
+    "modelness_train_margin_gci1_bot": 0.6,
     "n_certificates": 10,
     "n_certificates_unmapped": 0,
     "n_components": 1,
@@ -67,6 +72,10 @@
     "param_count": 120,
     "peak_gpu_memory_bytes": 36864,
     "peak_gpu_memory_mb": 0.03515625,
+    "posthoc": {
+      "git": "d4ea50ea8f188b567589e3e06d5095c779cd63a2",
+      "version": 1
+    },
     "total_train_time_s": 5.61214378700015
   },
   "timings": {

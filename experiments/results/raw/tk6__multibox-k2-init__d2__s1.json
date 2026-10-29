@@ -25,6 +25,7 @@
     },
     "learning_rate": 0.001,
     "margin": 0.02,
+    "margin_semantics": "relaxing",
     "method": "multibox-k2-init",
     "model": "MultiBoxEL",
     "n_components": 2,
@@ -57,6 +58,10 @@
     "modelness_gci0": 0.3333333333333333,
     "modelness_gci1": 0.0,
     "modelness_gci1_bot": 0.13333333333333333,
+    "modelness_train_margin": 0.6376811594202898,
+    "modelness_train_margin_gci0": 0.6944444444444444,
+    "modelness_train_margin_gci1": 0.2777777777777778,
+    "modelness_train_margin_gci1_bot": 0.9333333333333333,
     "n_certificates": 20,
     "n_certificates_unmapped": 0,
     "n_components": 2,
@@ -67,6 +72,10 @@
     "param_count": 270,
     "peak_gpu_memory_bytes": 95744,
     "peak_gpu_memory_mb": 0.09130859375,
+    "posthoc": {
+      "git": "d4ea50ea8f188b567589e3e06d5095c779cd63a2",
+      "version": 1
+    },
     "total_train_time_s": 5.097071728000174
   },
   "timings": {

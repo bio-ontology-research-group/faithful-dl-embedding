@@ -14,6 +14,7 @@
     "init_report": null,
     "learning_rate": 0.001,
     "margin": 0.02,
+    "margin_semantics": "relaxing",
     "method": "box2el",
     "model": "BoxSquaredEL",
     "n_components": 1,
@@ -46,6 +47,10 @@
     "modelness_gci0": 0.0,
     "modelness_gci1": 0.0,
     "modelness_gci1_bot": 0.0,
+    "modelness_train_margin": 0.17391304347826086,
+    "modelness_train_margin_gci0": 0.1388888888888889,
+    "modelness_train_margin_gci1": 0.1111111111111111,
+    "modelness_train_margin_gci1_bot": 0.3333333333333333,
     "n_certificates": 20,
     "n_certificates_unmapped": 0,
     "n_components": 1,
@@ -56,6 +61,10 @@
     "param_count": 810,
     "peak_gpu_memory_bytes": 195584,
     "peak_gpu_memory_mb": 0.1865234375,
+    "posthoc": {
+      "git": "d4ea50ea8f188b567589e3e06d5095c779cd63a2",
+      "version": 1
+    },
     "total_train_time_s": 4.178459933999875
   },
   "timings": {

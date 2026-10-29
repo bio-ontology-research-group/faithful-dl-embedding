@@ -14,6 +14,7 @@
     "init_report": null,
     "learning_rate": 0.001,
     "margin": 0.02,
+    "margin_semantics": "tightening",
     "method": "elbe",
     "model": "ELBE",
     "n_components": 1,
@@ -46,6 +47,10 @@
     "modelness_gci0": 0.4722222222222222,
     "modelness_gci1": 0.3333333333333333,
     "modelness_gci1_bot": 0.8,
+    "modelness_train_margin": 0.15942028985507245,
+    "modelness_train_margin_gci0": 0.19444444444444445,
+    "modelness_train_margin_gci1": 0.0,
+    "modelness_train_margin_gci1_bot": 0.26666666666666666,
     "n_certificates": 20,
     "n_certificates_unmapped": 0,
     "n_components": 1,
@@ -56,6 +61,10 @@
     "param_count": 108,
     "peak_gpu_memory_bytes": 58368,
     "peak_gpu_memory_mb": 0.0556640625,
+    "posthoc": {
+      "git": "d4ea50ea8f188b567589e3e06d5095c779cd63a2",
+      "version": 1
+    },
     "total_train_time_s": 3.5603006260002985
   },
   "timings": {
