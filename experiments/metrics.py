@@ -130,6 +130,159 @@ def class_regions(model: Any) -> Tuple[np.ndarray, np.ndarray]:
     )
 
 
+class _CPUFilteredRowLookup:
+    """Thin wrapper around a CPU ``filtering_labels`` tensor that moves sliced rows to ``target_device``."""
+
+    def __init__(self, cpu_labels: torch.Tensor, target_device: str) -> None:
+        self._cpu_labels = cpu_labels
+        self._target_device = target_device
+
+    def __getitem__(self, item: Any) -> torch.Tensor:
+        return self._cpu_labels[item].to(self._target_device, non_blocking=True)
+
+
+def _compute_fast_head_centric_ranking_metrics(
+    evaluator: Any,
+    module: torch.nn.Module,
+    test_data: torch.Tensor,
+    eval_chunk_size: int = 65536,
+) -> Dict[str, float]:
+    """Compute head-centric ranking metrics identically to ``BaseRankingEvaluator.compute_ranking_metrics``
+    while batching host-device transfers and chunking large ``gci0`` score expansions.
+    """
+    from mowl.evaluation.base import compute_rank_roc
+    from mowl.utils.data import FastTensorDataLoader
+
+    module.to(evaluator.device)
+    module.eval()
+
+    num_tails = len(evaluator.tails)
+    head_to_idx: Optional[Dict[int, int]] = getattr(evaluator, "_head_to_idx", None)
+    tail_to_idx: Optional[Dict[int, int]] = getattr(evaluator, "_tail_to_idx", None)
+    if head_to_idx is None or tail_to_idx is None:
+        head_to_idx = {
+            int(h): idx for idx, h in enumerate(evaluator.heads.detach().cpu().tolist())
+        }
+        tail_to_idx = {
+            int(t): idx for idx, t in enumerate(evaluator.tails.detach().cpu().tolist())
+        }
+        setattr(evaluator, "_head_to_idx", head_to_idx)
+        setattr(evaluator, "_tail_to_idx", tail_to_idx)
+
+    filt = evaluator.filtering_labels
+    cpu_labels: Optional[torch.Tensor] = (
+        filt._cpu_labels if isinstance(filt, _CPUFilteredRowLookup) else None
+    )
+
+    dataloader = FastTensorDataLoader(
+        test_data, batch_size=evaluator.batch_size, shuffle=False
+    )
+
+    mrr, fmrr = 0.0, 0.0
+    mr, fmr = 0.0, 0.0
+    ranks: Dict[int, int] = {}
+    franks: Dict[int, int] = {}
+    hits_k: Dict[str, float] = {"1": 0, "3": 0, "10": 0, "50": 0, "100": 0}
+    f_hits_k: Dict[str, float] = {"1": 0, "3": 0, "10": 0, "50": 0, "100": 0}
+
+    orig_forward = module.forward
+
+    def _chunked_eval_forward(gci_tensor: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
+        if (
+            isinstance(gci_tensor, torch.Tensor)
+            and gci_tensor.ndim == 2
+            and gci_tensor.shape[0] > eval_chunk_size
+        ):
+            parts = [
+                orig_forward(gci_tensor[start : start + eval_chunk_size], *args, **kwargs)
+                for start in range(0, gci_tensor.shape[0], eval_chunk_size)
+            ]
+            return torch.cat(parts, dim=0)
+        return orig_forward(gci_tensor, *args, **kwargs)
+
+    module.forward = _chunked_eval_forward  # type: ignore[method-assign]
+    try:
+        with torch.no_grad():
+            for (batch,) in dataloader:
+                if batch.shape[1] == 2:
+                    heads, tails = batch[:, 0], batch[:, 1]
+                elif batch.shape[1] == 3:
+                    heads, tails = batch[:, 0], batch[:, 2]
+                else:
+                    raise ValueError("Batch shape must be either (n, 2) or (n, 3)")
+
+                head_ids = heads.detach().cpu().tolist()
+                tail_ids = tails.detach().cpu().tolist()
+                head_indices = [head_to_idx[int(h)] for h in head_ids]
+                tail_indices = [tail_to_idx[int(t)] for t in tail_ids]
+
+                batch_dev = batch.to(evaluator.device)
+                head_scores, _ = evaluator.get_expanded_scores(
+                    module, batch_dev, "head_centric"
+                )
+                if head_scores is None:
+                    continue
+
+                if cpu_labels is not None:
+                    batch_filter = cpu_labels[head_indices].to(
+                        head_scores.device, non_blocking=True
+                    )
+                else:
+                    batch_filter = filt[head_indices]
+
+                batch_f_scores = head_scores * batch_filter
+                tail_idx_tensor = torch.tensor(
+                    tail_indices, device=head_scores.device, dtype=torch.long
+                )
+
+                rank_tensors = []
+                frank_tensors = []
+                for i in range(len(head_indices)):
+                    t_idx = tail_idx_tensor[i]
+                    order = torch.argsort(head_scores[i], descending=False)
+                    rank_tensors.append(torch.where(order == t_idx)[0][0])
+                    f_order = torch.argsort(batch_f_scores[i], descending=False)
+                    frank_tensors.append(torch.where(f_order == t_idx)[0][0])
+
+                batch_ranks = (torch.stack(rank_tensors) + 1).cpu().tolist()
+                batch_franks = (torch.stack(frank_tensors) + 1).cpu().tolist()
+
+                for rank, f_rank in zip(batch_ranks, batch_franks):
+                    rank = int(rank)
+                    f_rank = int(f_rank)
+                    mr += rank
+                    mrr += 1.0 / rank
+                    fmr += f_rank
+                    fmrr += 1.0 / f_rank
+
+                    for k in hits_k:
+                        if rank <= int(k):
+                            hits_k[k] += 1
+                    for k in f_hits_k:
+                        if f_rank <= int(k):
+                            f_hits_k[k] += 1
+
+                    ranks[rank] = ranks.get(rank, 0) + 1
+                    franks[f_rank] = franks.get(f_rank, 0) + 1
+    finally:
+        module.forward = orig_forward  # type: ignore[method-assign]
+
+    n_test = float(len(test_data))
+    metrics: Dict[str, float] = {
+        "mr": mr / n_test,
+        "mrr": mrr / n_test,
+        "f_mr": fmr / n_test,
+        "f_mrr": fmrr / n_test,
+        "auc": float(compute_rank_roc(ranks, num_tails)),
+        "f_auc": float(compute_rank_roc(franks, num_tails)),
+    }
+    for k in hits_k:
+        metrics[f"hits@{k}"] = hits_k[k] / n_test
+    for k in f_hits_k:
+        metrics[f"f_hits@{k}"] = f_hits_k[k] / n_test
+    return metrics
+
+
 def ranking_metrics(
     model: Any,
     bundle: DatasetBundle,
@@ -186,21 +339,17 @@ def ranking_metrics(
     cached_eval = evaluator
     if cached_eval is None:
         cached_eval = getattr(bundle, "_subsumption_evaluator", None)
-        if (
-            cached_eval is not None
-            and (
-                str(getattr(cached_eval, "device", None)) != resolved_device
-                or getattr(cached_eval, "batch_size", None) != batch_size
-            )
-        ):
+        if cached_eval is not None and str(getattr(cached_eval, "device", None)) != resolved_device:
             cached_eval = None
 
     if cached_eval is None:
+        # Build the evaluator on CPU first so the dense (n_heads, n_tails) filtering_labels
+        # matrix (7.47 GB on GO with 44,246 classes) is allocated in host RAM rather than
+        # exhausting the 8 GB GPU VRAM.
         cached_eval = SubsumptionEvaluator(
-            bundle.dataset, batch_size=batch_size, device=resolved_device
+            bundle.dataset, batch_size=batch_size, device="cpu"
         )
         testing_data = cached_eval.create_tuples(bundle.dataset.testing)
-        filter_data = None
         if filter_ontologies:
             import torch as th
 
@@ -208,23 +357,46 @@ def ranking_metrics(
                 [cached_eval.create_tuples(ont) for ont in filter_ontologies], dim=0
             )
             cached_eval.update_filtering_labels(filter_data)
+
+        if resolved_device != "cpu":
+            cached_eval.device = resolved_device
+            cached_eval.heads = cached_eval.heads.to(resolved_device)
+            cached_eval.tails = cached_eval.tails.to(resolved_device)
+            cached_eval.mapped_heads = cached_eval.mapped_heads.to(resolved_device)
+            cached_eval.mapped_tails = cached_eval.mapped_tails.to(resolved_device)
+            cpu_labels = cached_eval.filtering_labels.cpu()
+            cached_eval.filtering_labels = _CPUFilteredRowLookup(  # type: ignore[assignment]
+                cpu_labels, resolved_device
+            )
+
         setattr(cached_eval, "_cached_testing_data", testing_data)
         setattr(bundle, "_subsumption_evaluator", cached_eval)
 
+    cached_eval.batch_size = int(batch_size)
+    eval_oom_retries = 0
     try:
-        if hasattr(cached_eval, "_cached_testing_data"):
-            raw_metrics = cached_eval.compute_ranking_metrics(
-                module,
-                getattr(cached_eval, "_cached_testing_data"),
-                filter_data=None,
-                mode="head_centric",
-            )
-        else:
-            raw_metrics = cached_eval.evaluate(
-                module,
-                bundle.dataset.testing,
-                filter_ontologies=filter_ontologies,
-            )
+        while True:
+            try:
+                if hasattr(cached_eval, "_cached_testing_data"):
+                    raw_metrics = _compute_fast_head_centric_ranking_metrics(
+                        cached_eval,
+                        module,
+                        getattr(cached_eval, "_cached_testing_data"),
+                    )
+                else:
+                    raw_metrics = cached_eval.evaluate(
+                        module,
+                        bundle.dataset.testing,
+                        filter_ontologies=filter_ontologies,
+                    )
+                break
+            except torch.cuda.OutOfMemoryError:
+                if eval_oom_retries >= 4 or cached_eval.batch_size <= 1:
+                    raise
+                eval_oom_retries += 1
+                cached_eval.batch_size = max(1, cached_eval.batch_size // 2)
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
     finally:
         module.to(orig_device)
         if was_training:

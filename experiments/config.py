@@ -85,6 +85,11 @@ DATASET_SEEDS: Dict[str, List[int]] = {
     "foodon": [0],
 }
 
+# Spec §5.2 fixed hyperparameters.
+# Note on Box²EL / MultiBoxEL `margin` (gamma): in Box²EL's upstream convention,
+# gamma enters inside `relu(... - gamma)`, so a positive gamma RELAXES inclusion
+# and disjointness constraints rather than enforcing a strict interior/separation
+# margin. We keep the upstream default `margin=0.02` for comparability.
 DEFAULT_HYPERPARAMS: Dict[str, Any] = {
     "margin": 0.02,
     "delta": 2.5,
