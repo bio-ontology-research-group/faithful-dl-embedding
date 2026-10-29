@@ -2,11 +2,11 @@
   "name": "pizza",
   "ontology_path": "/home/leechuck/tmp/gfe-data/pizza/pizza.owl",
   "status": "completed",
-  "load_wall_seconds": 0.1964301519910805,
+  "load_wall_seconds": 0.25862011199933477,
   "normalise": {
-    "wall_seconds": 0.15628140899934806,
-    "concept_names_count": 101,
-    "concept_names_excluding_top_bottom": 99,
+    "wall_seconds": 0.15462332000606693,
+    "concept_names_count": 109,
+    "concept_names_excluding_top_bottom": 107,
     "role_names_count": 8,
     "total_axioms": 662,
     "axioms_by_normal_form": {
@@ -27,19 +27,19 @@
     "dropped_axioms": 52
   },
   "canonical_model": {
-    "wall_seconds": 0.1982646780088544,
-    "completion_wall_seconds": 0.04198326900950633,
+    "wall_seconds": 0.15738417900865898,
+    "completion_wall_seconds": 0.002760859002592042,
     "inconsistent": false,
-    "names_count": 65,
-    "unsatisfiable_names_count": 35
+    "names_count": 106,
+    "unsatisfiable_names_count": 2
   },
-  "bottom_relevant_all_names_count": 92,
-  "bottom_relevant_satisfiable_names_count": 57,
+  "bottom_relevant_all_names_count": 98,
+  "bottom_relevant_satisfiable_names_count": 96,
   "helly_check": {
     "timed_out": false,
     "timeout_seconds": 900,
-    "wall_seconds": 101.37249458697625,
-    "spawn_and_wall_seconds": 104.40801858398481,
+    "wall_seconds": 73.89948798899422,
+    "spawn_and_wall_seconds": 77.15369163101423,
     "complete": false,
     "has_roles": true,
     "k_max": 4,
@@ -51,9 +51,9 @@
     "minimal_unsatisfiable_set_size_distribution": {}
   },
   "targeted_triangle_search": {
-    "wall_seconds": 3.883001045323908e-05,
-    "graph_stats_wall_seconds": 4.1391991544514894e-05,
-    "named_conjunctions_count": 0,
+    "wall_seconds": 6.472301902249455e-05,
+    "graph_stats_wall_seconds": 5.792902084067464e-05,
+    "named_conjunctions_count": 5,
     "graph_triangles_count": 0,
     "certificate_triangles_count": 0,
     "certificate_triangles_sample": []
