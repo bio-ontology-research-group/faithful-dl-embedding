@@ -33,6 +33,7 @@ import torch
 
 from experiments.cm_cache import get_canonical_model
 from experiments.config import (
+    ABOX_DATASETS,
     DATASETS,
     DATASET_DIMS,
     DATASET_EPOCHS,
@@ -52,6 +53,7 @@ SUITE_DATASETS: Dict[str, List[str]] = {
     "synthetic": list(SYNTHETIC_DATASETS),
     "pizza": ["pizza"],
     "real": ["go", "foodon"],
+    "abox": list(ABOX_DATASETS),
     "all": list(DATASETS),
 }
 

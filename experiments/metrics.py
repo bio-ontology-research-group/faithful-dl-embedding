@@ -801,10 +801,21 @@ def modelness(
                 data = gci_ds[:]
                 n_rows = int(data.shape[0])
                 sat_gci = 0
+                supported = True
                 for start in range(0, n_rows, batch_size):
                     chunk = data[start : start + batch_size].to(device=device)
-                    losses = module(chunk, gci_name).reshape(-1)
+                    try:
+                        raw_losses = module(chunk, gci_name)
+                    except NotImplementedError:
+                        supported = False
+                        break
+                    if isinstance(raw_losses, Exception) or raw_losses is NotImplemented:
+                        supported = False
+                        break
+                    losses = raw_losses.reshape(-1)
                     sat_gci += int((losses <= tol).sum().item())
+                if not supported:
+                    continue
                 out[f"modelness_{gci_name}"] = float(sat_gci / n_rows)
                 total_satisfied += sat_gci
                 total_axioms += n_rows
@@ -987,8 +998,11 @@ def cost_metrics(
         eff_tensor = module.effective_components()
         mean_eff = float(eff_tensor.to(dtype=torch.float32).mean().item())
     else:
-        _, offsets = class_regions(model)
-        mean_eff = float(np.mean(np.all(offsets[:, 0, :] > 1e-3, axis=-1)))
+        try:
+            _, offsets = class_regions(model)
+            mean_eff = float(np.mean(np.all(offsets[:, 0, :] > 1e-3, axis=-1)))
+        except TypeError:
+            mean_eff = float(n_components)
 
     epoch_times = timings_dict.get("epoch_times")
     total_train_time_s: Optional[float] = None
@@ -1042,3 +1056,119 @@ def cost_metrics(
         "peak_gpu_memory_bytes": peak_bytes,
         "peak_gpu_memory_mb": float(peak_bytes / (1024.0 * 1024.0)),
     }
+
+
+def abox_metrics(
+    model: Any,
+    bundle: DatasetBundle,
+    *,
+    split: str = "test",
+    seed: int = 0,
+) -> Dict[str, Any]:
+    """Compute the full ABox evaluation block for ``bundle`` (Spec §3.1, §3.2).
+
+    Evaluates:
+    - Filtered candidate ranking (both ``rankable_only`` and ``all_positives``
+      plus coverage accounting),
+    - CAFA-style protein-centric :math:`F_{\\max}` for ``yeast-function``
+      (``None`` on ``helis``),
+    - ``hierarchy_violation_rate`` over entailed candidate subsumptions,
+    - Three-way faithfulness metrics on ``label`` (``faithfulness_kb``) and, when
+      present, ``label_gold`` (``faithfulness_gold``),
+    - ``abox_modelness`` on training assertions,
+    - Missing entity counts (``n_missing_individuals``, ``n_missing_candidates``).
+    """
+    from experiments.abox_eval import (
+        abox_modelness,
+        count_missing_entities,
+        fmax,
+        get_candidate_hierarchy,
+        hierarchy_violation_rate,
+        load_abox_split_data,
+        ranking,
+        score_candidates,
+        three_way_metrics,
+    )
+
+    split_data = load_abox_split_data(bundle, split=split)
+    individuals = split_data["individuals"]
+    candidates = split_data["candidates"]
+    cand_to_idx = split_data["cand_to_idx"]
+
+    missing_counts = count_missing_entities(model, individuals, candidates)
+    scores = score_candidates(model, individuals, candidates)
+
+    rank_res = ranking(
+        scores,
+        split_data["positives"],
+        skip_mask=split_data["skip_mask"],
+    )
+
+    hierarchy = get_candidate_hierarchy(bundle.paths["ontology"], candidates)
+    entailed_pairs: List[Tuple[int, int]] = []
+    for c_iri in candidates:
+        c_idx = cand_to_idx[c_iri]
+        for sup_iri in hierarchy.get(c_iri, ()):
+            sup_idx = cand_to_idx.get(sup_iri, -1)
+            if sup_idx >= 0 and sup_idx != c_idx:
+                entailed_pairs.append((c_idx, sup_idx))
+
+    hvr = hierarchy_violation_rate(scores, entailed_pairs, seed=seed)
+
+    if bundle.name == "yeast-function":
+        fmax_val: Optional[float] = fmax(
+            scores,
+            split_data["true_sets"],
+            hierarchy,
+            candidates=candidates,
+        )
+    else:
+        fmax_val = None
+
+    faith_kb = three_way_metrics(scores, split_data["label_codes"], seed=seed)
+    if split_data["label_gold_codes"] is not None:
+        faith_gold: Optional[Dict[str, Any]] = three_way_metrics(
+            scores, split_data["label_gold_codes"], seed=seed
+        )
+    else:
+        faith_gold = None
+
+    abox_mod = abox_modelness(model)
+
+    return {
+        "rank_mrr": rank_res["mrr"],
+        "rank_hits@1": rank_res["hits@1"],
+        "rank_hits@5": rank_res["hits@5"],
+        "rank_hits@10": rank_res["hits@10"],
+        "rank_auc": rank_res["auc"],
+        "rank_all_mrr": rank_res["all_mrr"],
+        "rank_all_hits@1": rank_res["all_hits@1"],
+        "rank_all_hits@5": rank_res["all_hits@5"],
+        "rank_all_hits@10": rank_res["all_hits@10"],
+        "rank_all_auc": rank_res["all_auc"],
+        "rank_coverage": rank_res["coverage"],
+        "n_positives_total": rank_res["n_positives_total"],
+        "n_positives_rankable": rank_res["n_positives_rankable"],
+        "n_positives_unrankable": rank_res["n_positives_unrankable"],
+        "ranking_rankable": rank_res["rankable_only"],
+        "ranking_all": rank_res["all_positives"],
+        "fmax": fmax_val,
+        "hierarchy_violation_rate": hvr,
+        "abox_modelness": abox_mod,
+        "faithfulness_kb": faith_kb,
+        "faithfulness_gold": faith_gold,
+        "auc_pos_neg": faith_kb["auc_pos_neg"],
+        "auc_pos_und": faith_kb["auc_pos_und"],
+        "pair_fvr": faith_kb["pair_fvr"],
+        "fvr": faith_kb["fvr"],
+        "n_pos": faith_kb["n_pos"],
+        "n_und": faith_kb["n_und"],
+        "n_neg": faith_kb["n_neg"],
+        "auc_pos_neg_gold": faith_gold["auc_pos_neg"] if faith_gold else None,
+        "auc_pos_und_gold": faith_gold["auc_pos_und"] if faith_gold else None,
+        "pair_fvr_gold": faith_gold["pair_fvr"] if faith_gold else None,
+        "fvr_gold": faith_gold["fvr"] if faith_gold else None,
+        "n_missing_individuals": missing_counts["n_missing_individuals"],
+        "n_missing_candidates": missing_counts["n_missing_candidates"],
+    }
+

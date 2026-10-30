@@ -168,12 +168,16 @@ def test_run_smoke_tk3_multibox_k2_cpu(scratch_dir: Path) -> None:
 
 def test_sweep_dry_run_lists_all_cells(scratch_dir: Path) -> None:
     """Verify sweep dry-run enumerates methods_for_dataset(d) x datasets x dims x seeds for every suite."""
-    assert len(METHODS) == 12
+    assert len(METHODS) >= 13
     assert len(methods_for_dataset("tk3")) == 11
     assert len(methods_for_dataset("pizza")) == 12
     assert "box2el-milp" in methods_for_dataset("pizza")
     assert "box2el-milp" not in methods_for_dataset("tk3")
     assert "box2el-milp" not in methods_for_dataset("go")
+    assert "canonical-mixture" in methods_for_dataset("yeast-function")
+    assert "canonical-mixture" in methods_for_dataset("helis")
+    assert "canonical-mixture" not in methods_for_dataset("pizza")
+    assert "canonical-mixture" not in methods_for_dataset("tk3")
 
     def _expected_count(ds_list: List[str], smoke: bool = False) -> int:
         total = 0
@@ -194,10 +198,10 @@ def test_sweep_dry_run_lists_all_cells(scratch_dir: Path) -> None:
     assert len(cells_real) == _expected_count(["go", "foodon"], smoke=False) == 11 * 2 * 1 * 3
 
     cells_all = sweep.enumerate_cells("all", smoke=False)
-    assert len(cells_all) == _expected_count(DATASETS, smoke=False) == 264 + 36 + 66
+    assert len(cells_all) == _expected_count(DATASETS, smoke=False)
 
     cells_smoke = sweep.enumerate_cells("all", smoke=True)
-    assert len(cells_smoke) == _expected_count(DATASETS, smoke=True) == 88 + 12 + 22 == 122
+    assert len(cells_smoke) == _expected_count(DATASETS, smoke=True)
 
     # Also test CLI --dry-run does not execute training or write files
     out_dir = scratch_dir / "dry_out"

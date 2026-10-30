@@ -246,7 +246,17 @@ def test_pizza_raw_entailment_and_asserted_candidates():
 )
 def test_load_dataset_all(name: str):
     """Verify every dataset id in DATASETS loads and exposes the expected DatasetBundle contract."""
-    assert DATASETS == ["tk3", "tk4", "tk5", "tk6", "pizza", "go", "foodon"]
+    assert DATASETS == [
+        "tk3",
+        "tk4",
+        "tk5",
+        "tk6",
+        "pizza",
+        "go",
+        "foodon",
+        "yeast-function",
+        "helis",
+    ]
     bundle = load_dataset(name)
     assert isinstance(bundle, DatasetBundle)
     assert bundle.name == name
@@ -259,6 +269,13 @@ def test_load_dataset_all(name: str):
     if name.startswith("tk"):
         assert bundle.task == "satisfaction"
         assert bundle.deductive_closure_ontology is None
+    elif name in ("yeast-function", "helis"):
+        assert bundle.task == "abox"
+        assert bundle.deductive_closure_ontology is None
+        assert bundle.dataset.validation is not None
+        assert bundle.dataset.testing is not None
+        for req_key in ("ontology", "valid", "test", "candidates", "labels_valid", "labels_test", "manifest"):
+            assert req_key in bundle.paths
     else:
         assert bundle.task == "subsumption"
         assert bundle.deductive_closure_ontology is not None

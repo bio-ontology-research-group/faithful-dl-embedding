@@ -35,14 +35,27 @@ RAW_DATA_ROOT: Path = Path("~/tmp/gfe-data").expanduser()
 MOWL_DATA_ROOT: Path = RAW_DATA_ROOT / "mowl"
 PIZZA_RAW_PATH: Path = RAW_DATA_ROOT / "pizza" / "pizza.owl"
 PIZZA_EL_DIR: Path = RAW_DATA_ROOT / "pizza-el"
+YEAST_FUNCTION_DIR: Path = RAW_DATA_ROOT / "yeast-function"
+HELIS_DIR: Path = RAW_DATA_ROOT / "helis"
 RUNS_DIR: Path = Path("~/tmp/gfe-runs").expanduser()
 
 SYNTHETIC_NS: str = "http://mowl.borg/geo#"
 SYNTHETIC_ONT_BASE: str = "http://mowl.borg/geo"
 
-DATASETS: List[str] = ["tk3", "tk4", "tk5", "tk6", "pizza", "go", "foodon"]
+DATASETS: List[str] = [
+    "tk3",
+    "tk4",
+    "tk5",
+    "tk6",
+    "pizza",
+    "go",
+    "foodon",
+    "yeast-function",
+    "helis",
+]
 SYNTHETIC_DATASETS: List[str] = ["tk3", "tk4", "tk5", "tk6"]
 SUBSUMPTION_DATASETS: List[str] = ["pizza", "go", "foodon"]
+ABOX_DATASETS: List[str] = ["yeast-function", "helis"]
 
 DATASET_TASKS: Dict[str, str] = {
     "tk3": "satisfaction",
@@ -52,6 +65,8 @@ DATASET_TASKS: Dict[str, str] = {
     "pizza": "subsumption",
     "go": "subsumption",
     "foodon": "subsumption",
+    "yeast-function": "abox",
+    "helis": "abox",
 }
 
 # Spec §5.2 fixed hyperparameters
@@ -63,6 +78,8 @@ DATASET_DIMS: Dict[str, List[int]] = {
     "pizza": [50],
     "go": [50],
     "foodon": [50],
+    "yeast-function": [50],
+    "helis": [50],
 }
 
 DATASET_EPOCHS: Dict[str, int] = {
@@ -73,6 +90,8 @@ DATASET_EPOCHS: Dict[str, int] = {
     "pizza": 2000,
     "go": 300,
     "foodon": 300,
+    "yeast-function": 2000,
+    "helis": 2000,
 }
 
 DATASET_SEEDS: Dict[str, List[int]] = {
@@ -83,6 +102,8 @@ DATASET_SEEDS: Dict[str, List[int]] = {
     "pizza": [0, 1, 2],
     "go": [0, 1, 2],
     "foodon": [0, 1, 2],
+    "yeast-function": [0, 1, 2],
+    "helis": [0, 1, 2],
 }
 
 # Spec §5.2 fixed hyperparameters.
@@ -175,6 +196,13 @@ METHODS: Dict[str, Dict[str, Any]] = {
         "n_components": 2,
         "init": "projected",
         "anchor_weight": 0.0,
+    },
+    "canonical-mixture": {
+        "model": "CanonicalMixture",
+        "n_components": 1,
+        "init": None,
+        "anchor_weight": 0.0,
+        "datasets": ["yeast-function", "helis"],
     },
 }
 

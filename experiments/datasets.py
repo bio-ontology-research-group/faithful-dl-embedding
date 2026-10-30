@@ -28,10 +28,12 @@ import mowl
 from experiments.config import (
     DATASETS,
     DATASET_TASKS,
+    HELIS_DIR,
     MOWL_DATA_ROOT,
     PIZZA_EL_DIR,
     PIZZA_REPO_DIR,
     SYNTHETIC_DIR,
+    YEAST_FUNCTION_DIR,
 )
 from experiments.data.make_pizza import is_auxiliary_iri
 
@@ -39,7 +41,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from org.semanticweb.owlapi.model import OWLOntology
     from mowl.datasets import Dataset
 
-TaskType = Literal["satisfaction", "subsumption"]
+TaskType = Literal["satisfaction", "subsumption", "abox"]
 
 
 @dataclass
@@ -277,6 +279,69 @@ def load_dataset(name: str, data_root: Path | str = MOWL_DATA_ROOT) -> DatasetBu
             name=name,
             dataset=ds,
             deductive_closure_ontology=ds.deductive_closure_ontology,
+            task=task,
+            paths=paths,
+        )
+
+    if name == "yeast-function":
+        yf_dir = YEAST_FUNCTION_DIR
+        required = {
+            "ontology": yf_dir / "ontology.owl",
+            "valid": yf_dir / "valid.owl",
+            "test": yf_dir / "test.owl",
+            "candidates": yf_dir / "candidates.txt",
+            "labels_valid": yf_dir / "labels_valid.parquet",
+            "labels_test": yf_dir / "labels_test.parquet",
+            "train_annotations": yf_dir / "train_annotations.tsv",
+            "valid_annotations": yf_dir / "valid_annotations.tsv",
+            "test_annotations": yf_dir / "test_annotations.tsv",
+            "manifest": yf_dir / "manifest.json",
+        }
+        if not all(p.exists() for p in required.values()):
+            from experiments.data.make_yeast_function import build_yeast_function
+
+            build_yeast_function(out_dir=yf_dir)
+        paths = {k: str(p.resolve()) for k, p in required.items()}
+        ds = PathDataset(
+            paths["ontology"],
+            validation_path=paths["valid"],
+            testing_path=paths["test"],
+        )
+        return DatasetBundle(
+            name=name,
+            dataset=ds,
+            deductive_closure_ontology=None,
+            task=task,
+            paths=paths,
+        )
+
+    if name == "helis":
+        hl_dir = HELIS_DIR
+        required = {
+            "ontology": hl_dir / "ontology.owl",
+            "valid": hl_dir / "valid.owl",
+            "test": hl_dir / "test.owl",
+            "candidates": hl_dir / "candidates.txt",
+            "labels_valid": hl_dir / "labels_valid.parquet",
+            "labels_test": hl_dir / "labels_test.parquet",
+            "skip_valid": hl_dir / "skip_valid.tsv",
+            "skip_test": hl_dir / "skip_test.tsv",
+            "manifest": hl_dir / "manifest.json",
+        }
+        if not all(p.exists() for p in required.values()):
+            from experiments.data.make_helis import build_helis
+
+            build_helis(out_dir=hl_dir)
+        paths = {k: str(p.resolve()) for k, p in required.items()}
+        ds = PathDataset(
+            paths["ontology"],
+            validation_path=paths["valid"],
+            testing_path=paths["test"],
+        )
+        return DatasetBundle(
+            name=name,
+            dataset=ds,
+            deductive_closure_ontology=None,
             task=task,
             paths=paths,
         )

@@ -67,6 +67,7 @@ from experiments.config import (
 )
 from experiments.datasets import DatasetBundle, load_dataset
 from experiments.metrics import (
+    abox_metrics,
     cost_metrics,
     faithfulness_metrics,
     helly_metrics,
@@ -211,8 +212,9 @@ def _build_model(
     checkpoint_path: Path,
 ):
     """Instantiate the requested mOWL model and apply ``ExactBoxInit`` when configured."""
+    from mowl.datasets.el import ELDataset
     from mowl.geometric import ExactBoxInit
-    from mowl.models import BoxSquaredEL, ELBE, MultiBoxEL
+    from mowl.models import BoxSquaredEL, CanonicalMixture, ELBE, MultiBoxEL
 
     if method_id not in METHODS:
         raise ValueError(
@@ -300,19 +302,56 @@ def _build_model(
                 init_boxes=None,
                 anchor_weight=anchor_weight,
             )
+        elif model_cls_name == "CanonicalMixture":
+            model = CanonicalMixture(
+                bundle.dataset,
+                rank=dim,
+                lr=learning_rate,
+                batch_size=min(batch_size, 1024),
+                model_filepath=ckpt_str,
+                device=device,
+            )
         else:  # pragma: no cover
             raise ValueError(f"Unsupported model class {model_cls_name!r}")
     finally:
         ELNormalizer.normalize = orig_normalize  # type: ignore[method-assign]
 
-    # Also wrap _load_datasets so validation/testing ELNormalizer calls reuse the cache
+    # Wrap _load_datasets so validation/testing ELNormalizer calls reuse the cache
+    # and ELDataset always receives model.individual_index_dict when individuals exist.
     orig_load_ds = model._load_datasets
+    orig_el_dataset_init = ELDataset.__init__
 
     def _cached_load_datasets():
+        def _patched_el_dataset_init(
+            self_el,
+            ontology,
+            class_index_dict=None,
+            object_property_index_dict=None,
+            individual_index_dict=None,
+            *args,
+            **kwargs,
+        ):
+            if (
+                individual_index_dict is None
+                and getattr(model, "individual_index_dict", None)
+            ):
+                individual_index_dict = model.individual_index_dict
+            return orig_el_dataset_init(
+                self_el,
+                ontology,
+                class_index_dict=class_index_dict,
+                object_property_index_dict=object_property_index_dict,
+                individual_index_dict=individual_index_dict,
+                *args,
+                **kwargs,
+            )
+
         ELNormalizer.normalize = _cached_normalize  # type: ignore[method-assign]
+        ELDataset.__init__ = _patched_el_dataset_init  # type: ignore[method-assign]
         try:
             return orig_load_ds()
         finally:
+            ELDataset.__init__ = orig_el_dataset_init  # type: ignore[method-assign]
             ELNormalizer.normalize = orig_normalize  # type: ignore[method-assign]
 
     model._load_datasets = _cached_load_datasets
@@ -431,11 +470,14 @@ def _train_model_with_chunking(
     epoch_times.clear()
     _ = model.training_datasets
     t_last = [time.monotonic()]
+    extra_cb = getattr(model, "_abox_epoch_callback", None)
 
     def _on_epoch(epoch_idx: int, _m: Any) -> None:
         now = time.monotonic()
         epoch_times.append(now - t_last[0])
-        t_last[0] = now
+        if extra_cb is not None:
+            extra_cb(epoch_idx, _m)
+        t_last[0] = time.monotonic()
 
     chunk_needed = effective_batch_size < int(DEFAULT_HYPERPARAMS["batch_size"])
     with _chunked_module_forward(model.module, effective_batch_size, enabled=chunk_needed):
@@ -483,7 +525,12 @@ def execute_run(
         dataset_load_time_s = 0.0
 
     t_cm0 = time.monotonic()
-    if cm is None:
+    need_cm = (
+        bundle.task != "abox"
+        or METHODS[method].get("init") is not None
+        or dataset == "helis"
+    )
+    if cm is None and need_cm:
         cm = get_canonical_model(bundle)
     cm_load_time_s = time.monotonic() - t_cm0
 
@@ -505,8 +552,17 @@ def execute_run(
     oom_retries = 0
     max_oom_retries = 3
     epoch_times: List[float] = []
+    validation_curve: List[Dict[str, Any]] = []
+    best_val_mrr: Optional[float] = None
+    best_val_epoch: Optional[int] = None
     model: Any = None
     init_report: Optional[Dict[str, Any]] = None
+
+    if bundle.task == "abox":
+        from experiments.abox_eval import compute_validation_mrr, load_abox_split_data
+
+        # Pre-load validation split structures once outside the training timer
+        load_abox_split_data(bundle, split="valid")
 
     while True:
         t_init0 = time.monotonic()
@@ -530,7 +586,30 @@ def execute_run(
         _ = model.training_datasets
         model_init_time_s = time.monotonic() - t_init0
 
-        if bundle.task == "subsumption" and bundle.dataset.validation is not None:
+        validation_curve.clear()
+        best_val_mrr = None
+        best_val_epoch = None
+
+        if bundle.task == "abox":
+            torch.save(model.module.state_dict(), ckpt_path)
+            # Disable mOWL's loss-based validation checkpointing; use 50-epoch validation MRR instead
+            eff_validate_every = resolved_epochs + 1
+            val_mrr_interval = 50
+            best_mrr_box = [-1.0]
+            best_ep_box = [0]
+
+            def _abox_val_cb(epoch_idx: int, m_obj: Any) -> None:
+                ep_num = int(epoch_idx + 1)
+                if ep_num % val_mrr_interval == 0 or ep_num == resolved_epochs:
+                    v_mrr = float(compute_validation_mrr(m_obj, bundle))
+                    validation_curve.append({"epoch": ep_num, "val_mrr": v_mrr})
+                    if v_mrr > best_mrr_box[0]:
+                        best_mrr_box[0] = v_mrr
+                        best_ep_box[0] = ep_num
+                        torch.save(m_obj.module.state_dict(), ckpt_path)
+
+            setattr(model, "_abox_epoch_callback", _abox_val_cb)
+        elif bundle.task == "subsumption" and bundle.dataset.validation is not None:
             model.eval_gci_name = eval_gci_name
             # Ensure a valid initial checkpoint exists even if epochs < validate_every
             # (e.g. smoke runs with epochs=3 and validate_every=10).
@@ -552,6 +631,9 @@ def execute_run(
                 epoch_times=epoch_times,
             )
             total_train_time_s = time.monotonic() - t_train0
+            if bundle.task == "abox" and validation_curve:
+                best_val_mrr = float(best_mrr_box[0])
+                best_val_epoch = int(best_ep_box[0])
             break
         except torch.cuda.OutOfMemoryError:
             if oom_retries >= max_oom_retries or effective_batch_size <= 1:
@@ -562,7 +644,7 @@ def execute_run(
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-    # Load best validation checkpoint for subsumption datasets; for satisfaction
+    # Load best validation checkpoint for subsumption and abox datasets; for satisfaction
     # datasets (no validation split), persist the final state dict to ckpt_path.
     if (
         bundle.task == "subsumption"
@@ -570,6 +652,10 @@ def execute_run(
         and ckpt_path.exists()
     ):
         model.load_best_model()
+    elif bundle.task == "abox" and ckpt_path.exists():
+        model.module.load_state_dict(
+            torch.load(ckpt_path, map_location=resolved_device, weights_only=True)
+        )
     else:
         torch.save(model.module.state_dict(), ckpt_path)
 
@@ -579,7 +665,7 @@ def execute_run(
         else 0
     )
 
-    # Compute all Spec §5.3 metrics BEFORE writing the JSON
+    # Compute all Spec §5.3 / §3.1-3.2 metrics BEFORE writing the JSON
     t_eval0 = time.monotonic()
 
     t_m0 = time.monotonic()
@@ -587,30 +673,48 @@ def execute_run(
     modelness_time_s = time.monotonic() - t_m0
 
     t_h0 = time.monotonic()
-    certs = _resolve_certificates(bundle, cm)
-    m_helly = helly_metrics(model, bundle=bundle, cm=cm, certificates=certs)
+    if cm is not None and METHODS[method]["model"] != "CanonicalMixture":
+        certs = _resolve_certificates(bundle, cm)
+        m_helly = helly_metrics(model, bundle=bundle, cm=cm, certificates=certs)
+    else:
+        m_helly = {
+            "helly_violation_rate": None,
+            "degeneracy_rate": None,
+            "n_certificates": 0,
+            "n_certificates_unmapped": 0,
+        }
     helly_time_s = time.monotonic() - t_h0
 
-    t_f0 = time.monotonic()
-    if bundle.task == "subsumption":
-        m_faith = faithfulness_metrics(model, bundle=bundle, cm=cm, seed=0)
-    else:
-        m_faith = {
-            "auc_pos_neg": None,
-            "pair_fvr": None,
-            "fvr": None,
-            "n_pos": 0,
-            "n_und": 0,
-            "n_neg": 0,
-        }
-    faithfulness_time_s = time.monotonic() - t_f0
-
-    t_r0 = time.monotonic()
-    if bundle.task == "subsumption":
-        m_rank = ranking_metrics(model, bundle=bundle, device=resolved_device)
-    else:
+    if bundle.task == "abox":
+        t_ab0 = time.monotonic()
+        m_abox = abox_metrics(model, bundle=bundle, split="test", seed=0)
+        abox_eval_time_s = time.monotonic() - t_ab0
+        faithfulness_time_s = abox_eval_time_s
+        ranking_time_s = abox_eval_time_s
+        m_faith = {}
         m_rank = {}
-    ranking_time_s = time.monotonic() - t_r0
+    else:
+        m_abox = {}
+        t_f0 = time.monotonic()
+        if bundle.task == "subsumption":
+            m_faith = faithfulness_metrics(model, bundle=bundle, cm=cm, seed=0)
+        else:
+            m_faith = {
+                "auc_pos_neg": None,
+                "pair_fvr": None,
+                "fvr": None,
+                "n_pos": 0,
+                "n_und": 0,
+                "n_neg": 0,
+            }
+        faithfulness_time_s = time.monotonic() - t_f0
+
+        t_r0 = time.monotonic()
+        if bundle.task == "subsumption":
+            m_rank = ranking_metrics(model, bundle=bundle, device=resolved_device)
+        else:
+            m_rank = {}
+        ranking_time_s = time.monotonic() - t_r0
 
     eval_time_s = time.monotonic() - t_eval0
     wall_clock_s = time.monotonic() - t_run_start
@@ -653,6 +757,11 @@ def execute_run(
     all_metrics.update(m_modelness)
     all_metrics.update(m_helly)
     all_metrics.update(m_cost)
+    if bundle.task == "abox":
+        all_metrics.update(m_abox)
+        all_metrics["val_mrr_curve"] = validation_curve
+        all_metrics["best_val_mrr"] = best_val_mrr
+        all_metrics["best_val_epoch"] = best_val_epoch
 
     method_spec = METHODS[method]
     config_dict: Dict[str, Any] = {
@@ -666,8 +775,12 @@ def execute_run(
         "dim": int(dim),
         "seed": int(seed),
         "epochs": int(resolved_epochs),
-        "validate_every": int(validate_every),
-        "eval_gci_name": eval_gci_name if bundle.task == "subsumption" else None,
+        "validate_every": 50 if bundle.task == "abox" else int(validate_every),
+        "eval_gci_name": (
+            "class_assertion"
+            if bundle.task == "abox"
+            else (eval_gci_name if bundle.task == "subsumption" else None)
+        ),
         "margin": margin,
         "delta": delta,
         "reg_factor": reg_factor,
@@ -680,6 +793,10 @@ def execute_run(
         "checkpoint_path": str(ckpt_path),
         "init_report": init_report,
     }
+    if bundle.task == "abox":
+        config_dict["validation_curve"] = validation_curve
+        config_dict["best_val_mrr"] = best_val_mrr
+        config_dict["best_val_epoch"] = best_val_epoch
 
     payload: Dict[str, Any] = {
         "config": config_dict,
@@ -687,6 +804,8 @@ def execute_run(
         "timings": timings,
         "env": collect_env_info(resolved_device),
     }
+    if bundle.task == "abox":
+        payload["validation_curve"] = validation_curve
 
     out_dir = Path(out_dir).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
