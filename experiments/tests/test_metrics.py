@@ -449,3 +449,121 @@ def test_filtered_ranking_does_not_filter_test_tuple() -> None:
         stored = ev.filtering_labels._cpu_labels if use_cpu_lookup else ev.filtering_labels
         assert stored[0, 2].item() == pytest.approx(10000.0)
         assert stored[1, 1].item() == pytest.approx(10000.0)
+
+
+def _supports_to_center_inradius(h: Tuple[float, float, float]) -> Tuple[Tuple[float, float], float]:
+    """Invert supports(c, r) = c @ NORMALS.T + r for sum(h) >= 0."""
+    h1, h2, h3 = h
+    r = (h1 + h2 + h3) / 3.0
+    cy = r - h1
+    cx = (h2 - h3) / float(np.sqrt(3.0))
+    return (cx, cy), r
+
+
+def test_helly_metrics_prism_exact_t3_zero(t3_bundle: DatasetBundle) -> None:
+    """Verify PrismRegion and helly_metrics on the exact T3 prism configuration achieve HVR 0 and Deg 0."""
+    from mowl.models import PrismEL
+    from experiments.metrics import PrismRegion
+
+    # 1. Direct unit test of PrismRegion with supports (3,3,-1), (3,-1,3), (-1,3,3) and identical boxes
+    sup = np.array(
+        [
+            [3.0, 3.0, -1.0],
+            [3.0, -1.0, 3.0],
+            [-1.0, 3.0, 3.0],
+        ],
+        dtype=np.float64,
+    )
+    lo = np.zeros((3, 2), dtype=np.float64)
+    hi = np.ones((3, 2), dtype=np.float64)
+    prisms = PrismRegion(supports=sup, lower=lo, upper=hi)
+
+    p1, p2, p3 = prisms[0], prisms[1], prisms[2]
+    assert not p1.is_empty() and not p1.is_degenerate()
+    assert not p2.is_empty() and not p2.is_degenerate()
+    assert not p3.is_empty() and not p3.is_degenerate()
+
+    # Pairwise non-empty
+    assert not p1.intersect(p2).is_empty()
+    assert not p2.intersect(p3).is_empty()
+    assert not p1.intersect(p3).is_empty()
+
+    # Triple intersection has supports (-1, -1, -1), sum = -3 < -1e-6 -> empty
+    triple = p1.intersect(p2).intersect(p3)
+    assert np.allclose(triple.supports, np.array([-1.0, -1.0, -1.0]))
+    assert triple.is_empty()
+
+    # 2. Full helly_metrics test on PrismEL with the exact T3 prism configuration
+    cm = get_canonical_model(t3_bundle)
+    certs = certificate_triangles(cm)
+    assert len(certs) == 1
+
+    prism = PrismEL(t3_bundle.dataset, embed_dim=4, margin=0.0)
+    support_spec: Dict[str, Tuple[float, float, float]] = {
+        f"{NS}X1": (3.0, 3.0, -1.0),
+        f"{NS}X2": (3.0, -1.0, 3.0),
+        f"{NS}X3": (-1.0, 3.0, 3.0),
+        f"{NS}A": (3.0, -1.0, -1.0),
+        f"{NS}B": (-1.0, -1.0, 3.0),
+        f"{NS}C": (-1.0, 3.0, -1.0),
+        f"{NS}Z": (3.0, -1.0, -1.0),
+        OWL_THING: (4.0, 4.0, 4.0),
+    }
+    with torch.no_grad():
+        prism.module.box_center.weight.zero_()
+        prism.module.box_offset.weight.fill_(1.0)
+        prism.module.tri_center.weight.zero_()
+        prism.module.tri_inradius.weight.fill_(2.0)
+        for iri, h in support_spec.items():
+            if iri not in prism.class_index_dict:
+                continue
+            idx = prism.class_index_dict[iri]
+            (cx, cy), r = _supports_to_center_inradius(h)
+            prism.module.tri_center.weight[idx] = torch.tensor(
+                [cx, cy], dtype=prism.module.tri_center.weight.dtype
+            )
+            prism.module.tri_inradius.weight[idx] = torch.tensor(
+                [r], dtype=prism.module.tri_inradius.weight.dtype
+            )
+
+    reg = class_regions(prism)
+    assert isinstance(reg, PrismRegion)
+    s_arr, l_arr, u_arr = reg
+    assert s_arr.shape == (len(prism.class_index_dict), 3)
+    assert l_arr.shape == (len(prism.class_index_dict), 2)
+    assert u_arr.shape == (len(prism.class_index_dict), 2)
+
+    res = helly_metrics(prism, t3_bundle, cm, certs)
+    assert res["n_certificates"] == 1
+    assert res["n_certificates_unmapped"] == 0
+    assert res["helly_violation_rate"] == pytest.approx(0.0)
+    assert res["degeneracy_rate"] == pytest.approx(0.0)
+
+    m_strict = modelness(prism)
+    assert m_strict["modelness_all"] == pytest.approx(1.0)
+
+
+def test_point_modelness_metric(t3_bundle: DatasetBundle) -> None:
+    """Verify point_modelness returns None for axiom objective and pos/hardneg dict for point/mixed."""
+    from mowl.models import MultiELBE
+    from experiments.metrics import point_modelness
+
+    m_axiom = MultiBoxEL(t3_bundle.dataset, embed_dim=2, n_components=2, objective="axiom")
+    assert point_modelness(m_axiom) is None
+
+    m_point = MultiELBE(
+        t3_bundle.dataset,
+        embed_dim=2,
+        n_components=2,
+        objective="point",
+        points_per_epoch=16,
+        points_seed=0,
+        device="cpu",
+    )
+    m_point.train(epochs=1)
+    pm = point_modelness(m_point)
+    assert isinstance(pm, dict)
+    assert set(pm.keys()) == {"pos_frac", "hardneg_frac"}
+    assert 0.0 <= pm["pos_frac"] <= 1.0
+    assert 0.0 <= pm["hardneg_frac"] <= 1.0
+

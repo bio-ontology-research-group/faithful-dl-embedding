@@ -24,7 +24,8 @@ Implements:
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Dict, FrozenSet, List, Mapping, Optional, Sequence, Tuple
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Dict, FrozenSet, Iterator, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from scipy.stats import rankdata
@@ -45,6 +46,78 @@ AUXILIARY_IRI_PREFIXES = (
 )
 
 
+@dataclass(frozen=True)
+class PrismRegion:
+    """Equilateral-triangle × box prism region(s) with support-function and corner arithmetic.
+
+    Parameters
+    ----------
+    supports : np.ndarray
+        Triangle support values of shape ``(..., 3)`` along the 3 outward unit normals.
+    lower : np.ndarray
+        Box lower corners of shape ``(..., d_box)``.
+    upper : np.ndarray
+        Box upper corners of shape ``(..., d_box)``.
+    """
+
+    supports: np.ndarray
+    lower: np.ndarray
+    upper: np.ndarray
+
+    def __iter__(self) -> Iterator[np.ndarray]:
+        yield self.supports
+        yield self.lower
+        yield self.upper
+
+    def __getitem__(self, idx: Any) -> "PrismRegion":
+        return PrismRegion(
+            supports=self.supports[idx],
+            lower=self.lower[idx],
+            upper=self.upper[idx],
+        )
+
+    def intersect(self, other: "PrismRegion") -> "PrismRegion":
+        """Return the intersection of ``self`` and ``other``."""
+        return PrismRegion(
+            supports=np.minimum(self.supports, other.supports),
+            lower=np.maximum(self.lower, other.lower),
+            upper=np.minimum(self.upper, other.upper),
+        )
+
+    @classmethod
+    def intersect_all(cls, regions: Sequence["PrismRegion"]) -> "PrismRegion":
+        """Return the common intersection of a non-empty sequence of prism regions."""
+        if not regions:
+            raise ValueError("PrismRegion.intersect_all requires at least one region.")
+        acc = regions[0]
+        for reg in regions[1:]:
+            acc = acc.intersect(reg)
+        return acc
+
+    def is_empty(self, tol: float = 1e-6) -> bool:
+        """Return ``True`` iff the prism region is empty up to tolerance ``tol``."""
+        tri_nonempty = bool(np.all(np.sum(self.supports, axis=-1) >= -tol))
+        box_nonempty = bool(np.all(self.lower <= self.upper + tol))
+        return not (tri_nonempty and box_nonempty)
+
+    def is_nonempty(self, tol: float = 1e-6) -> bool:
+        """Return ``True`` iff the prism region is non-empty up to tolerance ``tol``."""
+        return not self.is_empty(tol=tol)
+
+    def intersects(self, other: "PrismRegion", tol: float = 1e-6) -> bool:
+        """Return ``True`` iff ``self`` and ``other`` have non-empty intersection."""
+        return not self.intersect(other).is_empty(tol=tol)
+
+    def is_degenerate(self, deg_eps: float = 1e-3) -> bool:
+        """Return ``True`` iff ``sum(supports) <= deg_eps`` or any box side ``<= deg_eps``."""
+        tri_deg = bool(np.any(np.sum(self.supports, axis=-1) <= deg_eps))
+        box_deg = bool(np.any((self.upper - self.lower) <= deg_eps))
+        return tri_deg or box_deg
+
+
+Prism = PrismRegion
+
+
 def _is_named_class(iri: str) -> bool:
     """Return ``True`` iff ``iri`` is a named ontology class (not ``TOP``, ``BOTTOM``, or auxiliary)."""
     if iri in (TOP, BOTTOM):
@@ -61,35 +134,47 @@ def _module_device(module: torch.nn.Module) -> torch.device:
     return torch.device("cpu")
 
 
-def class_regions(model: Any) -> Tuple[np.ndarray, np.ndarray]:
-    """Extract ``(centers, offsets)`` NumPy arrays of shape ``(n, k, d)`` from ``model``.
+def class_regions(model: Any) -> Union[Tuple[np.ndarray, np.ndarray], PrismRegion]:
+    """Extract class regions from ``model``.
 
     Parameters
     ----------
     model : mOWL model or torch.nn.Module
-        An ``ELBE``, ``BoxSquaredEL``, or ``MultiBoxEL`` model (or its underlying
-        ``.module``).
+        An ``ELBE``, ``BoxSquaredEL``, ``MultiBoxEL``, ``MultiELBE``, or ``PrismEL``
+        model (or its underlying ``.module``).
 
     Returns
     -------
-    centers : np.ndarray
-        Float32 array of shape ``(n_classes, k, d)``.
-    offsets : np.ndarray
-        Non-negative float32 array of shape ``(n_classes, k, d)`` (computed via
-        ``abs``).
-
-    Guarantees
-    ----------
-    - For ``ELBE`` and ``BoxSquaredEL``, ``k == 1``.
-    - For ``MultiBoxEL``, ``k == module.n_components``.
-    - ``offsets >= 0`` everywhere.
-
-    Non-guarantees
-    --------------
-    - Raises ``TypeError`` if ``model`` exposes neither ``class_center`` nor
-      ``class_embed`` with ``class_offset``.
+    Union[Tuple[np.ndarray, np.ndarray], PrismRegion]
+        - For box/multi-box models: ``(centers, offsets)`` float32 arrays of shape
+          ``(n_classes, k, d)`` with ``offsets >= 0``.
+        - For ``PrismEL`` / ``PrismModule``: a :class:`PrismRegion` with ``supports``
+          of shape ``(n_classes, 3)`` and ``lower``, ``upper`` of shape
+          ``(n_classes, d - 2)``.
     """
     module = getattr(model, "module", model)
+
+    if (
+        hasattr(module, "tri_center")
+        and hasattr(module, "tri_inradius")
+        and hasattr(module, "box_center")
+        and hasattr(module, "box_offset")
+    ):
+        from mowl.nn.el.prism.losses import supports as _prism_supports
+
+        with torch.no_grad():
+            sup_t = _prism_supports(
+                module.tri_center.weight.detach(),
+                torch.abs(module.tri_inradius.weight.detach()),
+            )
+        sup_np = sup_t.cpu().numpy().astype(np.float32, copy=False)
+        box_c = module.box_center.weight.detach().cpu().numpy().astype(np.float32, copy=False)
+        box_o = np.abs(module.box_offset.weight.detach().cpu().numpy()).astype(np.float32, copy=False)
+        return PrismRegion(
+            supports=sup_np,
+            lower=(box_c - box_o).astype(np.float32, copy=False),
+            upper=(box_c + box_o).astype(np.float32, copy=False),
+        )
 
     if hasattr(module, "n_components"):
         if not (hasattr(module, "class_center") and hasattr(module, "class_offset")):
@@ -833,6 +918,29 @@ def modelness(
     return out
 
 
+def point_modelness(model: Any) -> Optional[Dict[str, float]]:
+    """Return ``{"pos_frac": float, "hardneg_frac": float}`` when objective is ``point``/``mixed``, else ``None``."""
+    module = getattr(model, "module", model)
+    objective = getattr(module, "objective", getattr(model, "objective", "axiom"))
+    if objective not in ("point", "mixed"):
+        return None
+    ps = getattr(module, "point_supervision", getattr(model, "point_supervision", None))
+    if ps is None or not hasattr(module, "point_modelness"):
+        return None
+    was_training = module.training
+    module.eval()
+    try:
+        with torch.no_grad():
+            raw = module.point_modelness(ps)
+    finally:
+        if was_training:
+            module.train()
+    return {
+        "pos_frac": float(raw["pos_frac"]),
+        "hardneg_frac": float(raw["hardneg_frac"]),
+    }
+
+
 def helly_metrics(
     model: Any,
     bundle: Optional[DatasetBundle] = None,
@@ -897,57 +1005,87 @@ def helly_metrics(
             "n_certificates_unmapped": 0,
         }
 
-    centers, offsets = class_regions(model)
-    lo_all = centers - offsets  # (n, k, d)
-    hi_all = centers + offsets  # (n, k, d)
-    k = int(centers.shape[1])
+    regions = class_regions(model)
     c2i = model.class_index_dict
 
     violations = 0
     degeneracies = 0
     n_unmapped = 0
 
-    for cert in certificates:
-        all_names = list(
-            dict.fromkeys(list(cert.c1) + list(cert.c2) + list(cert.c3))
-        )
-        pw_names = [p for p in cert.pairwise_names if p is not None]
-        if (
-            len(all_names) == 0
-            or any(name not in c2i for name in all_names)
-            or any(p_name not in c2i for p_name in pw_names)
-        ):
-            n_unmapped += 1
-            continue
+    if isinstance(regions, PrismRegion):
+        for cert in certificates:
+            all_names = list(
+                dict.fromkeys(list(cert.c1) + list(cert.c2) + list(cert.c3))
+            )
+            pw_names = [p for p in cert.pairwise_names if p is not None]
+            if (
+                len(all_names) == 0
+                or any(name not in c2i for name in all_names)
+                or any(p_name not in c2i for p_name in pw_names)
+            ):
+                n_unmapped += 1
+                continue
 
-        first_idx = c2i[all_names[0]]
-        active: List[Tuple[np.ndarray, np.ndarray]] = [
-            (lo_all[first_idx, m], hi_all[first_idx, m]) for m in range(k)
-        ]
-        for name in all_names[1:]:
-            idx_u = c2i[name]
-            next_active: List[Tuple[np.ndarray, np.ndarray]] = []
-            for cur_lo, cur_hi in active:
-                for m in range(k):
-                    new_lo = np.maximum(cur_lo, lo_all[idx_u, m])
-                    new_hi = np.minimum(cur_hi, hi_all[idx_u, m])
-                    if bool(np.all(new_lo <= new_hi + tol)):
-                        next_active.append((new_lo, new_hi))
-            active = next_active
-            if not active:
-                break
-        if len(active) > 0:
-            violations += 1
+            inter = regions[c2i[all_names[0]]]
+            for name in all_names[1:]:
+                inter = inter.intersect(regions[c2i[name]])
+            if not inter.is_empty(tol=tol):
+                violations += 1
 
-        is_deg = False
-        for p_name in pw_names:
-            off_p = offsets[c2i[p_name]]  # (k, d)
-            valid_comps = np.all(off_p > deg_eps, axis=-1)  # (k,)
-            if not bool(np.any(valid_comps)):
-                is_deg = True
-                break
-        if is_deg:
-            degeneracies += 1
+            is_deg = False
+            for p_name in pw_names:
+                if regions[c2i[p_name]].is_degenerate(deg_eps=deg_eps):
+                    is_deg = True
+                    break
+            if is_deg:
+                degeneracies += 1
+    else:
+        centers, offsets = regions
+        lo_all = centers - offsets  # (n, k, d)
+        hi_all = centers + offsets  # (n, k, d)
+        k = int(centers.shape[1])
+
+        for cert in certificates:
+            all_names = list(
+                dict.fromkeys(list(cert.c1) + list(cert.c2) + list(cert.c3))
+            )
+            pw_names = [p for p in cert.pairwise_names if p is not None]
+            if (
+                len(all_names) == 0
+                or any(name not in c2i for name in all_names)
+                or any(p_name not in c2i for p_name in pw_names)
+            ):
+                n_unmapped += 1
+                continue
+
+            first_idx = c2i[all_names[0]]
+            active: List[Tuple[np.ndarray, np.ndarray]] = [
+                (lo_all[first_idx, m], hi_all[first_idx, m]) for m in range(k)
+            ]
+            for name in all_names[1:]:
+                idx_u = c2i[name]
+                next_active: List[Tuple[np.ndarray, np.ndarray]] = []
+                for cur_lo, cur_hi in active:
+                    for m in range(k):
+                        new_lo = np.maximum(cur_lo, lo_all[idx_u, m])
+                        new_hi = np.minimum(cur_hi, hi_all[idx_u, m])
+                        if bool(np.all(new_lo <= new_hi + tol)):
+                            next_active.append((new_lo, new_hi))
+                active = next_active
+                if not active:
+                    break
+            if len(active) > 0:
+                violations += 1
+
+            is_deg = False
+            for p_name in pw_names:
+                off_p = offsets[c2i[p_name]]  # (k, d)
+                valid_comps = np.all(off_p > deg_eps, axis=-1)  # (k,)
+                if not bool(np.any(valid_comps)):
+                    is_deg = True
+                    break
+            if is_deg:
+                degeneracies += 1
 
     n_mapped = n_certs - n_unmapped
     if n_mapped == 0:
@@ -999,8 +1137,15 @@ def cost_metrics(
         mean_eff = float(eff_tensor.to(dtype=torch.float32).mean().item())
     else:
         try:
-            _, offsets = class_regions(model)
-            mean_eff = float(np.mean(np.all(offsets[:, 0, :] > 1e-3, axis=-1)))
+            regions = class_regions(model)
+            if isinstance(regions, PrismRegion):
+                non_deg = (np.sum(regions.supports, axis=-1) > 1e-3) & np.all(
+                    (regions.upper - regions.lower) > 1e-3, axis=-1
+                )
+                mean_eff = float(np.mean(non_deg))
+            else:
+                _, offsets = regions
+                mean_eff = float(np.mean(np.all(offsets[:, 0, :] > 1e-3, axis=-1)))
         except TypeError:
             mean_eff = float(n_components)
 

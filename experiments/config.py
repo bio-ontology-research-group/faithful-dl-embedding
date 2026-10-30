@@ -56,6 +56,8 @@ DATASETS: List[str] = [
 SYNTHETIC_DATASETS: List[str] = ["tk3", "tk4", "tk5", "tk6"]
 SUBSUMPTION_DATASETS: List[str] = ["pizza", "go", "foodon"]
 ABOX_DATASETS: List[str] = ["yeast-function", "helis"]
+OBJECTIVE_DATASETS: List[str] = list(SYNTHETIC_DATASETS)
+LR_GRID: List[float] = [0.001, 0.01]
 
 DATASET_TASKS: Dict[str, str] = {
     "tk3": "satisfaction",
@@ -204,6 +206,60 @@ METHODS: Dict[str, Dict[str, Any]] = {
         "anchor_weight": 0.0,
         "datasets": ["yeast-function", "helis"],
     },
+}
+
+_OBJECTIVE_ALLOWED_DATASETS: List[str] = list(OBJECTIVE_DATASETS) + ["pizza"] + list(ABOX_DATASETS)
+
+_BACKBONE_MODEL_MAP: Dict[str, str] = {
+    "multibox": "MultiBoxEL",
+    "multielbe": "MultiELBE",
+}
+
+_OBJECTIVE_KWARGS_MAP: Dict[str, Dict[str, Any]] = {
+    "axiom": {},
+    "soft": {"component_aggregation": "soft", "tau_anneal": True},
+    "softdiv": {"component_aggregation": "soft", "tau_anneal": True, "diversity_reg": 0.1},
+    "point": {"objective": "point"},
+    "mixed": {"objective": "mixed"},
+}
+
+OBJECTIVE_METHODS: List[str] = []
+for _backbone, _model_cls in _BACKBONE_MODEL_MAP.items():
+    for _k in (1, 2, 3):
+        for _obj_var, _obj_kw in _OBJECTIVE_KWARGS_MAP.items():
+            _m_id = f"{_backbone}-k{_k}-{_obj_var}"
+            OBJECTIVE_METHODS.append(_m_id)
+            METHODS[_m_id] = {
+                "model": _model_cls,
+                "backbone": _backbone,
+                "n_components": _k,
+                "init": None,
+                "anchor_weight": 0.0,
+                "objective": _obj_kw.get("objective", "axiom"),
+                "objective_variant": _obj_var,
+                "component_aggregation": _obj_kw.get("component_aggregation", "hard"),
+                "tau_anneal": bool(_obj_kw.get("tau_anneal", False)),
+                "diversity_reg": float(_obj_kw.get("diversity_reg", 0.0)),
+                "objective_kwargs": dict(_obj_kw),
+                "datasets": list(_OBJECTIVE_ALLOWED_DATASETS),
+            }
+
+PRISM_METHODS: List[str] = ["prism", "prism-init"]
+METHODS["prism"] = {
+    "model": "PrismEL",
+    "backbone": "prism",
+    "n_components": 1,
+    "init": None,
+    "anchor_weight": 0.0,
+    "datasets": list(_OBJECTIVE_ALLOWED_DATASETS),
+}
+METHODS["prism-init"] = {
+    "model": "PrismEL",
+    "backbone": "prism",
+    "n_components": 1,
+    "init": "projected",
+    "anchor_weight": 0.0,
+    "datasets": list(_OBJECTIVE_ALLOWED_DATASETS),
 }
 
 

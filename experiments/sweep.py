@@ -38,8 +38,13 @@ from experiments.config import (
     DATASET_DIMS,
     DATASET_EPOCHS,
     DATASET_SEEDS,
+    DEFAULT_HYPERPARAMS,
     LOGS_DIR,
+    LR_GRID,
     METHODS,
+    OBJECTIVE_DATASETS,
+    OBJECTIVE_METHODS,
+    PRISM_METHODS,
     RAW_RESULTS_DIR,
     RUNS_DIR,
     SMOKE_RESULTS_DIR,
@@ -51,6 +56,7 @@ from experiments.run import execute_run, run_filename
 
 SUITE_DATASETS: Dict[str, List[str]] = {
     "synthetic": list(SYNTHETIC_DATASETS),
+    "objectives": list(OBJECTIVE_DATASETS),
     "pizza": ["pizza"],
     "real": ["go", "foodon"],
     "abox": list(ABOX_DATASETS),
@@ -60,53 +66,85 @@ SUITE_DATASETS: Dict[str, List[str]] = {
 
 @dataclass(frozen=True)
 class SweepCell:
-    """One ``(dataset, method, dim, seed, epochs)`` experiment cell."""
+    """One ``(dataset, method, dim, seed, epochs, lr)`` experiment cell."""
 
     dataset: str
     method: str
     dim: int
     seed: int
     epochs: int
+    lr: float = float(DEFAULT_HYPERPARAMS["learning_rate"])
 
     @property
     def filename(self) -> str:
         """Canonical JSON filename for this cell."""
-        return run_filename(self.dataset, self.method, self.dim, self.seed)
+        return run_filename(self.dataset, self.method, self.dim, self.seed, lr=self.lr)
 
 
 def enumerate_cells(
-    suite: str,
+    suite: str = "all",
     *,
     smoke: bool = False,
     epochs_override: Optional[int] = None,
+    datasets: Optional[Sequence[str]] = None,
+    methods: Optional[Sequence[str]] = None,
+    dims: Optional[Sequence[int]] = None,
+    seeds: Optional[Sequence[int]] = None,
+    lrs: Optional[Sequence[float]] = None,
 ) -> List[SweepCell]:
     """Enumerate all ``SweepCell`` entries for ``suite`` in deterministic order."""
-    if suite not in SUITE_DATASETS:
-        raise ValueError(
-            f"Unknown suite {suite!r}; expected one of {list(SUITE_DATASETS)}"
-        )
+    if datasets is None:
+        if suite not in SUITE_DATASETS:
+            raise ValueError(
+                f"Unknown suite {suite!r}; expected one of {list(SUITE_DATASETS)}"
+            )
+        ds_list = list(SUITE_DATASETS[suite])
+    else:
+        ds_list = list(datasets)
+
+    if lrs is not None:
+        lr_list = [float(x) for x in lrs]
+    elif suite == "objectives":
+        lr_list = [float(DEFAULT_HYPERPARAMS["learning_rate"])] if smoke else [float(x) for x in LR_GRID]
+    else:
+        lr_list = [float(DEFAULT_HYPERPARAMS["learning_rate"])]
 
     cells: List[SweepCell] = []
-    for ds_name in SUITE_DATASETS[suite]:
-        dims = DATASET_DIMS[ds_name]
-        seeds = [0] if smoke else DATASET_SEEDS[ds_name]
+    for ds_name in ds_list:
+        ds_dims = [int(d) for d in dims] if dims is not None else DATASET_DIMS[ds_name]
+        ds_seeds = (
+            [int(s) for s in seeds]
+            if seeds is not None
+            else ([0] if smoke else DATASET_SEEDS[ds_name])
+        )
         epochs = (
             int(epochs_override)
             if epochs_override is not None
             else (3 if smoke else int(DATASET_EPOCHS[ds_name]))
         )
-        for dim in dims:
-            for seed in seeds:
-                for method_id in methods_for_dataset(ds_name):
-                    cells.append(
-                        SweepCell(
-                            dataset=ds_name,
-                            method=method_id,
-                            dim=int(dim),
-                            seed=int(seed),
-                            epochs=epochs,
+        if methods is not None:
+            ds_methods = list(methods)
+        elif suite == "objectives":
+            ds_methods = [
+                m for m in (OBJECTIVE_METHODS + PRISM_METHODS) if m in methods_for_dataset(ds_name)
+            ]
+        else:
+            ds_methods = methods_for_dataset(ds_name)
+
+        for lr_val in lr_list:
+            for dim in ds_dims:
+                for seed in ds_seeds:
+                    for method_id in ds_methods:
+                        cells.append(
+                            SweepCell(
+                                dataset=ds_name,
+                                method=method_id,
+                                dim=int(dim),
+                                seed=int(seed),
+                                epochs=epochs,
+                                lr=float(lr_val),
+                            )
                         )
-                    )
     return cells
 
 
@@ -118,9 +156,46 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--suite",
         type=str,
-        required=True,
+        default="all",
         choices=list(SUITE_DATASETS.keys()),
-        help="Experiment suite to run.",
+        help="Experiment suite to run (default: all).",
+    )
+    parser.add_argument(
+        "--datasets",
+        type=str,
+        nargs="+",
+        default=None,
+        help="Explicit dataset list override.",
+    )
+    parser.add_argument(
+        "--methods",
+        type=str,
+        nargs="+",
+        default=None,
+        help="Explicit method list override.",
+    )
+    parser.add_argument(
+        "--dims",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Explicit embedding dimension list override.",
+    )
+    parser.add_argument(
+        "--seeds",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Explicit seed list override.",
+    )
+    parser.add_argument(
+        "--lr",
+        "--lrs",
+        dest="lrs",
+        type=float,
+        nargs="+",
+        default=None,
+        help="Explicit learning rate list override.",
     )
     parser.add_argument(
         "--smoke",
@@ -185,6 +260,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         args.suite,
         smoke=bool(args.smoke),
         epochs_override=args.epochs,
+        datasets=args.datasets,
+        methods=args.methods,
+        dims=args.dims,
+        seeds=args.seeds,
+        lrs=args.lrs,
     )
 
     if args.dry_run:
@@ -273,6 +353,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             dim=cell.dim,
             seed=cell.seed,
             epochs=cell.epochs,
+            learning_rate=cell.lr,
+            lr=cell.lr,
             device=resolved_device,
             out_dir=out_dir,
             runs_dir=args.runs_dir,

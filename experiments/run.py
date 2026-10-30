@@ -131,6 +131,8 @@ from experiments.config import (
     DATASET_EPOCHS,
     DEFAULT_HYPERPARAMS,
     METHODS,
+    OBJECTIVE_METHODS,
+    PRISM_METHODS,
     RAW_RESULTS_DIR,
     REPO_ROOT,
     RUNS_DIR,
@@ -143,8 +145,11 @@ from experiments.metrics import (
     faithfulness_metrics,
     helly_metrics,
     modelness,
+    point_modelness,
     ranking_metrics,
 )
+
+PLAIN_BACKBONES = ("ELBE", "BoxSquaredEL", "ELEm", "PrismEL", "CanonicalMixture")
 
 if TYPE_CHECKING:  # pragma: no cover
     from mowl.geometric import CanonicalModel, HellyCertificate
@@ -234,9 +239,18 @@ def _seed_everything(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def run_filename(dataset: str, method: str, dim: int, seed: int) -> str:
-    """Return canonical JSON filename ``{dataset}__{method}__d{dim}__s{seed}.json``."""
-    return f"{dataset}__{method}__d{dim}__s{seed}.json"
+def run_filename(
+    dataset: str,
+    method: str,
+    dim: int,
+    seed: int,
+    lr: Optional[float] = None,
+) -> str:
+    """Return canonical JSON filename ``{dataset}__{method}__d{dim}__s{seed}[__lr{lr}].json``."""
+    default_lr = float(DEFAULT_HYPERPARAMS["learning_rate"])
+    if lr is None or abs(float(lr) - default_lr) <= 1e-12:
+        return f"{dataset}__{method}__d{dim}__s{seed}.json"
+    return f"{dataset}__{method}__d{dim}__s{seed}__lr{float(lr):g}.json"
 
 
 def _resolve_certificates(
@@ -267,6 +281,27 @@ def _resolve_certificates(
     return certs
 
 
+def _validate_method_objective(
+    method_id: str,
+    spec: Dict[str, Any],
+    objective_override: Optional[str] = None,
+) -> str:
+    """Validate that plain backbones are not run with non-axiom objectives; return effective objective."""
+    model_cls_name = str(spec["model"])
+    obj_kw = dict(spec.get("objective_kwargs", {}))
+    effective_objective = str(
+        objective_override
+        if objective_override is not None
+        else spec.get("objective", obj_kw.get("objective", "axiom"))
+    )
+    if model_cls_name in PLAIN_BACKBONES and effective_objective != "axiom":
+        raise ValueError(
+            f"Plain backbone {model_cls_name!r} (method {method_id!r}) does not support "
+            f"objective={effective_objective!r}; only 'axiom' is supported."
+        )
+    return effective_objective
+
+
 def _build_model(
     bundle: DatasetBundle,
     cm: Optional["CanonicalModel"],
@@ -281,10 +316,18 @@ def _build_model(
     num_negs: int,
     device: str,
     checkpoint_path: Path,
+    objective: Optional[str] = None,
 ):
     """Instantiate the requested mOWL model and apply ``ExactBoxInit`` when configured."""
     from mowl.geometric import ExactBoxInit
-    from mowl.models import BoxSquaredEL, CanonicalMixture, ELBE, MultiBoxEL
+    from mowl.models import (
+        BoxSquaredEL,
+        CanonicalMixture,
+        ELBE,
+        MultiBoxEL,
+        MultiELBE,
+        PrismEL,
+    )
 
     if method_id not in METHODS:
         raise ValueError(
@@ -295,6 +338,12 @@ def _build_model(
     k = int(spec["n_components"])
     init_method = spec["init"]
     anchor_weight = float(spec["anchor_weight"])
+    effective_objective = _validate_method_objective(method_id, spec, objective)
+    obj_kw: Dict[str, Any] = dict(spec.get("objective_kwargs", {}))
+    if objective is not None:
+        obj_kw["objective"] = effective_objective
+
+    effective_dim = max(int(dim), 3) if model_cls_name == "PrismEL" else int(dim)
 
     _seed_everything(seed)
 
@@ -331,7 +380,7 @@ def _build_model(
         if model_cls_name == "ELBE":
             model = ELBE(
                 bundle.dataset,
-                embed_dim=dim,
+                embed_dim=effective_dim,
                 margin=margin,
                 learning_rate=learning_rate,
                 batch_size=batch_size,
@@ -343,7 +392,7 @@ def _build_model(
         elif model_cls_name == "BoxSquaredEL":
             model = BoxSquaredEL(
                 bundle.dataset,
-                embed_dim=dim,
+                embed_dim=effective_dim,
                 margin=margin,
                 learning_rate=learning_rate,
                 batch_size=batch_size,
@@ -358,7 +407,7 @@ def _build_model(
         elif model_cls_name == "MultiBoxEL":
             model = MultiBoxEL(
                 bundle.dataset,
-                embed_dim=dim,
+                embed_dim=effective_dim,
                 n_components=k,
                 margin=margin,
                 learning_rate=learning_rate,
@@ -371,11 +420,41 @@ def _build_model(
                 device=device,
                 init_boxes=None,
                 anchor_weight=anchor_weight,
+                points_seed=seed,
+                **obj_kw,
+            )
+        elif model_cls_name == "MultiELBE":
+            model = MultiELBE(
+                bundle.dataset,
+                embed_dim=effective_dim,
+                n_components=k,
+                margin=margin,
+                component_reg=0.0,
+                learning_rate=learning_rate,
+                batch_size=batch_size,
+                model_filepath=ckpt_str,
+                device=device,
+                init_boxes=None,
+                anchor_weight=anchor_weight,
+                points_seed=seed,
+                **obj_kw,
+            )
+        elif model_cls_name == "PrismEL":
+            model = PrismEL(
+                bundle.dataset,
+                embed_dim=effective_dim,
+                margin=margin,
+                learning_rate=learning_rate,
+                batch_size=batch_size,
+                model_filepath=ckpt_str,
+                device=device,
+                init_boxes=None,
+                anchor_weight=anchor_weight,
             )
         elif model_cls_name == "CanonicalMixture":
             model = CanonicalMixture(
                 bundle.dataset,
-                rank=dim,
+                rank=effective_dim,
                 lr=learning_rate,
                 batch_size=min(batch_size, 1024),
                 model_filepath=ckpt_str,
@@ -408,7 +487,7 @@ def _build_model(
         setattr(bundle, "_exact_box_init_cache", init_cache)
         milp_time_limit = float(spec.get("milp_time_limit", 120.0))
         init_key = (
-            int(dim),
+            int(effective_dim),
             int(k),
             str(init_method),
             int(seed),
@@ -419,7 +498,7 @@ def _build_model(
             init_boxes = init_cache[init_key]
         else:
             init_kwargs: Dict[str, Any] = {
-                "embed_dim": dim,
+                "embed_dim": effective_dim,
                 "n_components": k,
                 "method": init_method,
                 "seed": seed,
@@ -437,7 +516,7 @@ def _build_model(
                 proj_boxes = ExactBoxInit.from_canonical_model(
                     cm,
                     model.class_index_dict,
-                    embed_dim=dim,
+                    embed_dim=effective_dim,
                     n_components=k,
                     method="projected",
                     seed=seed,
@@ -540,6 +619,8 @@ def execute_run(
     epochs: Optional[int] = None,
     batch_size: int = int(DEFAULT_HYPERPARAMS["batch_size"]),
     learning_rate: float = float(DEFAULT_HYPERPARAMS["learning_rate"]),
+    lr: Optional[float] = None,
+    objective: Optional[str] = None,
     validate_every: int = int(DEFAULT_HYPERPARAMS["validate_every"]),
     device: Optional[str] = None,
     out_dir: Path = RAW_RESULTS_DIR,
@@ -552,6 +633,9 @@ def execute_run(
         raise ValueError(f"Unknown dataset {dataset!r}; expected one of {DATASETS}")
     if method not in METHODS:
         raise ValueError(f"Unknown method {method!r}; expected one of {list(METHODS)}")
+
+    resolved_lr = float(lr if lr is not None else learning_rate)
+    effective_objective = _validate_method_objective(method, METHODS[method], objective)
 
     resolved_device = (
         device if device is not None else ("cuda" if torch.cuda.is_available() else "cpu")
@@ -577,7 +661,8 @@ def execute_run(
 
     runs_dir = Path(runs_dir).expanduser().resolve()
     runs_dir.mkdir(parents=True, exist_ok=True)
-    ckpt_path = runs_dir / f"{dataset}__{method}__d{dim}__s{seed}.pt"
+    json_fname = run_filename(dataset, method, dim, seed, lr=resolved_lr)
+    ckpt_path = runs_dir / f"{Path(json_fname).stem}.pt"
 
     margin = float(DEFAULT_HYPERPARAMS["margin"])
     delta = float(DEFAULT_HYPERPARAMS["delta"])
@@ -614,13 +699,14 @@ def execute_run(
             dim=dim,
             seed=seed,
             batch_size=effective_batch_size,
-            learning_rate=learning_rate,
+            learning_rate=resolved_lr,
             margin=margin,
             delta=delta,
             reg_factor=reg_factor,
             num_negs=num_negs,
             device=resolved_device,
             checkpoint_path=ckpt_path,
+            objective=objective,
         )
         # Ensure training/validation/testing ELDatasets are loaded before starting the training timer
         # so the first cell of a dataset does not absorb ontology/ELDataset loading time.
@@ -711,6 +797,15 @@ def execute_run(
 
     t_m0 = time.monotonic()
     m_modelness = modelness(model, batch_size=effective_batch_size)
+    m_point_mod = point_modelness(model)
+    m_train_margin_dict: Dict[str, float] = {}
+    if method in OBJECTIVE_METHODS or method in PRISM_METHODS:
+        raw_tm = modelness(model, batch_size=effective_batch_size, margin=margin)
+        m_train_margin_dict["modelness_train_margin"] = float(raw_tm["modelness_all"])
+        for k_tm, v_tm in raw_tm.items():
+            if k_tm != "modelness_all" and k_tm.startswith("modelness_"):
+                gci_tm = k_tm[len("modelness_") :]
+                m_train_margin_dict[f"modelness_train_margin_{gci_tm}"] = float(v_tm)
     modelness_time_s = time.monotonic() - t_m0
 
     t_h0 = time.monotonic()
@@ -787,6 +882,23 @@ def execute_run(
         "peak_gpu_memory_bytes": int(peak_gpu_bytes),
     }
 
+    mod_obj = getattr(model, "module", model)
+    tau_start_val = float(getattr(mod_obj, "tau_start", 1.0))
+    tau_end_val = float(getattr(mod_obj, "tau_end", 0.05))
+    tau_anneal_val = bool(
+        getattr(mod_obj, "tau_anneal", METHODS[method].get("tau_anneal", False))
+    )
+    diversity_reg_val = float(
+        getattr(mod_obj, "diversity_reg", METHODS[method].get("diversity_reg", 0.0))
+    )
+    comp_agg_val = str(
+        getattr(
+            mod_obj,
+            "component_aggregation",
+            METHODS[method].get("component_aggregation", "hard"),
+        )
+    )
+
     m_cost = cost_metrics(model, timings=timings)
     del model
     if resolved_device.startswith("cuda") and torch.cuda.is_available():
@@ -796,6 +908,8 @@ def execute_run(
     all_metrics.update(m_rank)
     all_metrics.update(m_faith)
     all_metrics.update(m_modelness)
+    all_metrics.update(m_train_margin_dict)
+    all_metrics["point_modelness"] = m_point_mod
     all_metrics.update(m_helly)
     all_metrics.update(m_cost)
     if bundle.task == "abox":
@@ -813,6 +927,20 @@ def execute_run(
         "n_components": int(method_spec["n_components"]),
         "init": method_spec["init"],
         "anchor_weight": float(method_spec["anchor_weight"]),
+        "objective": str(effective_objective),
+        "objective_variant": str(
+            method_spec.get("objective_variant", effective_objective)
+        ),
+        "component_aggregation": comp_agg_val,
+        "tau_start": tau_start_val,
+        "tau_end": tau_end_val,
+        "tau_anneal": tau_anneal_val,
+        "tau_schedule": {
+            "tau_start": tau_start_val,
+            "tau_end": tau_end_val,
+            "tau_anneal": tau_anneal_val,
+        },
+        "diversity_reg": diversity_reg_val,
         "dim": int(dim),
         "seed": int(seed),
         "epochs": int(resolved_epochs),
@@ -826,7 +954,8 @@ def execute_run(
         "delta": delta,
         "reg_factor": reg_factor,
         "num_negs": num_negs,
-        "learning_rate": learning_rate,
+        "learning_rate": resolved_lr,
+        "lr": resolved_lr,
         "batch_size": int(batch_size),
         "effective_batch_size": int(effective_batch_size),
         "oom_retries": int(oom_retries),
@@ -834,6 +963,12 @@ def execute_run(
         "checkpoint_path": str(ckpt_path),
         "init_report": init_report,
     }
+    if method in OBJECTIVE_METHODS or method in PRISM_METHODS:
+        config_dict["margin_semantics"] = (
+            "relaxing"
+            if method_spec["model"] in ("BoxSquaredEL", "MultiBoxEL")
+            else "tightening"
+        )
 
     payload: Dict[str, Any] = {
         "config": config_dict,
@@ -844,7 +979,7 @@ def execute_run(
 
     out_dir = Path(out_dir).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / run_filename(dataset, method, dim, seed)
+    out_path = out_dir / json_fname
     tmp_path = out_path.with_name(f"{out_path.name}.tmp.{os.getpid()}")
     try:
         tmp_path.write_text(
@@ -909,10 +1044,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Initial training batch size (default: 32768).",
     )
     parser.add_argument(
+        "--lr",
         "--learning-rate",
+        dest="learning_rate",
         type=float,
         default=float(DEFAULT_HYPERPARAMS["learning_rate"]),
         help="Adam learning rate (default: 0.001).",
+    )
+    parser.add_argument(
+        "--objective",
+        type=str,
+        default=None,
+        help="Optional objective override ('axiom', 'point', or 'mixed').",
     )
     parser.add_argument(
         "--validate-every",
@@ -962,6 +1105,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         epochs=epochs,
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
+        objective=args.objective,
         validate_every=args.validate_every,
         device=args.device,
         out_dir=out_dir,

@@ -52,10 +52,10 @@ POSTHOC_VERSION = 1
 
 
 def margin_semantics_for_model(model_cls_name: str) -> str:
-    """Return ``'relaxing'`` for Box²EL/MultiBoxEL and ``'tightening'`` for ELBE."""
+    """Return ``'relaxing'`` for Box²EL/MultiBoxEL and ``'tightening'`` for ELBE/MultiELBE/PrismEL."""
     if model_cls_name in ("BoxSquaredEL", "MultiBoxEL"):
         return "relaxing"
-    if model_cls_name == "ELBE":
+    if model_cls_name in ("ELBE", "MultiELBE", "PrismEL"):
         return "tightening"
     raise ValueError(
         f"Unsupported model class {model_cls_name!r} for margin_semantics."

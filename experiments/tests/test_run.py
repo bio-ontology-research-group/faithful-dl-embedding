@@ -168,9 +168,10 @@ def test_run_smoke_tk3_multibox_k2_cpu(scratch_dir: Path) -> None:
 
 def test_sweep_dry_run_lists_all_cells(scratch_dir: Path) -> None:
     """Verify sweep dry-run enumerates methods_for_dataset(d) x datasets x dims x seeds for every suite."""
-    assert len(METHODS) >= 13
-    assert len(methods_for_dataset("tk3")) == 11
-    assert len(methods_for_dataset("pizza")) == 12
+    assert len(METHODS) >= 45
+    assert len(methods_for_dataset("tk3")) == 43
+    assert len(methods_for_dataset("pizza")) == 44
+    assert len(methods_for_dataset("go")) == 11
     assert "box2el-milp" in methods_for_dataset("pizza")
     assert "box2el-milp" not in methods_for_dataset("tk3")
     assert "box2el-milp" not in methods_for_dataset("go")
@@ -189,10 +190,10 @@ def test_sweep_dry_run_lists_all_cells(scratch_dir: Path) -> None:
         return total
 
     cells_syn = sweep.enumerate_cells("synthetic", smoke=False)
-    assert len(cells_syn) == _expected_count(SYNTHETIC_DATASETS, smoke=False) == 11 * 4 * 2 * 3
+    assert len(cells_syn) == _expected_count(SYNTHETIC_DATASETS, smoke=False) == 43 * 4 * 2 * 3
 
     cells_pizza = sweep.enumerate_cells("pizza", smoke=False)
-    assert len(cells_pizza) == _expected_count(["pizza"], smoke=False) == 12 * 1 * 1 * 3
+    assert len(cells_pizza) == _expected_count(["pizza"], smoke=False) == 44 * 1 * 1 * 3
 
     cells_real = sweep.enumerate_cells("real", smoke=False)
     assert len(cells_real) == _expected_count(["go", "foodon"], smoke=False) == 11 * 2 * 1 * 3
@@ -499,5 +500,145 @@ def test_run_abox_reloads_best_checkpoint_and_stores_single_curve(
     assert payload["metrics"]["best_val_epoch"] == 50
     assert payload["metrics"]["best_val_mrr"] == pytest.approx(1.0)
     assert payload["metrics"]["rank_mrr"] == pytest.approx(1.0)
+
+
+def test_run_rejects_point_objective_for_plain_backbone(
+    monkeypatch: pytest.MonkeyPatch,
+    scratch_dir: Path,
+) -> None:
+    """Verify run.py rejects objective != 'axiom' for plain backbones without point losses."""
+    for plain_method, model_cls in (
+        ("elbe", "ELBE"),
+        ("box2el", "BoxSquaredEL"),
+        ("prism", "PrismEL"),
+        ("canonical-mixture", "CanonicalMixture"),
+    ):
+        with pytest.raises(ValueError, match="objective"):
+            run.execute_run(
+                dataset="tk3" if plain_method != "canonical-mixture" else "yeast-function",
+                method=plain_method,
+                dim=2,
+                seed=0,
+                epochs=1,
+                device="cpu",
+                out_dir=scratch_dir / "out",
+                runs_dir=scratch_dir / "ckpts",
+                objective="point",
+            )
+
+    # Also test when a method spec in METHODS has a plain backbone with objective != "axiom"
+    for plain_cls in ("ELBE", "BoxSquaredEL", "ELEm", "PrismEL", "CanonicalMixture"):
+        fake_id = f"bad-{plain_cls.lower()}-point"
+        monkeypatch.setitem(
+            METHODS,
+            fake_id,
+            {
+                "model": plain_cls,
+                "n_components": 1,
+                "init": None,
+                "anchor_weight": 0.0,
+                "objective": "point",
+                "objective_kwargs": {"objective": "point"},
+            },
+        )
+        with pytest.raises(ValueError, match="objective"):
+            run.execute_run(
+                dataset="tk3",
+                method=fake_id,
+                dim=2,
+                seed=0,
+                epochs=1,
+                device="cpu",
+                out_dir=scratch_dir / "out",
+                runs_dir=scratch_dir / "ckpts",
+            )
+
+
+def test_run_lr_filename_and_objectives_table(scratch_dir: Path) -> None:
+    """Verify --lr records lr in JSON and filename when lr != 0.001, and aggregate writes objectives_<dataset>.md."""
+    raw_dir = scratch_dir / "raw"
+    ckpts_dir = scratch_dir / "ckpts"
+    tables_dir = scratch_dir / "tables"
+    csv_path = scratch_dir / "all_runs.csv"
+
+    assert run.run_filename("tk3", "multibox-k2-point", 2, 0) == "tk3__multibox-k2-point__d2__s0.json"
+    assert run.run_filename("tk3", "multibox-k2-point", 2, 0, lr=0.001) == "tk3__multibox-k2-point__d2__s0.json"
+    assert run.run_filename("tk3", "multibox-k2-point", 2, 0, lr=0.01) == "tk3__multibox-k2-point__d2__s0__lr0.01.json"
+
+    for method, lr in (("multibox-k2-point", "0.001"), ("multibox-k2-point", "0.01"), ("prism", "0.001")):
+        rc = run.main(
+            [
+                "--dataset",
+                "tk3",
+                "--method",
+                method,
+                "--dim",
+                "2",
+                "--seed",
+                "0",
+                "--epochs",
+                "2",
+                "--lr",
+                lr,
+                "--device",
+                "cpu",
+                "--out",
+                str(raw_dir),
+                "--runs-dir",
+                str(ckpts_dir),
+            ]
+        )
+        assert rc in (0, None)
+
+    p_default = raw_dir / "tk3__multibox-k2-point__d2__s0.json"
+    p_lr01 = raw_dir / "tk3__multibox-k2-point__d2__s0__lr0.01.json"
+    p_prism = raw_dir / "tk3__prism__d2__s0.json"
+    assert p_default.exists()
+    assert p_lr01.exists()
+    assert p_prism.exists()
+
+    j_point = json.loads(p_lr01.read_text(encoding="utf-8"))
+    assert j_point["config"]["lr"] == pytest.approx(0.01)
+    assert j_point["config"]["objective"] == "point"
+    assert "tau_start" in j_point["config"]
+    assert "diversity_reg" in j_point["config"]
+    pm = j_point["metrics"]["point_modelness"]
+    assert isinstance(pm, dict)
+    assert "pos_frac" in pm and "hardneg_frac" in pm
+
+    j_prism = json.loads(p_prism.read_text(encoding="utf-8"))
+    assert j_prism["metrics"]["point_modelness"] is None
+
+    rc_agg = aggregate.main(
+        [
+            "--raw",
+            str(raw_dir),
+            "--out",
+            str(tables_dir),
+            "--csv",
+            str(csv_path),
+        ]
+    )
+    assert rc_agg in (0, None)
+    obj_table = tables_dir / "objectives_tk3.md"
+    assert obj_table.exists()
+    text = obj_table.read_text(encoding="utf-8")
+    for col in (
+        "method",
+        "backbone",
+        "k",
+        "objective",
+        "lr",
+        "d",
+        "Mod strict",
+        "Mod@γ",
+        "point-Mod (pos/hardneg)",
+        "HVR",
+        "Deg",
+        "eff-k",
+        "seeds n/k",
+    ):
+        assert col in text
+
 
 

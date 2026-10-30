@@ -34,6 +34,9 @@ from experiments.config import (
     DATASETS,
     DATASET_TASKS,
     METHODS,
+    OBJECTIVE_DATASETS,
+    OBJECTIVE_METHODS,
+    PRISM_METHODS,
     RAW_RESULTS_DIR,
     RESULTS_DIR,
     TABLES_DIR,
@@ -294,6 +297,140 @@ def render_multibox_curve_markdown(runs: Sequence[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _format_point_modelness(cell_runs: Sequence[Dict[str, Any]], decimals: int = 4) -> str:
+    """Format ``point_modelness`` ``(pos_frac / hardneg_frac)`` across ``cell_runs``."""
+    pos_vals: List[Optional[float]] = []
+    neg_vals: List[Optional[float]] = []
+    for cr in cell_runs:
+        pm = cr.get("metrics", {}).get("point_modelness")
+        if isinstance(pm, dict):
+            pos_vals.append(pm.get("pos_frac"))
+            neg_vals.append(pm.get("hardneg_frac"))
+        else:
+            pos_vals.append(None)
+            neg_vals.append(None)
+    if not any(_is_valid_number(v) for v in pos_vals) and not any(
+        _is_valid_number(v) for v in neg_vals
+    ):
+        return "—"
+    return f"{_format_mean_sd(pos_vals, decimals=decimals)} / {_format_mean_sd(neg_vals, decimals=decimals)}"
+
+
+def render_objectives_markdown(
+    dataset: str,
+    runs: Sequence[Dict[str, Any]],
+) -> str:
+    """Render ``objectives_<dataset>.md`` comparing objectives, backbones, k, lr, and prisms."""
+    grouped: Dict[Tuple[int, float, str], List[Dict[str, Any]]] = defaultdict(list)
+    dims_seen = set()
+    lrs_seen = set()
+    dirty_exp = any(bool(r.get("env", {}).get("git_dirty_experiments")) for r in runs)
+    dirty_mowl = any(bool(r.get("env", {}).get("git_dirty_mowl")) for r in runs)
+    exp_hashes = sorted(
+        {str(r.get("env", {}).get("git_hash_experiments", "unknown"))[:7] for r in runs if r.get("env")}
+    )
+    mowl_hashes = sorted(
+        {str(r.get("env", {}).get("git_hash_mowl", "unknown"))[:7] for r in runs if r.get("env")}
+    )
+
+    for r in runs:
+        cfg = r["config"]
+        d = int(cfg["dim"])
+        lr = float(cfg.get("lr", cfg.get("learning_rate", 0.001)))
+        m_id = str(cfg["method"])
+        dims_seen.add(d)
+        lrs_seen.add(lr)
+        grouped[(d, lr, m_id)].append(r)
+
+    method_order = list(METHODS.keys())
+    for _, _, m_id in sorted(grouped.keys()):
+        if m_id not in method_order:
+            method_order.append(m_id)
+
+    exp_flag = "dirty" if dirty_exp else "clean"
+    mowl_flag = "dirty" if dirty_mowl else "clean"
+    lines: List[str] = [
+        f"# Objectives & Prisms: `{dataset}`",
+        "",
+        f"- Provenance: `experiments` `{','.join(exp_hashes) or 'n/a'}` ({exp_flag}), "
+        f"`mowl` `{','.join(mowl_hashes) or 'n/a'}` ({mowl_flag}).",
+        "- Margin semantics: `Mod strict` evaluates GCI losses at `margin = 0`; `Mod@γ` evaluates at the training margin `γ` (`relaxing` for Box²EL/MultiBoxEL, `tightening` for ELBE/MultiELBE/PrismEL).",
+        "",
+        "| method | backbone | k | objective | lr | d | Mod strict | Mod@γ | point-Mod (pos/hardneg) | HVR | Deg | eff-k | seeds n/k |",
+        "|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+
+    for dim in sorted(dims_seen):
+        for lr in sorted(lrs_seen):
+            for m_id in method_order:
+                cell_runs = grouped.get((dim, lr, m_id), [])
+                if not cell_runs:
+                    continue
+                cfg0 = cell_runs[0]["config"]
+                spec = METHODS.get(m_id, {})
+                backbone = str(
+                    cfg0.get("backbone")
+                    or spec.get("backbone")
+                    or cfg0.get("model", "—")
+                )
+                k_val = str(
+                    cfg0.get("n_components", spec.get("n_components", "—"))
+                )
+                obj_val = str(
+                    cfg0.get("objective_variant")
+                    or spec.get("objective_variant")
+                    or cfg0.get("objective", "axiom")
+                )
+                lr_str = f"{lr:g}"
+                d_str = str(dim)
+
+                mod_strict = _format_mean_sd(
+                    [cr["metrics"].get("modelness_all") for cr in cell_runs],
+                    decimals=4,
+                )
+                mod_gamma = _format_mean_sd(
+                    [cr["metrics"].get("modelness_train_margin") for cr in cell_runs],
+                    decimals=4,
+                )
+                pmod_str = _format_point_modelness(cell_runs, decimals=4)
+                hvr_str = _format_mean_sd(
+                    [cr["metrics"].get("helly_violation_rate") for cr in cell_runs],
+                    decimals=4,
+                )
+                deg_str = _format_mean_sd(
+                    [cr["metrics"].get("degeneracy_rate") for cr in cell_runs],
+                    decimals=4,
+                )
+                eff_k_str = _format_mean_sd(
+                    [cr["metrics"].get("mean_effective_components") for cr in cell_runs],
+                    decimals=2,
+                )
+                seeds_nk = _format_row_n(
+                    cell_runs,
+                    ["modelness_all", "helly_violation_rate", "degeneracy_rate"],
+                )
+
+                row = [
+                    f"`{m_id}`",
+                    backbone,
+                    k_val,
+                    obj_val,
+                    lr_str,
+                    d_str,
+                    mod_strict,
+                    mod_gamma,
+                    pmod_str,
+                    hvr_str,
+                    deg_str,
+                    eff_k_str,
+                    seeds_nk,
+                ]
+                lines.append("| " + " | ".join(row) + " |")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
 def write_all_runs_csv(runs: Sequence[Dict[str, Any]], csv_path: Path) -> None:
     """Write a flat CSV table containing one row per run JSON."""
     config_fields = [
@@ -304,6 +441,15 @@ def write_all_runs_csv(runs: Sequence[Dict[str, Any]], csv_path: Path) -> None:
         "n_components",
         "init",
         "anchor_weight",
+        "objective",
+        "objective_variant",
+        "component_aggregation",
+        "tau_start",
+        "tau_end",
+        "tau_anneal",
+        "diversity_reg",
+        "lr",
+        "learning_rate",
         "dim",
         "seed",
         "epochs",
@@ -411,6 +557,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         by_dataset[ds].append(r)
 
     written_tables: List[Path] = []
+    obj_method_set = set(OBJECTIVE_METHODS) | set(PRISM_METHODS)
     for ds in DATASETS:
         if ds not in by_dataset:
             continue
@@ -420,6 +567,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             encoding="utf-8",
         )
         written_tables.append(md_path)
+        if ds in OBJECTIVE_DATASETS or any(
+            str(r.get("config", {}).get("method")) in obj_method_set
+            for r in by_dataset[ds]
+        ):
+            obj_path = out_dir / f"objectives_{ds}.md"
+            obj_path.write_text(
+                render_objectives_markdown(ds, by_dataset[ds]),
+                encoding="utf-8",
+            )
+            written_tables.append(obj_path)
 
     for ds in sorted(by_dataset.keys()):
         if ds in DATASETS:
