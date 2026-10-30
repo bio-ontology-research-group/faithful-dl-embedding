@@ -16,19 +16,24 @@ Guarantees
   the target). Reports both ``rankable_only`` and ``all_positives`` metrics (where
   unrankable positives outside ``candidates`` receive ``rank = n_candidates + 1``)
   along with coverage counts.
-- ``fmax(scores, true_sets, hierarchy)`` computes the CAFA-style protein-centric
-  :math:`F_{\\max}` over ancestor-closed held-out annotations using 100 thresholds
-  over the score quantiles.
+- ``fmax(scores, true_sets, hierarchy, ..., entailed_mask=None, labels=None)``
+  computes the CAFA-style protein-centric :math:`F_{\\max}` over ancestor-closed
+  held-out annotations using 100 thresholds over the score quantiles, excluding
+  KB-entailed cells (``label == entailed``) from both the prediction set and the
+  truth set so a model that scores KB-entailed candidates as plausible is not
+  penalised.
 - ``hierarchy_violation_rate(scores, entailed_pairs)`` samples up to 10,000
   ``(a, G ⊑ G')`` instances with ``G != G'`` and the subsumption entailed,
   counting a violation iff ``score(a, G) < score(a, G') - 1e-6``, and returning
   ``None`` when fewer than 50 instances exist.
 - ``three_way_metrics(scores, labels)`` computes ``auc_pos_neg`` (``AUC(+/-)``),
-  ``auc_pos_und`` (``AUC(+/?)``), ``pair_fvr``, and ``fvr`` following the
-  sampling and ``< 50`` null rules of ``experiments.metrics.faithfulness_metrics``.
+  ``auc_pos_und`` (``AUC(+/?)``, pooled across individuals), ``pair_fvr``, and
+  ``fvr`` following the sampling and ``< 50`` null rules of
+  ``experiments.metrics.faithfulness_metrics``.
 - ``abox_modelness(model)`` computes the fraction of training class assertions
   (and object-property assertions when supported by the module) whose strict loss
-  is ``<= 1e-6`` with ``margin = 0`` (restoring ``margin``/``gamma`` afterwards).
+  is ``<= 1e-6`` with ``margin = 0`` (restoring ``margin``/``gamma`` afterwards),
+  returning ``None`` when no training assertion was scored.
 """
 from __future__ import annotations
 
@@ -387,8 +392,10 @@ def ranking(
             rank = int(unmasked_scores.size)
         else:
             # Pessimistic tie-breaking: every unmasked candidate with score <= target_score
-            # (including the target itself) counts as ranked at or above the target.
-            rank = int(np.sum(unmasked_scores <= target_score))
+            # (including the target itself) or NaN counts as ranked at or above the target.
+            rank = int(
+                np.sum((unmasked_scores <= target_score) | np.isnan(unmasked_scores))
+            )
         ranks.append(max(1, rank))
 
     ranks_arr = np.asarray(ranks, dtype=np.int64)
@@ -471,17 +478,22 @@ def fmax(
     hierarchy: Mapping[Any, Iterable[Any]],
     *,
     candidates: Optional[Sequence[Any]] = None,
+    entailed_mask: Optional[Any] = None,
+    labels: Optional[Any] = None,
     n_thresholds: int = 100,
 ) -> float:
     """Compute CAFA-style protein-centric :math:`F_{\\max}` over ancestor-closed annotations.
 
     Both ``true_sets`` and thresholded predictions are closed under ``hierarchy``
     (where ``hierarchy[c]`` gives the superclasses ``{a : c ⊑ a}`` of ``c``).
-    Because lower ``scores`` indicate higher plausibility, a candidate ``c`` is
-    predicted at threshold ``tau`` iff ``score(p, c) <= tau`` (and finite), and
-    propagation under ``hierarchy`` is equivalent to replacing each candidate's
-    score by ``min_{c : a in hierarchy[c]} score(p, c)`` before thresholding.
-    Thresholds are evaluated at ``n_thresholds`` quantiles of the finite scores.
+    KB-entailed cells (passed via ``entailed_mask`` or ``labels`` where
+    ``label == "entailed"`` / code ``1``) are excluded from **both** the
+    prediction set and the truth set (matching the filtered ranking protocol) so
+    that a model that scores KB-entailed candidates as plausible is not penalised.
+    Because lower ``scores`` indicate higher plausibility, a non-entailed
+    candidate ``c`` is predicted at threshold ``tau`` iff its propagated score is
+    ``<= tau`` (and finite). Thresholds are evaluated at ``n_thresholds``
+    quantiles of the finite non-entailed scores.
 
     Parameters
     ----------
@@ -495,6 +507,14 @@ def fmax(
     candidates : Sequence[Any], optional
         Ordered candidate class identifiers matching the columns of ``scores`` when
         ``true_sets`` / ``hierarchy`` are keyed by class IRI instead of column index.
+    entailed_mask : np.ndarray, Sequence[Iterable[Any]], or Mapping[int, Iterable[Any]], optional
+        Boolean mask of shape ``(n_ind, n_cand)`` (``True`` = KB-entailed), label
+        array, or per-individual iterable of KB-entailed candidate classes/indices
+        to exclude from both prediction and truth sets.
+    labels : array-like, optional
+        Alternative to ``entailed_mask``: ``(n_ind, n_cand)`` label matrix where
+        entries with ``label == "entailed"`` (or code ``1``) are excluded from
+        both prediction and truth sets.
     n_thresholds : int, optional
         Number of quantile thresholds to evaluate (default: ``100``).
 
@@ -547,7 +567,55 @@ def fmax(
                     stack.append(nxt)
         anc_by_cand[j] = closed
 
+    # Resolve KB-entailed mask of shape (n_ind, n_cand)
+    ent_mat = np.zeros((n_ind, n_cand), dtype=bool)
+    ent_source = entailed_mask if entailed_mask is not None else labels
+    if ent_source is not None:
+        if isinstance(ent_source, Mapping):
+            for i_key, items in ent_source.items():
+                i_idx = int(i_key)
+                if 0 <= i_idx < n_ind and items is not None:
+                    for item in items:
+                        c_idx = _to_cand_idx(item)
+                        if 0 <= c_idx < n_cand:
+                            ent_mat[i_idx, c_idx] = True
+        else:
+            arr_try: Optional[np.ndarray] = None
+            try:
+                arr_cand = np.asarray(ent_source)
+                if arr_cand.size == n_ind * n_cand:
+                    if arr_cand.dtype != object:
+                        arr_try = arr_cand.reshape(n_ind, n_cand)
+                    else:
+                        first_el = arr_cand.flat[0] if arr_cand.size > 0 else None
+                        if isinstance(
+                            first_el, (str, bytes, int, np.integer, bool, np.bool_)
+                        ):
+                            arr_try = arr_cand.reshape(n_ind, n_cand)
+            except ValueError:
+                arr_try = None
+
+            if arr_try is not None:
+                if arr_try.dtype == bool or np.issubdtype(arr_try.dtype, np.bool_):
+                    ent_mat = arr_try.astype(bool, copy=True)
+                else:
+                    ent_mat = (
+                        _normalise_label_codes(arr_try, (n_ind, n_cand)).reshape(
+                            n_ind, n_cand
+                        )
+                        == 1
+                    )
+            else:
+                for i_idx, items in enumerate(ent_source):
+                    if i_idx >= n_ind or items is None:
+                        continue
+                    for item in items:
+                        c_idx = _to_cand_idx(item)
+                        if 0 <= c_idx < n_cand:
+                            ent_mat[i_idx, c_idx] = True
+
     # Build true indicator matrix T of shape (n_eval, n_cand), ancestor-closed
+    # and excluding KB-entailed cells.
     true_rows: List[np.ndarray] = []
     eval_ind_indices: List[int] = []
     for i in range(n_ind):
@@ -571,15 +639,20 @@ def fmax(
         if closed_t:
             row_bool = np.zeros(n_cand, dtype=bool)
             row_bool[list(closed_t)] = True
-            true_rows.append(row_bool)
-            eval_ind_indices.append(i)
+            row_bool[ent_mat[i]] = False
+            if np.any(row_bool):
+                true_rows.append(row_bool)
+                eval_ind_indices.append(i)
 
     if not true_rows:
         return 0.0
 
     true_mat = np.stack(true_rows, axis=0)  # (n_eval, n_cand)
     true_counts = true_mat.sum(axis=1).astype(np.float64)  # (n_eval,)
-    eval_scores = scores_arr[eval_ind_indices]  # (n_eval, n_cand)
+    eval_ent_mat = ent_mat[eval_ind_indices]  # (n_eval, n_cand)
+    eval_scores = np.where(
+        eval_ent_mat, np.inf, scores_arr[eval_ind_indices]
+    )  # (n_eval, n_cand)
 
     # Propagate scores upward: prop_scores[p, a] = min_{c : a in anc_by_cand[c]} eval_scores[p, c]
     descendants_of_a: List[List[int]] = [[] for _ in range(n_cand)]
@@ -594,6 +667,9 @@ def fmax(
             prop_scores[:, a_idx] = eval_scores[:, descs[0]]
         else:
             prop_scores[:, a_idx] = np.nanmin(eval_scores[:, descs], axis=1)
+
+    # Exclude KB-entailed cells from predictions
+    prop_scores[eval_ent_mat] = np.inf
 
     finite_vals = eval_scores[np.isfinite(eval_scores)]
     if finite_vals.size == 0:
@@ -750,10 +826,12 @@ def three_way_metrics(
 
     Follows the exact sampling and ``< 50`` null conventions of
     :func:`experiments.metrics.faithfulness_metrics`:
-    - Samples up to ``n_sample`` (default 5,000) pairs from each of ``+``, ``?``, ``-``.
-    - ``auc_pos_und`` (``AUC(+/?)``) is computed whenever ``n_pos >= 50`` and
-      ``n_und >= 50`` (and is ``None`` otherwise), even when ``n_neg < 50``
-      (as in B1 ``yeast-function`` where ``n_neg == 0`` by design).
+    - Samples up to ``n_sample`` (default 5,000) ``(individual, candidate)`` cells
+      **pooled across evaluation individuals** from each of ``+``, ``?``, ``-``.
+    - ``auc_pos_und`` (``AUC(+/?)``) is computed over the pooled ``+`` vs. ``?``
+      samples whenever ``n_pos >= 50`` and ``n_und >= 50`` (and is ``None``
+      otherwise), even when ``n_neg < 50`` (as in B1 ``yeast-function`` where
+      ``n_neg == 0`` by design).
     - ``auc_pos_neg`` (``AUC(+/-)``), ``pair_fvr``, and ``fvr`` require
       ``n_neg >= 50``, ``n_pos >= 50``, and ``n_und >= 50`` (returning ``None``
       when fewer than 50 negatives, positives, or unknowns exist).
@@ -859,7 +937,7 @@ def abox_modelness(
     tol: float = 1e-6,
     batch_size: int = 32768,
     margin: float = 0.0,
-) -> float:
+) -> Optional[float]:
     """Compute the fraction of training ABox assertions whose strict loss is ``<= 1e-6``.
 
     Evaluates all training ``class_assertion`` rows (and ``object_property_assertion``
@@ -881,8 +959,9 @@ def abox_modelness(
 
     Returns
     -------
-    float
-        Fraction of training assertions satisfied within ``tol`` in ``[0.0, 1.0]``.
+    float or None
+        Fraction of training assertions satisfied within ``tol`` in ``[0.0, 1.0]``,
+        or ``None`` when no training assertion was scored.
     """
     module = model.module
     saved_attrs: Dict[Tuple[str, str], float] = {}
@@ -936,7 +1015,7 @@ def abox_modelness(
         if was_training and hasattr(module, "train"):
             module.train()
 
-    return float(total_sat / total_cnt) if total_cnt > 0 else 1.0
+    return float(total_sat / total_cnt) if total_cnt > 0 else None
 
 
 def _file_sha256(path: Path) -> str:
@@ -1162,6 +1241,7 @@ def load_abox_split_data(
     for ind_iri, cls_iri in raw_pos_pairs:
         i = ind_to_idx.get(ind_iri, -1)
         if i < 0:
+            positives.append((-1, None))
             continue
         true_sets[i].append(cls_iri)
         j = cand_to_idx.get(cls_iri, None)

@@ -24,6 +24,15 @@ Guarantees
   via ``model.load_best_model()`` before evaluation.
 - For satisfaction datasets (``tk3``..``tk6``), trains for the fixed number of
   epochs without validation and evaluates the final parameters.
+- For ABox datasets (``yeast-function``, ``helis``, ``task == "abox"``), disables
+  mOWL's loss-based validation checkpointing (``validate_every = epochs + 1``) and
+  runs a 50-epoch validation-MRR callback (plus the final epoch) via
+  :func:`~experiments.abox_eval.compute_validation_mrr` without early stopping,
+  saving the state dict with the highest validation rankable-only MRR under
+  ``~/tmp/gfe-runs/`` and reloading it via ``load_state_dict`` before test
+  evaluation. Note that ``timings["total_train_time_s"]`` includes validation-MRR
+  callback time whereas ``timings["mean_epoch_time_s"]`` measures per-epoch
+  training steps only.
 - Handles ``torch.cuda.OutOfMemoryError`` per Spec §7: halves ``batch_size`` and
   retries up to 3 times (``max_oom_retries = 3``), recording
   ``config["effective_batch_size"]`` and ``config["oom_retries"]``. When
@@ -35,6 +44,68 @@ Guarantees
   only peak non-saved intermediate tensor allocations inside each chunk's
   forward pass, not autograd saved activations across chunks (no OOM occurred in
   the smoke sweep; max GPU memory was 3.7 GB).
+
+ABox JSON Schema (``task == "abox"``)
+-------------------------------------
+Every output JSON has four top-level keys (``config``, ``metrics``, ``timings``,
+``env``). For ``task == "abox"`` runs:
+
+- ``config``:
+  ``dataset``, ``task`` (``"abox"``), ``method``, ``model``, ``n_components``,
+  ``init``, ``anchor_weight``, ``dim``, ``seed``, ``epochs``, ``validate_every``
+  (``50``), ``eval_gci_name`` (``"class_assertion"``), ``margin``, ``delta``,
+  ``reg_factor``, ``num_negs``, ``learning_rate``, ``batch_size``,
+  ``effective_batch_size``, ``oom_retries``, ``device``, ``checkpoint_path``,
+  ``init_report``.
+- ``metrics``:
+  - Filtered candidate ranking (rankable-only): ``rank_mrr``, ``rank_hits@1``,
+    ``rank_hits@5``, ``rank_hits@10``, ``rank_auc``, and nested dict
+    ``ranking_rankable`` (``{"mrr", "hits@1", "hits@5", "hits@10", "auc"}``).
+  - Filtered candidate ranking (all-positives, where unrankable positives outside
+    ``candidates.txt`` receive ``rank = n_candidates + 1``): ``rank_all_mrr``,
+    ``rank_all_hits@1``, ``rank_all_hits@5``, ``rank_all_hits@10``,
+    ``rank_all_auc``, and nested dict ``ranking_all``
+    (``{"mrr", "hits@1", "hits@5", "hits@10", "auc"}``).
+  - Ranking coverage accounting: ``rank_coverage``, ``n_positives_total``,
+    ``n_positives_rankable``, ``n_positives_unrankable``.
+  - CAFA-style protein-centric :math:`F_{\\max}`: ``fmax`` (float on
+    ``yeast-function`` with KB-entailed cells excluded from both prediction and
+    truth sets; ``null`` on ``helis``).
+  - Hierarchy consistency: ``hierarchy_violation_rate`` (fraction of up to 10,000
+    sampled ``(a, G ⊑ G')`` pairs with ``G != G'`` where
+    ``score(a, G) < score(a, G') - 1e-6``, or ``null`` below 50 pairs).
+  - ABox and TBox modelness: ``abox_modelness`` (fraction of training class and
+    supported role assertions with strict ``margin=0`` loss ``<= 1e-6``, or
+    ``null`` if none scored), plus ``modelness_all``, ``modelness_<gci>``,
+    ``modelness_train_margin``, ``modelness_train_margin_<gci>``,
+    ``margin_semantics``.
+  - Three-way faithfulness on KB ``label``: nested dict ``faithfulness_kb``
+    (``{"auc_pos_neg", "auc_pos_und", "pair_fvr", "fvr", "n_pos", "n_und", "n_neg"}``)
+    and top-level keys ``auc_pos_neg``, ``auc_pos_und``, ``pair_fvr``, ``fvr``,
+    ``n_pos``, ``n_und``, ``n_neg``. ``auc_pos_und`` (``AUC(+/?)``) is pooled
+    across evaluation individuals.
+  - Three-way faithfulness on ``label_gold`` (``helis`` only; ``null`` on
+    ``yeast-function``): nested dict ``faithfulness_gold`` (same 7 keys or
+    ``null``) and top-level keys ``auc_pos_neg_gold``, ``auc_pos_und_gold``,
+    ``pair_fvr_gold``, ``fvr_gold``.
+  - Missing entity counts: ``n_missing_individuals``, ``n_missing_candidates``.
+  - Validation curve & best checkpoint (stored once in the JSON under ``metrics``):
+    ``val_mrr_curve`` (list of ``{"epoch": int, "val_mrr": float}``),
+    ``best_val_mrr``, ``best_val_epoch``.
+  - Helly & cost metrics: ``helly_violation_rate``, ``degeneracy_rate``,
+    ``n_certificates``, ``n_certificates_unmapped``, ``param_count``,
+    ``mean_epoch_time_s``, ``total_train_time_s``, ``n_components``,
+    ``mean_effective_components``, ``peak_gpu_memory_bytes``,
+    ``peak_gpu_memory_mb``.
+- ``timings``:
+  ``dataset_load_time_s``, ``cm_load_time_s``, ``model_init_time_s``,
+  ``total_train_time_s``, ``mean_epoch_time_s``, ``eval_time_s``,
+  ``modelness_time_s``, ``helly_time_s``, ``faithfulness_time_s``,
+  ``ranking_time_s``, ``wall_clock_s``, ``epochs``, ``peak_gpu_memory_bytes``.
+- ``env``:
+  ``git_hash_experiments``, ``git_hash_mowl``, ``git_dirty_experiments``,
+  ``git_dirty_mowl``, ``torch_version``, ``cuda_version``, ``cuda_available``,
+  ``device``, ``gpu_name``.
 """
 from __future__ import annotations
 
@@ -212,7 +283,6 @@ def _build_model(
     checkpoint_path: Path,
 ):
     """Instantiate the requested mOWL model and apply ``ExactBoxInit`` when configured."""
-    from mowl.datasets.el import ELDataset
     from mowl.geometric import ExactBoxInit
     from mowl.models import BoxSquaredEL, CanonicalMixture, ELBE, MultiBoxEL
 
@@ -316,42 +386,14 @@ def _build_model(
     finally:
         ELNormalizer.normalize = orig_normalize  # type: ignore[method-assign]
 
-    # Wrap _load_datasets so validation/testing ELNormalizer calls reuse the cache
-    # and ELDataset always receives model.individual_index_dict when individuals exist.
+    # Wrap _load_datasets so validation/testing ELNormalizer calls reuse the cache.
     orig_load_ds = model._load_datasets
-    orig_el_dataset_init = ELDataset.__init__
 
     def _cached_load_datasets():
-        def _patched_el_dataset_init(
-            self_el,
-            ontology,
-            class_index_dict=None,
-            object_property_index_dict=None,
-            individual_index_dict=None,
-            *args,
-            **kwargs,
-        ):
-            if (
-                individual_index_dict is None
-                and getattr(model, "individual_index_dict", None)
-            ):
-                individual_index_dict = model.individual_index_dict
-            return orig_el_dataset_init(
-                self_el,
-                ontology,
-                class_index_dict=class_index_dict,
-                object_property_index_dict=object_property_index_dict,
-                individual_index_dict=individual_index_dict,
-                *args,
-                **kwargs,
-            )
-
         ELNormalizer.normalize = _cached_normalize  # type: ignore[method-assign]
-        ELDataset.__init__ = _patched_el_dataset_init  # type: ignore[method-assign]
         try:
             return orig_load_ds()
         finally:
-            ELDataset.__init__ = orig_el_dataset_init  # type: ignore[method-assign]
             ELNormalizer.normalize = orig_normalize  # type: ignore[method-assign]
 
     model._load_datasets = _cached_load_datasets
@@ -528,7 +570,6 @@ def execute_run(
     need_cm = (
         bundle.task != "abox"
         or METHODS[method].get("init") is not None
-        or dataset == "helis"
     )
     if cm is None and need_cm:
         cm = get_canonical_model(bundle)
@@ -793,10 +834,6 @@ def execute_run(
         "checkpoint_path": str(ckpt_path),
         "init_report": init_report,
     }
-    if bundle.task == "abox":
-        config_dict["validation_curve"] = validation_curve
-        config_dict["best_val_mrr"] = best_val_mrr
-        config_dict["best_val_epoch"] = best_val_epoch
 
     payload: Dict[str, Any] = {
         "config": config_dict,
@@ -804,8 +841,6 @@ def execute_run(
         "timings": timings,
         "env": collect_env_info(resolved_device),
     }
-    if bundle.task == "abox":
-        payload["validation_curve"] = validation_curve
 
     out_dir = Path(out_dir).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)

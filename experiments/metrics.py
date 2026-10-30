@@ -1071,11 +1071,14 @@ def abox_metrics(
     - Filtered candidate ranking (both ``rankable_only`` and ``all_positives``
       plus coverage accounting),
     - CAFA-style protein-centric :math:`F_{\\max}` for ``yeast-function``
-      (``None`` on ``helis``),
+      (excluding KB-entailed cells from both prediction and truth sets; ``None``
+      on ``helis``),
     - ``hierarchy_violation_rate`` over entailed candidate subsumptions,
     - Three-way faithfulness metrics on ``label`` (``faithfulness_kb``) and, when
-      present, ``label_gold`` (``faithfulness_gold``),
-    - ``abox_modelness`` on training assertions,
+      present, ``label_gold`` (``faithfulness_gold``), with ``auc_pos_und``
+      (``AUC(+/?)``) pooled across evaluation individuals,
+    - ``abox_modelness`` on training assertions (``None`` when no assertion is
+      scored),
     - Missing entity counts (``n_missing_individuals``, ``n_missing_candidates``).
     """
     from experiments.abox_eval import (
@@ -1121,6 +1124,7 @@ def abox_metrics(
             split_data["true_sets"],
             hierarchy,
             candidates=candidates,
+            entailed_mask=(split_data["label_codes"] == 1),
         )
     else:
         fmax_val = None

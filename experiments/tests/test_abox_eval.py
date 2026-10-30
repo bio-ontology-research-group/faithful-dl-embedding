@@ -157,6 +157,29 @@ def test_filter_keeps_target() -> None:
     assert res["n_positives_unrankable"] == 0
     assert res["all_mrr"] == pytest.approx(expected_mrr)
 
+    # Verify +inf target gets worst rank (count of unmasked candidates, not NaN)
+    # and NaN unmasked candidate score counts pessimistically above a finite target.
+    scores_edge = np.array(
+        [
+            [0.1, np.inf, 0.4, 0.8, np.inf],
+            [np.nan, 0.2, 0.5, 0.8, 0.9],
+        ],
+        dtype=np.float64,
+    )
+    skip_edge = np.array(
+        [
+            [True, False, False, False, False],  # 4 unmasked candidates for ind 0
+            [False, False, False, False, False],  # 5 unmasked candidates for ind 1
+        ],
+        dtype=bool,
+    )
+    res_edge = ranking(scores_edge, [(0, 1), (1, 1)], skip_mask=skip_edge)
+    # ind 0 target C1 (+inf) among 4 unmasked candidates -> rank 4
+    # ind 1 target C1 (0.2) with C0=NaN unmasked -> NaN + C1 count as <= 0.2 pessimistically -> rank 2
+    assert res_edge["ranks"] == [4, 2]
+    assert not np.isnan(res_edge["mrr"])
+    assert res_edge["mrr"] == pytest.approx((0.25 + 0.5) / 2.0)
+
 
 def test_coverage_and_unrankable_positives() -> None:
     """Verify rankable-only vs all-positives metrics when held-out positives fall outside candidates."""
@@ -245,6 +268,90 @@ def test_fmax_hand_computed() -> None:
     )
     val_imp = fmax(scores_imperfect, true_sets, hierarchy, n_thresholds=100)
     assert val_imp == pytest.approx(10.0 / 11.0)
+
+
+def test_fmax_excludes_kb_entailed_cells() -> None:
+    """Verify Fmax excludes KB-entailed cells from both prediction and truth sets.
+
+    An oracle on the held-out closure must reach Fmax 1.0 whether or not it also
+    scores the KB-entailed candidates as plausible.
+    """
+    # 5 candidates:
+    # Branch A: C0 ⊑ C1 ⊑ C2 (root)
+    # Branch B: C3 ⊑ C2 (root), C4 ⊑ C3 ⊑ C2
+    hierarchy = {
+        0: [0, 1, 2],
+        1: [1, 2],
+        2: [2],
+        3: [2, 3],
+        4: [2, 3, 4],
+    }
+    # Protein 0:
+    # - Training KB entails C3 (and therefore its ancestor C2): entailed = {2, 3}
+    # - Held-out test positive is C0 (whose ancestor closure is {0, 1, 2})
+    #   After excluding KB-entailed {2, 3}, the non-entailed held-out truth is {0, 1}.
+    # Protein 1:
+    # - Training KB entails C0, C1, C2: entailed = {0, 1, 2}
+    # - Held-out test positive is C4 (whose ancestor closure is {2, 3, 4})
+    #   After excluding KB-entailed {0, 1, 2}, the non-entailed held-out truth is {3, 4}.
+    true_sets = [[0], [4]]
+    labels = np.array(
+        [
+            ["unknown", "unknown", "entailed", "entailed", "unknown"],
+            ["entailed", "entailed", "entailed", "unknown", "unknown"],
+        ],
+        dtype=object,
+    )
+    entailed_mask = labels == "entailed"
+
+    # Oracle 1: scores ONLY the held-out closure as plausible (0.1) and non-held-out
+    # KB-entailed candidates (C3 for P0; C0, C1 for P1) as implausible (0.9).
+    scores_heldout_only = np.array(
+        [
+            [0.1, 0.1, 0.1, 0.9, 0.9],
+            [0.9, 0.9, 0.1, 0.1, 0.1],
+        ],
+        dtype=np.float64,
+    )
+
+    # Oracle 2 (faithful KB model): scores BOTH the held-out closure (0.1) AND all
+    # KB-entailed candidates (0.05) as plausible, and unknown non-truth cells as 0.9.
+    scores_faithful_oracle = np.array(
+        [
+            [0.1, 0.1, 0.05, 0.05, 0.9],
+            [0.05, 0.05, 0.05, 0.1, 0.1],
+        ],
+        dtype=np.float64,
+    )
+
+    # Without excluding KB-entailed cells, Oracle 2 gets penalised for predicting C3 on P0
+    # and C0, C1 on P1 (precision < 1.0, so Fmax < 1.0):
+    unfiltered_fmax = fmax(scores_faithful_oracle, true_sets, hierarchy, n_thresholds=100)
+    assert unfiltered_fmax < 0.85
+
+    # With KB-entailed cells excluded from both prediction and truth sets,
+    # BOTH Oracle 1 and Oracle 2 must achieve Fmax == 1.0:
+    assert fmax(
+        scores_heldout_only,
+        true_sets,
+        hierarchy,
+        entailed_mask=entailed_mask,
+        n_thresholds=100,
+    ) == pytest.approx(1.0)
+    assert fmax(
+        scores_faithful_oracle,
+        true_sets,
+        hierarchy,
+        entailed_mask=entailed_mask,
+        n_thresholds=100,
+    ) == pytest.approx(1.0)
+    assert fmax(
+        scores_faithful_oracle,
+        true_sets,
+        hierarchy,
+        labels=labels,
+        n_thresholds=100,
+    ) == pytest.approx(1.0)
 
 
 def test_hierarchy_violation_sampling() -> None:
@@ -368,6 +475,32 @@ def test_abox_modelness_margin_restore() -> None:
     assert model.margin == pytest.approx(0.05)
     assert module.training is True
 
+    # When no assertions are scored (empty datasets or NotImplementedError), abox_modelness returns None
+    empty_model = _ScriptedABoxModel(
+        module=module,
+        individual_index_dict={"a0": 0},
+        class_index_dict={"C0": 0},
+        training_datasets={},
+        margin=0.05,
+    )
+    assert abox_modelness(empty_model) is None
+    assert module.margin == pytest.approx(0.05)
+    assert module.gamma == pytest.approx(0.02)
+
+    opa_only_unsupported = _ScriptedABoxModule(
+        score_table, margin=0.05, gamma=0.02, support_opa=False
+    )
+    unsupported_model = _ScriptedABoxModel(
+        module=opa_only_unsupported,
+        individual_index_dict={"a0": 0, "a1": 1, "a2": 2},
+        class_index_dict={"C0": 0, "C1": 1},
+        training_datasets={"object_property_assertion": opa_ds},
+        margin=0.05,
+    )
+    assert abox_modelness(unsupported_model) is None
+    assert opa_only_unsupported.margin == pytest.approx(0.05)
+    assert opa_only_unsupported.gamma == pytest.approx(0.02)
+
 
 def test_score_candidates_batching_missing_and_rank_classes() -> None:
     """Verify score_candidates missing entity +inf assignment, chunking, and rank_classes path."""
@@ -416,6 +549,125 @@ def test_score_candidates_batching_missing_and_rank_classes() -> None:
     assert np.all(np.isinf(rc_scores[:, 1]))
 
 
+def test_abox_best_checkpoint_reloaded_before_test_eval(
+    monkeypatch: pytest.MonkeyPatch,
+    scratch_dir: Path,
+) -> None:
+    """Verify execute_run reloads the best-validation-MRR checkpoint from an intermediate epoch before test evaluation."""
+    import experiments.abox_eval as abox_eval_mod
+    import experiments.run as run_mod
+    from experiments.datasets import DatasetBundle
+
+    # 1 individual ("a0"), 4 candidates ("C0".."C3"); positive is (0, 0) ("C0").
+    # At epoch 50 (intermediate peak): C0 has lowest score -> rank 1 -> MRR = 1.0.
+    # At epoch 100 (final epoch): C0 has highest score -> rank 4 -> MRR = 0.25.
+    good_scores = torch.tensor([[0.1, 0.4, 0.7, 0.9]], dtype=torch.float32)
+    bad_scores = torch.tensor([[0.9, 0.1, 0.2, 0.3]], dtype=torch.float32)
+
+    class _PeakAt50Module(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.scores_param = torch.nn.Parameter(bad_scores.clone())
+            self.margin = 0.02
+            self.gamma = 0.02
+            self.n_components = 1
+
+        def effective_components(self) -> torch.Tensor:
+            return torch.ones(4, dtype=torch.float32)
+
+        def forward(self, data: torch.Tensor, gci_name: str, neg: bool = False) -> torch.Tensor:
+            if gci_name == "class_assertion":
+                ind_idx = data[:, 0].long()
+                cls_idx = data[:, 1].long()
+                return self.scores_param[ind_idx, cls_idx]
+            raise NotImplementedError(gci_name)
+
+    class _PeakAt50Model:
+        def __init__(self) -> None:
+            self.module = _PeakAt50Module()
+            self.individual_index_dict = {"a0": 0}
+            self.class_index_dict = {"C0": 0, "C1": 1, "C2": 2, "C3": 3}
+            self.training_datasets = {
+                "class_assertion": torch.tensor([[0, 0]], dtype=torch.long)
+            }
+            self.validation_datasets = {}
+            self.testing_datasets = {}
+            self.device = "cpu"
+            self.margin = 0.02
+
+        def train(self, epochs: int, validate_every: int, epoch_callback=None) -> None:
+            for ep in range(epochs):
+                ep_num = ep + 1
+                with torch.no_grad():
+                    if ep_num == 50:
+                        self.module.scores_param.copy_(good_scores)
+                    elif ep_num == 51:
+                        # Degrade after epoch 50 so final epoch 100 has bad_scores
+                        self.module.scores_param.copy_(bad_scores)
+                if epoch_callback is not None:
+                    epoch_callback(ep, self)
+
+    fake_split = {
+        "individuals": ["a0"],
+        "candidates": ["C0", "C1", "C2", "C3"],
+        "cand_to_idx": {"C0": 0, "C1": 1, "C2": 2, "C3": 3},
+        "positives": [(0, 0)],
+        "true_sets": [["C0"]],
+        "skip_mask": np.zeros((1, 4), dtype=bool),
+        "label_codes": np.zeros((1, 4), dtype=np.int8),
+        "label_gold_codes": None,
+    }
+    fake_bundle = DatasetBundle(
+        name="helis",
+        task="abox",
+        dataset=object(),
+        deductive_closure_ontology=None,
+        paths={"ontology": str(scratch_dir / "dummy.owl")},
+    )
+    setattr(fake_bundle, "_abox_split_cache_valid", fake_split)
+    setattr(fake_bundle, "_abox_split_cache_test", fake_split)
+
+    monkeypatch.setattr(
+        abox_eval_mod,
+        "get_candidate_hierarchy",
+        lambda *_a, **_kw: {"C0": ["C0"], "C1": ["C1"], "C2": ["C2"], "C3": ["C3"]},
+    )
+    monkeypatch.setattr(
+        run_mod,
+        "_build_model",
+        lambda **_kw: (_PeakAt50Model(), None),
+    )
+
+    out_dir = scratch_dir / "ckpt_reload_out"
+    runs_dir = scratch_dir / "ckpt_reload_runs"
+    payload = execute_run(
+        dataset="helis",
+        method="elbe",
+        dim=8,
+        seed=0,
+        epochs=100,
+        device="cpu",
+        out_dir=out_dir,
+        runs_dir=runs_dir,
+        bundle=fake_bundle,
+    )
+
+    m = payload["metrics"]
+    # Validation MRR peaked at epoch 50 (1.0) and dropped to 0.25 at epoch 100
+    assert m["val_mrr_curve"] == [
+        {"epoch": 50, "val_mrr": pytest.approx(1.0)},
+        {"epoch": 100, "val_mrr": pytest.approx(0.25)},
+    ]
+    assert m["best_val_epoch"] == 50
+    assert m["best_val_mrr"] == pytest.approx(1.0)
+    # Because the epoch-50 checkpoint was reloaded before test evaluation, test rank_mrr is 1.0 (not 0.25)!
+    assert m["rank_mrr"] == pytest.approx(1.0)
+    assert m["rank_hits@1"] == pytest.approx(1.0)
+    # Validation curve is stored once in the JSON (under metrics.val_mrr_curve only)
+    assert "validation_curve" not in payload
+    assert "validation_curve" not in payload["config"]
+
+
 def test_run_elbe_on_helis_smoke(scratch_dir: Path) -> None:
     """End-to-end smoke test: ELBE on helis for 3 epochs through run.py writes a JSON with every key."""
     assert "canonical-mixture" in methods_for_dataset("helis")
@@ -440,17 +692,18 @@ def test_run_elbe_on_helis_smoke(scratch_dir: Path) -> None:
     disk_payload = json.loads(json_path.read_text(encoding="utf-8"))
     assert disk_payload == payload
 
-    for top_key in ("config", "metrics", "timings", "env", "validation_curve"):
-        assert top_key in disk_payload
+    assert set(disk_payload.keys()) == {"config", "metrics", "timings", "env"}
+    assert "validation_curve" not in disk_payload
 
     cfg = disk_payload["config"]
     assert cfg["dataset"] == "helis"
     assert cfg["task"] == "abox"
     assert cfg["method"] == "elbe"
     assert cfg["epochs"] == 3
-    assert isinstance(cfg["validation_curve"], list) and len(cfg["validation_curve"]) >= 1
+    assert "validation_curve" not in cfg
 
     m = disk_payload["metrics"]
+    assert isinstance(m["val_mrr_curve"], list) and len(m["val_mrr_curve"]) >= 1
     required_metric_keys = (
         "rank_mrr",
         "rank_hits@1",
@@ -498,10 +751,49 @@ def test_run_elbe_on_helis_smoke(scratch_dir: Path) -> None:
     assert 0.0 <= float(m["abox_modelness"]) <= 1.0
     assert 0.0 <= float(m["hierarchy_violation_rate"]) <= 1.0
     # Spec §3.2 Amendment: KB label on helis has 0 contradicted pairs (auc_pos_neg is None, auc_pos_und is float);
-    # label_gold has >600k contradicted pairs so all four three-way metrics are floats.
+    # label_gold has 20,169 contradicted pairs so all four three-way metrics are floats.
     assert m["faithfulness_kb"]["auc_pos_und"] is not None
     assert m["faithfulness_kb"]["auc_pos_neg"] is None
     assert m["faithfulness_gold"]["auc_pos_neg"] is not None
     assert m["faithfulness_gold"]["auc_pos_und"] is not None
     assert m["faithfulness_gold"]["pair_fvr"] is not None
     assert m["faithfulness_gold"]["fvr"] is not None
+
+
+@pytest.mark.slow
+def test_run_elbe_on_yeast_function_smoke(scratch_dir: Path) -> None:
+    """Slow end-to-end smoke test: ELBE on yeast-function for 3 epochs through run.py."""
+    out_dir = scratch_dir / "yeast_smoke_out"
+    runs_dir = scratch_dir / "yeast_smoke_runs"
+
+    payload = execute_run(
+        dataset="yeast-function",
+        method="elbe",
+        dim=16,
+        seed=0,
+        epochs=3,
+        out_dir=out_dir,
+        runs_dir=runs_dir,
+    )
+
+    json_path = out_dir / run_filename("yeast-function", "elbe", 16, 0)
+    assert json_path.exists()
+    disk_payload = json.loads(json_path.read_text(encoding="utf-8"))
+    assert disk_payload == payload
+    assert set(disk_payload.keys()) == {"config", "metrics", "timings", "env"}
+
+    m = disk_payload["metrics"]
+    assert m["fmax"] is not None
+    assert 0.0 <= float(m["fmax"]) <= 1.0
+    assert 0.0 < float(m["rank_coverage"]) < 1.0
+    assert m["n_positives_unrankable"] > 0
+    assert 0.0 <= float(m["rank_all_mrr"]) <= float(m["rank_mrr"]) <= 1.0
+    assert 0.0 <= float(m["hierarchy_violation_rate"]) <= 1.0
+    assert 0.0 <= float(m["abox_modelness"]) <= 1.0
+    assert m["faithfulness_kb"]["auc_pos_und"] is not None
+    assert m["faithfulness_kb"]["auc_pos_neg"] is None
+    assert m["faithfulness_gold"] is None
+    assert m["auc_pos_neg_gold"] is None
+    assert isinstance(m["val_mrr_curve"], list) and len(m["val_mrr_curve"]) == 1
+    assert m["best_val_epoch"] == 3
+

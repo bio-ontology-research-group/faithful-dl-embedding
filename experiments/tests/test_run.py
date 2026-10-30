@@ -397,3 +397,107 @@ def test_aggregate_null_nan_handling_and_certs_column() -> None:
     # HVR and DegRate are both "—" followed by Certs "0 ± 0"
     assert "| — | — | 0 ± 0 |" in md
 
+
+def test_run_abox_reloads_best_checkpoint_and_stores_single_curve(
+    monkeypatch: pytest.MonkeyPatch,
+    scratch_dir: Path,
+) -> None:
+    """Verify execute_run on an ABox bundle reloads the intermediate peak validation-MRR checkpoint and stores val_mrr_curve once."""
+    import numpy as np
+    import experiments.abox_eval as abox_eval_mod
+    from experiments.datasets import DatasetBundle
+
+    good_scores = torch.tensor([[0.1, 0.4, 0.7, 0.9]], dtype=torch.float32)
+    bad_scores = torch.tensor([[0.9, 0.1, 0.2, 0.3]], dtype=torch.float32)
+
+    class _ScriptedModule(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.scores_param = torch.nn.Parameter(bad_scores.clone())
+            self.margin = 0.02
+            self.gamma = 0.02
+            self.n_components = 1
+
+        def effective_components(self) -> torch.Tensor:
+            return torch.ones(4, dtype=torch.float32)
+
+        def forward(self, data: torch.Tensor, gci_name: str, neg: bool = False) -> torch.Tensor:
+            if gci_name == "class_assertion":
+                return self.scores_param[data[:, 0].long(), data[:, 1].long()]
+            raise NotImplementedError(gci_name)
+
+    class _ScriptedModel:
+        def __init__(self) -> None:
+            self.module = _ScriptedModule()
+            self.individual_index_dict = {"a0": 0}
+            self.class_index_dict = {"C0": 0, "C1": 1, "C2": 2, "C3": 3}
+            self.training_datasets = {
+                "class_assertion": torch.tensor([[0, 0]], dtype=torch.long)
+            }
+            self.validation_datasets = {}
+            self.testing_datasets = {}
+            self.device = "cpu"
+            self.margin = 0.02
+
+        def train(self, epochs: int, validate_every: int, epoch_callback=None) -> None:
+            for ep in range(epochs):
+                ep_num = ep + 1
+                with torch.no_grad():
+                    if ep_num == 50:
+                        self.module.scores_param.copy_(good_scores)
+                    elif ep_num == 51:
+                        self.module.scores_param.copy_(bad_scores)
+                if epoch_callback is not None:
+                    epoch_callback(ep, self)
+
+    fake_split = {
+        "individuals": ["a0"],
+        "candidates": ["C0", "C1", "C2", "C3"],
+        "cand_to_idx": {"C0": 0, "C1": 1, "C2": 2, "C3": 3},
+        "positives": [(0, 0)],
+        "true_sets": [["C0"]],
+        "skip_mask": np.zeros((1, 4), dtype=bool),
+        "label_codes": np.zeros((1, 4), dtype=np.int8),
+        "label_gold_codes": None,
+    }
+    fake_bundle = DatasetBundle(
+        name="helis",
+        task="abox",
+        dataset=object(),
+        deductive_closure_ontology=None,
+        paths={"ontology": str(scratch_dir / "dummy.owl")},
+    )
+    setattr(fake_bundle, "_abox_split_cache_valid", fake_split)
+    setattr(fake_bundle, "_abox_split_cache_test", fake_split)
+
+    monkeypatch.setattr(
+        abox_eval_mod,
+        "get_candidate_hierarchy",
+        lambda *_a, **_kw: {"C0": ["C0"], "C1": ["C1"], "C2": ["C2"], "C3": ["C3"]},
+    )
+    monkeypatch.setattr(
+        run,
+        "_build_model",
+        lambda **_kw: (_ScriptedModel(), None),
+    )
+
+    payload = run.execute_run(
+        dataset="helis",
+        method="elbe",
+        dim=8,
+        seed=0,
+        epochs=100,
+        device="cpu",
+        out_dir=scratch_dir / "out",
+        runs_dir=scratch_dir / "ckpts",
+        bundle=fake_bundle,
+    )
+
+    assert set(payload.keys()) == {"config", "metrics", "timings", "env"}
+    assert "validation_curve" not in payload
+    assert "validation_curve" not in payload["config"]
+    assert payload["metrics"]["best_val_epoch"] == 50
+    assert payload["metrics"]["best_val_mrr"] == pytest.approx(1.0)
+    assert payload["metrics"]["rank_mrr"] == pytest.approx(1.0)
+
+
