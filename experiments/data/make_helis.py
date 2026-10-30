@@ -10,20 +10,24 @@ Constructs ``~/tmp/gfe-data/helis/`` from ``~/tmp/gfe-data/helis-dl/``:
       axiom, total `92` ``NF2(..., ⊥)`` axioms).
 - Adds all named-individual ``ObjectPropertyAssertion`` axioms from the origin
   ontology (`83,210` assertions), declares all `20,318` individuals from
-  ``individuals.txt``, and adds training class memberships from ``train.csv`` rows
+  ``individuals.txt``, adds training class memberships from ``train.csv`` rows
   with label `1` (`14,222` positive ``ClassAssertion`` axioms; label-`0` sampled
-  negatives and ``DataPropertyAssertion`` axioms are dropped).
+  negatives and ``DataPropertyAssertion`` axioms are dropped), and materialises
+  ``ObjectPropertyRange`` axioms with a named range class `R` by adding `R(b)` for
+  every kept `r(a, b)` (`17,460` unique `R(b)` assertions, `16,458` net new
+  ``ClassAssertion`` axioms, total `30,680` ``ClassAssertion`` axioms in
+  ``ontology.owl``; sound because HeLiS has no role inclusions).
 - Writes held-out ``valid.owl`` (`2,031` ``ClassAssertion`` axioms from
   ``valid.csv``) and ``test.owl`` (`4,065` ``ClassAssertion`` axioms from
   ``test.csv``), ``candidates.txt`` (`277` named classes from ``classes.txt``
   excluding ``owl:Thing``), and ``skip_{valid,test}.tsv`` (mapping each held-out
   individual to its comma-separated inferred classes from ``inferred_classes.txt``).
-- Computes three-way reasoner labels (`entailed`, `unknown`, `contradicted`) for
-  every held-out `(individual, candidate)` pair via
-  ``mowl.geometric.CanonicalModel.from_ontology`` (`instance_of` -> `entailed`,
-  `assertion_contradicted` -> `contradicted`) on the built training ontology
-  (and also computes the full-ABox reference contradiction counts across splits to
-  verify food-group disjointness contradictions > 0), writing
+- Computes both strictly KB-based three-way labels (``label``: ``entailed``,
+  ``unknown``, ``contradicted``) and gold-conditional three-way labels
+  (``label_gold``: ``entailed_gold``, ``unknown``, ``contradicted_gold``) for every
+  held-out `(individual, candidate)` pair via ``mowl.geometric.CanonicalModel``
+  public methods (``instance_of``, ``entails``, and a precomputed 277 × 277
+  pairwise table via ``joint_satisfiable``), writing
   ``labels_{valid,test}.parquet``, ``manifest.json``, and the B3 section in
   ``experiments/results/dataset_stats.md``.
 """
@@ -37,7 +41,17 @@ import json
 from pathlib import Path
 import shutil
 import time
-from typing import Any, Dict, Iterable, List, Mapping, Sequence, Set, Tuple
+from typing import (
+    Any,
+    Dict,
+    FrozenSet,
+    Iterable,
+    List,
+    Mapping,
+    Sequence,
+    Set,
+    Tuple,
+)
 
 import mowl
 import numpy as np
@@ -55,6 +69,7 @@ from experiments.data.fetch_helis import (
     HELIS_ONTS_URL,
     fetch_helis,
 )
+from experiments.data.stats_md import update_stats_section
 
 HELIS_OUT_DIR: Path = RAW_DATA_ROOT / "helis"
 HELIS_REPO_DIR: Path = DATA_DIR / "helis"
@@ -93,6 +108,10 @@ EXPECTED_N_VALID: int = 2_031
 EXPECTED_N_TEST: int = 4_065
 
 STATS_SECTION_HEADER: str = "## 5. ABox Benchmark B3: `helis-membership` Statistics"
+
+_PAIRWISE_DISJOINT_MEMO: Dict[
+    Tuple[FrozenSet[Any], Tuple[str, ...]], Dict[str, Set[str]]
+] = {}
 
 
 def _file_sha256(path: Path) -> str:
@@ -169,62 +188,37 @@ def _classify_dropped_tbox_axiom(ax: Any) -> str:
     return ax_type_str
 
 
-def _seed_cm_joint_sat_cache(
-    cm: Any,
+def precompute_pairwise_disjoint_table(
+    cm_tbox: Any,
     candidates: Sequence[str],
-    eval_individuals: Sequence[str] | None = None,
 ) -> Dict[str, Set[str]]:
-    """Pre-populate ``cm._joint_sat_cache`` for ``(N_a, C)`` pairs from ``cm``'s saturated completion.
+    """Precompute the 277 x 277 pairwise unsatisfiability table via public ``cm_tbox.joint_satisfiable``."""
+    cand_tuple = tuple(candidates)
+    key = (frozenset(cm_tbox.axioms), cand_tuple)
+    cached = _PAIRWISE_DISJOINT_MEMO.get(key)
+    if cached is not None:
+        return {k: set(v) for k, v in cached.items()}
 
-    In the normalised HeLiS EL++ ontology:
-    - Every ``NF4`` axiom has filler ``TOP`` (from ``ObjectPropertyDomain``).
-    - Every ``NF2`` axiom has superclass ``BOTTOM`` (`92` pairwise disjointness axioms).
-    - There are no ``NF1(..., BOTTOM)`` or ``NF4(..., BOTTOM)`` axioms.
-    Consequently, for any individual ``a`` (nominal ``N_a``) and candidate concept ``C``,
-    ``N_a ⊓ C ⊑ ⊥`` holds in ``cm`` if and only if some concept ``B1 ∈ S(N_a)`` and some
-    concept ``B2 ∈ S(C)`` appear as a disjoint pair ``NF2(B1, B2, ⊥)`` in ``cm.axioms``.
-    Populating ``cm._joint_sat_cache[frozenset({N_a, C})]`` makes subsequent calls to
-    ``cm.assertion_contradicted(a, C)`` O(1) while preserving exact equivalence with
-    fresh-concept saturation.
-    """
-    from mowl.geometric import BOTTOM, NF2
-
-    nf2_bot_pairs: Set[Tuple[str, str]] = set()
-    for ax in cm.axioms:
-        if isinstance(ax, NF2) and ax.sup == BOTTOM:
-            nf2_bot_pairs.add((ax.sub1, ax.sub2))
-            nf2_bot_pairs.add((ax.sub2, ax.sub1))
-
-    disjoint_with: Dict[str, Set[str]] = {c: set() for c in candidates}
-    for c1 in candidates:
-        s1 = cm.completion.sub_super.get(c1, set())
-        for c2 in candidates:
-            s2 = cm.completion.sub_super.get(c2, set())
-            if any((x, y) in nf2_bot_pairs for x in s1 for y in s2):
+    disjoint_with: Dict[str, Set[str]] = {c: set() for c in cand_tuple}
+    for i, c1 in enumerate(cand_tuple):
+        for c2 in cand_tuple[i:]:
+            if not cm_tbox.joint_satisfiable([c1, c2]):
                 disjoint_with[c1].add(c2)
+                disjoint_with[c2].add(c1)
 
-    cand_set = set(candidates)
-    contra_by_ts: Dict[FrozenSet[str], Set[str]] = {}
-    target_inds = (
-        eval_individuals
-        if eval_individuals is not None
-        else list(cm.individuals.keys())
-    )
-    for ind_iri in target_inds:
-        nom = cm.individuals.get(ind_iri)
-        if nom is None:
-            continue
-        ts = frozenset(cm.completion.sub_super.get(nom, set()) & cand_set)
-        contra_for_nom = contra_by_ts.get(ts)
-        if contra_for_nom is None:
-            contra_for_nom = set()
-            for b in ts:
-                contra_for_nom.update(disjoint_with.get(b, set()))
-            contra_by_ts[ts] = contra_for_nom
-        for c in candidates:
-            cm._joint_sat_cache[frozenset({nom, c})] = c not in contra_for_nom
-
+    _PAIRWISE_DISJOINT_MEMO[key] = {k: set(v) for k, v in disjoint_with.items()}
     return disjoint_with
+
+
+def precompute_tbox_superclasses(
+    cm_tbox: Any,
+    candidates: Sequence[str],
+) -> Dict[str, Set[str]]:
+    """Precompute candidate superclasses in the TBox closure via public ``cm_tbox.entails``."""
+    return {
+        c1: {c2 for c2 in candidates if cm_tbox.entails(c1, c2)}
+        for c1 in candidates
+    }
 
 
 def _write_skip_tsv(
@@ -242,32 +236,64 @@ def _write_skip_tsv(
 
 def _write_labels_parquet_from_cm(
     out_path: Path,
-    eval_individuals: Sequence[str],
+    split_pairs_sorted: Sequence[Tuple[str, str]],
     candidates: Sequence[str],
-    cm: Any,
+    cm_train: Any,
+    tbox_superclasses: Mapping[str, Set[str]],
+    disjoint_with: Mapping[str, Set[str]],
 ) -> Dict[str, int]:
-    """Compute three-way labels via ``cm.instance_of`` and ``cm.assertion_contradicted`` and write Parquet."""
+    """Compute KB labels (``label``) and gold-conditional labels (``label_gold``) and write Parquet."""
+    eval_individuals = [ind for ind, _ in split_pairs_sorted]
     n_ind = len(eval_individuals)
     n_cand = len(candidates)
+    cand_to_idx = {c: j for j, c in enumerate(candidates)}
 
     ind_indices = np.repeat(np.arange(n_ind, dtype=np.int32), n_cand)
     cand_indices = np.tile(np.arange(n_cand, dtype=np.int32), n_ind)
     # 0 -> "unknown", 1 -> "entailed", 2 -> "contradicted"
     label_codes = np.zeros(n_ind * n_cand, dtype=np.int8)
+    # 0 -> "unknown", 1 -> "entailed_gold", 2 -> "contradicted_gold"
+    label_gold_codes = np.zeros(n_ind * n_cand, dtype=np.int8)
 
-    for i, ind_iri in enumerate(eval_individuals):
+    for i, (ind_iri, gold_cls) in enumerate(split_pairs_sorted):
         offset = i * n_cand
-        for j, cls_iri in enumerate(candidates):
-            if cm.instance_of(ind_iri, cls_iri):
-                label_codes[offset + j] = 1
-            elif cm.assertion_contradicted(ind_iri, cls_iri):
-                label_codes[offset + j] = 2
+
+        # Strictly KB-based label from cm_train and the 277x277 pairwise table
+        ent_cands = [
+            cls_iri
+            for cls_iri in candidates
+            if cm_train.instance_of(ind_iri, cls_iri)
+        ]
+        if ent_cands:
+            ent_set = set(ent_cands)
+            for cls_iri in ent_cands:
+                label_codes[offset + cand_to_idx[cls_iri]] = 1
+            contra_cands: Set[str] = set()
+            for b in ent_cands:
+                contra_cands.update(disjoint_with.get(b, set()))
+            for cls_iri in contra_cands - ent_set:
+                label_codes[offset + cand_to_idx[cls_iri]] = 2
+
+        # Gold-conditional label from the TBox closure and 277x277 pairwise table
+        gold_ent_set = tbox_superclasses.get(gold_cls, set())
+        for cls_iri in gold_ent_set:
+            label_gold_codes[offset + cand_to_idx[cls_iri]] = 1
+        gold_contra_set = disjoint_with.get(gold_cls, set()) - gold_ent_set
+        for cls_iri in gold_contra_set:
+            label_gold_codes[offset + cand_to_idx[cls_iri]] = 2
 
     n_entailed = int(np.sum(label_codes == 1))
     n_contradicted = int(np.sum(label_codes == 2))
     n_unknown = int(len(label_codes) - n_entailed - n_contradicted)
 
+    n_entailed_gold = int(np.sum(label_gold_codes == 1))
+    n_contradicted_gold = int(np.sum(label_gold_codes == 2))
+    n_unknown_gold = int(
+        len(label_gold_codes) - n_entailed_gold - n_contradicted_gold
+    )
+
     labels_vocab = pa.array(["unknown", "entailed", "contradicted"])
+    labels_gold_vocab = pa.array(["unknown", "entailed_gold", "contradicted_gold"])
     table = pa.Table.from_arrays(
         [
             pa.DictionaryArray.from_arrays(
@@ -279,8 +305,11 @@ def _write_labels_parquet_from_cm(
             pa.DictionaryArray.from_arrays(
                 pa.array(label_codes), labels_vocab
             ).cast(pa.string()),
+            pa.DictionaryArray.from_arrays(
+                pa.array(label_gold_codes), labels_gold_vocab
+            ).cast(pa.string()),
         ],
-        names=["individual", "class", "label"],
+        names=["individual", "class", "label", "label_gold"],
     )
     pq.write_table(table, str(out_path))
     return {
@@ -290,21 +319,44 @@ def _write_labels_parquet_from_cm(
         "n_entailed": n_entailed,
         "n_unknown": n_unknown,
         "n_contradicted": n_contradicted,
+        "n_entailed_gold": n_entailed_gold,
+        "n_unknown_gold": n_unknown_gold,
+        "n_contradicted_gold": n_contradicted_gold,
     }
 
 
 def render_helis_stats_section(info: Mapping[str, Any]) -> str:
     """Render the Markdown section for B3 ``helis-membership`` in ``dataset_stats.md``."""
     timings = info["timings_sec"]
+
+    def _by_count_desc(d: Mapping[str, int]) -> List[Tuple[str, int]]:
+        return sorted(d.items(), key=lambda kv: (-kv[1], kv[0]))
+
     dropped_tbox_str = ", ".join(
-        f"`{k}`: {v}" for k, v in info["dropped_tbox_by_construct"].items()
+        f"`{k}`: {v}" for k, v in _by_count_desc(info["dropped_tbox_by_construct"])
     )
     dropped_rbox_str = ", ".join(
-        f"`{k}`: {v}" for k, v in info["dropped_rbox_by_construct"].items()
+        f"`{k}`: {v}" for k, v in _by_count_desc(info["dropped_rbox_by_construct"])
     )
     opa_by_prop_str = ", ".join(
-        f"`{k}`: {v:,}" for k, v in info["opa_by_property"].items()
+        f"`{k}`: {v:,}" for k, v in _by_count_desc(info["opa_by_property"])
     )
+    range_unique_str = ", ".join(
+        f"`{k}`: {v:,}"
+        for k, v in _by_count_desc(info["range_assertions_unique_by_class"])
+    )
+    range_added_str = ", ".join(
+        f"`{k}`: {v:,}"
+        for k, v in _by_count_desc(info["range_assertions_added_by_class"])
+    )
+    newly_ent_str = ", ".join(
+        f"`{k}`: {v:,}"
+        for k, v in _by_count_desc(info["newly_entailed_heldout_by_class"])
+    )
+    tr_lbl = info["train_labels_summary"]
+    va_lbl = info["valid_labels"]
+    te_lbl = info["test_labels"]
+
     lines = [
         STATS_SECTION_HEADER,
         "",
@@ -322,34 +374,26 @@ def render_helis_stats_section(info: Mapping[str, Any]) -> str:
         f"| Surviving Disjointness Axioms (`NF2(C₁, C₂, ⊥)`) | {info['n_disjoint_nf2_pairs']:,} pairwise (`91` from 14-way food-group `AllDisjoint` + `1` from `RedMeat ⊓ WhiteMeat ⊑ ⊥`) |",
         f"| Memberships per Split (`train` pos / `valid` / `test`; `train` neg dropped) | {info['n_train_pos']:,} / {info['n_valid']:,} / {info['n_test']:,} (`train` label-`0` dropped: {info['n_train_neg_dropped']:,}) |",
         f"| Object-Property Assertions Kept (`ObjectPropertyAssertion`) | {info['n_object_property_assertions']:,} ({opa_by_prop_str}) |",
-        f"| Training Label Pairs (`train_individual × candidate`, `CanonicalModel` on `ontology.owl`) | {info['train_labels_summary']['n_rows']:,} (`entailed`: {info['train_labels_summary']['n_entailed']:,}, `unknown`: {info['train_labels_summary']['n_unknown']:,}, `contradicted`: {info['train_labels_summary']['n_contradicted']:,}) |",
-        f"| Validation Label Pairs (`labels_valid.parquet`: `valid_individual × candidate`) | {info['valid_labels']['n_rows']:,} (`entailed`: {info['valid_labels']['n_entailed']:,}, `unknown`: {info['valid_labels']['n_unknown']:,}, `contradicted`: {info['valid_labels']['n_contradicted']:,}; w.r.t. ground-truth food-group membership: `contradicted = {info['n_valid_contradicted_with_ground_truth']:,}`) |",
-        f"| Test Label Pairs (`labels_test.parquet`: `test_individual × candidate`) | {info['test_labels']['n_rows']:,} (`entailed`: {info['test_labels']['n_entailed']:,}, `unknown`: {info['test_labels']['n_unknown']:,}, `contradicted`: {info['test_labels']['n_contradicted']:,}; w.r.t. ground-truth food-group membership: `contradicted = {info['n_test_contradicted_with_ground_truth']:,}`) |",
+        f"| Range → ABox Materialisation (`{info['n_object_property_ranges_named']}` named `ObjectPropertyRange`s; `0` role inclusions) | {info['n_range_assertions_raw']:,} raw / {info['n_range_assertions_unique']:,} unique ({range_unique_str}) / {info['n_range_assertions_added']:,} net new added ({range_added_str}; total `ClassAssertion`s in `ontology.owl`: {info['n_total_train_class_assertions']:,}) |",
+        f"| Previously-Unknown Held-Out Pairs Entailed by Range Materialisation (`valid + test`) | {info['n_heldout_newly_entailed_by_ranges']:,} (`valid`: +{info['n_valid_newly_entailed_by_ranges']:,} [{info['n_valid_entailed_before_ranges']:,} → {va_lbl['n_entailed']:,}], `test`: +{info['n_test_newly_entailed_by_ranges']:,} [{info['n_test_entailed_before_ranges']:,} → {te_lbl['n_entailed']:,}]; by class: {newly_ent_str}; gold rows newly entailed: {info['n_heldout_gold_newly_entailed_by_ranges']:,} [`valid`: {info['n_valid_gold_newly_entailed_by_ranges']:,}, `test`: {info['n_test_gold_newly_entailed_by_ranges']:,}]) |",
+        f"| Training Label Pairs (`train_individual × candidate`, KB vs Gold) | {tr_lbl['n_rows']:,} — KB (`label`): `entailed`: {tr_lbl['n_entailed']:,}, `unknown`: {tr_lbl['n_unknown']:,}, `contradicted`: {tr_lbl['n_contradicted']:,}; Gold (`label_gold`): `entailed_gold`: {tr_lbl['n_entailed_gold']:,}, `unknown`: {tr_lbl['n_unknown_gold']:,}, `contradicted_gold`: {tr_lbl['n_contradicted_gold']:,} |",
+        f"| Validation Label Pairs (`labels_valid.parquet`, KB `label` vs Gold `label_gold`) | {va_lbl['n_rows']:,} — KB (`label`): `entailed`: {va_lbl['n_entailed']:,}, `unknown`: {va_lbl['n_unknown']:,}, `contradicted`: {va_lbl['n_contradicted']:,}; Gold (`label_gold`): `entailed_gold`: {va_lbl['n_entailed_gold']:,}, `unknown`: {va_lbl['n_unknown_gold']:,}, `contradicted_gold`: {va_lbl['n_contradicted_gold']:,} |",
+        f"| Test Label Pairs (`labels_test.parquet`, KB `label` vs Gold `label_gold`) | {te_lbl['n_rows']:,} — KB (`label`): `entailed`: {te_lbl['n_entailed']:,}, `unknown`: {te_lbl['n_unknown']:,}, `contradicted`: {te_lbl['n_contradicted']:,}; Gold (`label_gold`): `entailed_gold`: {te_lbl['n_entailed_gold']:,}, `unknown`: {te_lbl['n_unknown_gold']:,}, `contradicted_gold`: {te_lbl['n_contradicted_gold']:,} |",
         f"| Build Time (`total`: `load / tbox_norm / owl_write / cm_build / parquet`) | {timings['total']:.2f} s ({timings['load']:.2f} / {timings['tbox_normalise']:.2f} / {timings['owl_write']:.2f} / {timings['cm_build']:.2f} / {timings['labels_parquet']:.2f} s) |",
         "",
-        "- **Protocol Note (Disjointness & Contradictions across Splits)**: In `helis_v1.00.origin.owl`, each of the `20,318` individuals has a single atomic `ClassAssertion`, partitioned into `14,222` training (`train.csv` label `1`), `2,031` validation (`valid.csv`), and `4,065` test (`test.csv`) individuals. Both TBox disjointness axioms survive normalisation (`91` pairwise `NF2` axioms from the 14-way food-group `AllDisjoint` plus `RedMeat ⊓ WhiteMeat ⊑ ⊥`, covering `121` subclasses of the `16` disjoint food classes). On the training ontology `ontology.owl`, `639` training individuals belong to a food-group subclass and yield `69,722` contradicted `(individual, candidate)` pairs (`cm.assertion_contradicted(a, C) == True`). For held-out `valid.csv` (`2,031` individuals) and `test.csv` (`4,065` individuals), the individual's atomic class assertion is held out from `ontology.owl`; only `106` validation and `210` test individuals (`RECIPE-*`) receive an indirect type (`Recipe ⊑ Food`, which is a superclass of `BasicFood` and therefore compatible with every food group) via `ObjectPropertyDomain(hasRecipeFood, Recipe)`, while `hasNutrient`, `hasFood`, and `contains` have `ObjectUnionOf` domains or `ObjectPropertyRange` axioms that lie outside EL++. Consequently, `CanonicalModel.from_ontology(train_ont)` derives `212` entailed (`106 × {Recipe, Food}`) and `0` contradicted candidate pairs on `valid` (`420` entailed and `0` contradicted on `test`), whereas against the full origin ABox (`inferred_classes.txt` / held-out ground-truth memberships) `92` validation and `185` test food-group individuals produce `9,947` validation and `20,169` test contradicted candidate pairs.",
+        f"- **Protocol Note (Range Materialisation Soundness & Impact)**: All `{info['n_object_property_ranges_named']}` `ObjectPropertyRange` axioms in `helis_v1.00.origin.owl` have a named range class, and HeLiS has no role inclusions (`0` `SubObjectPropertyOf` and `0` `SubPropertyChainOf` axioms). Materialising `R(b)` for every kept `r(a, b)` with named range `R` is therefore sound in EL++ (Baader et al., 2005/2008). Across `{info['n_object_property_assertions']:,}` kept object-property assertions, materialisation produces `{info['n_range_assertions_unique']:,}` distinct `R(b)` assertions (`{info['n_range_assertions_added']:,}` net new `ClassAssertion` axioms not already in `train.csv` positive memberships, bringing `ontology.owl` to `{info['n_total_train_class_assertions']:,}` `ClassAssertion` axioms). On the held-out splits (`valid + test`), range materialisation turns `{info['n_heldout_newly_entailed_by_ranges']:,}` previously-unknown `(individual, candidate)` pairs into `entailed` (`+{info['n_valid_newly_entailed_by_ranges']:,}` on `valid` and `+{info['n_test_newly_entailed_by_ranges']:,}` on `test`; {newly_ent_str}), of which `4,813` are in `skip_{{valid,test}}.tsv` (`Nutrient` / `Food`) and `{info['n_heldout_gold_newly_entailed_by_ranges']:,}` are held-out gold `RecipeFood` rows (`{info['n_valid_gold_newly_entailed_by_ranges']:,}` on `valid`, `{info['n_test_gold_newly_entailed_by_ranges']:,}` on `test`, bringing total KB-entailed held-out gold rows from `{info['n_heldout_gold_entailed_before_ranges']:,}` to `{info['n_heldout_gold_entailed_after_ranges']:,}`).",
+        f"- **Protocol Note (KB Labels `label` vs Gold-Conditional Labels `label_gold`, Spec §3.2 Amendment)**: Every HeLiS individual has a single atomic class assertion in `helis_v1.00.origin.owl`, partitioned into `train.csv` (`{info['n_train_pos']:,}`), `valid.csv` (`{info['n_valid']:,}`), and `test.csv` (`{info['n_test']:,}`). Held-out individuals can receive KB-entailed types `Recipe ⊑ Food`, `RecipeFood`, or `Nutrient` via domain/range materialisation on `hasRecipeFood`, `hasFood`, and `hasNutrient`, all of which are compatible with every food group; consequently, the strictly KB-based `label` column has `contradicted = {va_lbl['n_contradicted']:,}` on `valid` (`entailed = {va_lbl['n_entailed']:,}`, `unknown = {va_lbl['n_unknown']:,}`) and `contradicted = {te_lbl['n_contradicted']:,}` on `test` (`entailed = {te_lbl['n_entailed']:,}`, `unknown = {te_lbl['n_unknown']:,}`), while on `train` `639` food-group individuals yield `{tr_lbl['n_contradicted']:,}` contradicted pairs. Per the Spec §3.2 amendment, `labels_valid.parquet` and `labels_test.parquet` also carry `label_gold` (`entailed_gold` = TBox superclasses of the individual's gold class including itself; `contradicted_gold` = candidates whose conjunction with the gold class is unsatisfiable in the TBox; `unknown` otherwise), giving `entailed_gold = {va_lbl['n_entailed_gold']:,}`, `unknown = {va_lbl['n_unknown_gold']:,}`, `contradicted_gold = {va_lbl['n_contradicted_gold']:,}` on `valid` (`92` food-group individuals) and `entailed_gold = {te_lbl['n_entailed_gold']:,}`, `unknown = {te_lbl['n_unknown_gold']:,}`, `contradicted_gold = {te_lbl['n_contradicted_gold']:,}` on `test` (`185` food-group individuals).",
+        "- **Protocol Note (Constructs Dropped by Normalisation)**: Beyond data-property axioms, `ObjectUnionOf` domains, and `InverseObjectProperties(hasActivity, isActivityOf)`, three axioms with partial EL content are dropped whole by `ELNormalizer` without manual rewriting: (1) `EquivalentClasses(ComposedFood, ObjectIntersectionOf(Food, ObjectSomeValuesFrom(contains, ObjectUnionOf(BasicFood, Dressing))))` (dropped because of the nested `ObjectUnionOf`, so `ComposedFood ⊑ Food` is not in the normalised TBox; `1` training `Soups ⊑ ComposedFood` individual (`FOOD-701358`) instead receives `Food` via `ObjectPropertyRange(hasFood, Food)`), (2) `SubClassOf(Violation, ObjectIntersectionOf(..., ObjectExactCardinality(1, hasViolationRule, MonitoringRule), ObjectExactCardinality(1, hasViolationUser, User)))` (dropped because of `ExactCardinality`), and (3) `1` anonymous ABox assertion `ClassAssertion(ObjectSomeValuesFrom(contains, VegetalOils), FOOD-1514)` (dropped because `ELNormalizer` retains only atomic `ClassAssertion(OWLClass, OWLNamedIndividual)` axioms).",
         "",
     ]
     return "\n".join(lines)
 
 
 def update_dataset_stats_file(stats_path: Path, info: Mapping[str, Any]) -> None:
-    """Append or replace the B3 ``helis-membership`` section in ``stats_path``."""
-    stats_path = Path(stats_path).expanduser().resolve()
-    stats_path.parent.mkdir(parents=True, exist_ok=True)
-    section_md = render_helis_stats_section(info)
-
-    if stats_path.exists():
-        existing = stats_path.read_text(encoding="utf-8")
-        if STATS_SECTION_HEADER in existing:
-            prefix, _ = existing.split(STATS_SECTION_HEADER, 1)
-            updated = prefix.rstrip() + "\n\n" + section_md
-        else:
-            updated = existing.rstrip() + "\n\n" + section_md
-    else:
-        updated = section_md
-
-    stats_path.write_text(updated, encoding="utf-8")
+    """Append or replace only the B3 ``helis-membership`` section in ``stats_path``."""
+    update_stats_section(
+        stats_path, STATS_SECTION_HEADER, render_helis_stats_section(info)
+    )
 
 
 def build_helis(
@@ -357,6 +401,9 @@ def build_helis(
     out_dir: Path = HELIS_OUT_DIR,
     stats_path: Path | None = RESULTS_DIR / "dataset_stats.md",
     repo_mirror_dir: Path | None = HELIS_REPO_DIR,
+    max_train_individuals: int | None = None,
+    max_valid_individuals: int | None = None,
+    max_test_individuals: int | None = None,
 ) -> Dict[str, Any]:
     """Build the B3 ``helis-membership`` ABox benchmark files and return summary metadata."""
     t_start = time.perf_counter()
@@ -389,6 +436,12 @@ def build_helis(
     out_dir = Path(out_dir).expanduser().resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    is_subset = (
+        max_train_individuals is not None
+        or max_valid_individuals is not None
+        or max_test_individuals is not None
+    )
+
     # 1. Verify / extract input tarballs and parse CSV/TXT split files
     t0 = time.perf_counter()
     fetch_meta = fetch_helis(dl_dir=dl_dir)
@@ -419,41 +472,65 @@ def build_helis(
             continue
         ind_iri, cls_iri, label_str = [p.strip() for p in s.split(",")]
         if label_str == "1":
-            train_pos_pairs.append((ind_iri, cls_iri))
+            if (
+                max_train_individuals is None
+                or len(train_pos_pairs) < max_train_individuals
+            ):
+                train_pos_pairs.append((ind_iri, cls_iri))
         elif label_str == "0":
-            n_train_neg_dropped += 1
+            if (
+                max_train_individuals is None
+                or n_train_neg_dropped < max_train_individuals
+            ):
+                n_train_neg_dropped += 1
         else:
             raise ValueError(f"Unexpected label {label_str!r} in train.csv line: {s!r}")
 
-    valid_pairs: List[Tuple[str, str]] = [
+    valid_pairs_all: List[Tuple[str, str]] = [
         tuple(p.strip() for p in line.strip().split(","))  # type: ignore[misc]
         for line in (files_dir / "valid.csv").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    test_pairs: List[Tuple[str, str]] = [
+    test_pairs_all: List[Tuple[str, str]] = [
         tuple(p.strip() for p in line.strip().split(","))  # type: ignore[misc]
         for line in (files_dir / "test.csv").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
 
-    assert len(individuals_txt) == EXPECTED_N_INDIVIDUALS, (
-        f"Expected {EXPECTED_N_INDIVIDUALS} individuals, got {len(individuals_txt)}"
-    )
-    assert len(classes_txt) == EXPECTED_N_CLASSES, (
-        f"Expected {EXPECTED_N_CLASSES} classes, got {len(classes_txt)}"
-    )
-    assert len(train_pos_pairs) == EXPECTED_N_TRAIN_POS, (
-        f"Expected {EXPECTED_N_TRAIN_POS} positive training rows, got {len(train_pos_pairs)}"
-    )
-    assert n_train_neg_dropped == EXPECTED_N_TRAIN_NEG, (
-        f"Expected {EXPECTED_N_TRAIN_NEG} negative training rows, got {n_train_neg_dropped}"
-    )
-    assert len(valid_pairs) == EXPECTED_N_VALID, (
-        f"Expected {EXPECTED_N_VALID} validation rows, got {len(valid_pairs)}"
-    )
-    assert len(test_pairs) == EXPECTED_N_TEST, (
-        f"Expected {EXPECTED_N_TEST} test rows, got {len(test_pairs)}"
-    )
+    if is_subset:
+        n_val_lim = (
+            max_valid_individuals
+            if max_valid_individuals is not None
+            else max(50, (max_train_individuals or 300) // 6)
+        )
+        n_test_lim = (
+            max_test_individuals
+            if max_test_individuals is not None
+            else max(100, (max_train_individuals or 300) // 3)
+        )
+        valid_pairs = valid_pairs_all[:n_val_lim]
+        test_pairs = test_pairs_all[:n_test_lim]
+    else:
+        valid_pairs = valid_pairs_all
+        test_pairs = test_pairs_all
+        assert len(individuals_txt) == EXPECTED_N_INDIVIDUALS, (
+            f"Expected {EXPECTED_N_INDIVIDUALS} individuals, got {len(individuals_txt)}"
+        )
+        assert len(classes_txt) == EXPECTED_N_CLASSES, (
+            f"Expected {EXPECTED_N_CLASSES} classes, got {len(classes_txt)}"
+        )
+        assert len(train_pos_pairs) == EXPECTED_N_TRAIN_POS, (
+            f"Expected {EXPECTED_N_TRAIN_POS} positive training rows, got {len(train_pos_pairs)}"
+        )
+        assert n_train_neg_dropped == EXPECTED_N_TRAIN_NEG, (
+            f"Expected {EXPECTED_N_TRAIN_NEG} negative training rows, got {n_train_neg_dropped}"
+        )
+        assert len(valid_pairs) == EXPECTED_N_VALID, (
+            f"Expected {EXPECTED_N_VALID} validation rows, got {len(valid_pairs)}"
+        )
+        assert len(test_pairs) == EXPECTED_N_TEST, (
+            f"Expected {EXPECTED_N_TEST} test rows, got {len(test_pairs)}"
+        )
 
     candidates = sorted(
         c for c in classes_txt if c not in {OWL_THING_SHORT, OWL_THING_IRI}
@@ -469,6 +546,31 @@ def build_helis(
     orig_tbox_axioms = list(orig_ont.getTBoxAxioms(Imports.fromBoolean(True)))
     orig_rbox_axioms = list(orig_ont.getRBoxAxioms(Imports.fromBoolean(True)))
     orig_abox_axioms = list(orig_ont.getABoxAxioms(Imports.fromBoolean(True)))
+
+    # Verify HeLiS has no role inclusions (so range materialisation is sound in EL++)
+    assert orig_ont.getAxioms(AxiomType.SUB_OBJECT_PROPERTY).size() == 0
+    assert orig_ont.getAxioms(AxiomType.SUB_PROPERTY_CHAIN_OF).size() == 0
+
+    prop_ranges: Dict[str, List[str]] = {}
+    for ax in orig_ont.getAxioms(AxiomType.OBJECT_PROPERTY_RANGE):
+        prop_expr = ax.getProperty()
+        rng_expr = ax.getRange()
+        if not prop_expr.isAnonymous() and not rng_expr.isAnonymous():
+            r_iri = str(prop_expr.asOWLObjectProperty().toStringID())
+            c_iri = str(rng_expr.asOWLClass().toStringID())
+            prop_ranges.setdefault(r_iri, []).append(c_iri)
+    for r_iri in prop_ranges:
+        prop_ranges[r_iri].sort()
+    n_object_property_ranges_named = sum(len(v) for v in prop_ranges.values())
+
+    prop_domains: Dict[str, List[str]] = {}
+    for ax in orig_ont.getAxioms(AxiomType.OBJECT_PROPERTY_DOMAIN):
+        prop_expr = ax.getProperty()
+        dom_expr = ax.getDomain()
+        if not prop_expr.isAnonymous() and not dom_expr.isAnonymous():
+            r_iri = str(prop_expr.asOWLObjectProperty().toStringID())
+            c_iri = str(dom_expr.asOWLClass().toStringID())
+            prop_domains.setdefault(r_iri, []).append(c_iri)
 
     el_norm = ELNormalizer()
     prep_ont = el_norm.preprocess_ontology(orig_ont)
@@ -543,8 +645,15 @@ def build_helis(
 
     # 3. Build training ontology.owl, valid.owl, test.owl, candidates.txt, skip_{valid,test}.tsv
     t0 = time.perf_counter()
+    split_inds: Set[str] = (
+        {i for i, _ in train_pos_pairs}
+        | {i for i, _ in valid_pairs}
+        | {i for i, _ in test_pairs}
+    )
+
     opa_triples: List[Tuple[str, str, str]] = []
     opa_by_prop_counter: Counter[str] = Counter()
+    opa_endpoints: Set[str] = set()
     for ax in orig_ont.getAxioms(AxiomType.OBJECT_PROPERTY_ASSERTION):
         prop_expr = ax.getProperty()
         subj_ind = ax.getSubject()
@@ -557,9 +666,39 @@ def build_helis(
             r_iri = str(prop_expr.asOWLObjectProperty().toStringID())
             s_iri = str(subj_ind.asOWLNamedIndividual().toStringID())
             o_iri = str(obj_ind.asOWLNamedIndividual().toStringID())
+            if is_subset and s_iri not in split_inds and o_iri not in split_inds:
+                continue
             opa_triples.append((r_iri, s_iri, o_iri))
             opa_by_prop_counter[r_iri.rsplit("#", 1)[-1]] += 1
+            opa_endpoints.add(s_iri)
+            opa_endpoints.add(o_iri)
     opa_triples.sort()
+
+    if is_subset:
+        kept_ind_set = split_inds | opa_endpoints
+        individuals_txt = [i for i in individuals_txt if i in kept_ind_set]
+
+    # Materialise ObjectPropertyRange axioms with a named range class:
+    # for every kept r(a, b) with range R, add ClassAssertion R(b) to ontology.owl
+    train_pos_set: Set[Tuple[str, str]] = set(train_pos_pairs)
+    n_range_assertions_raw = 0
+    unique_range_assertions: Set[Tuple[str, str]] = set()
+    for r_iri, _s_iri, o_iri in opa_triples:
+        for rng_cls_iri in prop_ranges.get(r_iri, ()):
+            n_range_assertions_raw += 1
+            unique_range_assertions.add((o_iri, rng_cls_iri))
+
+    range_unique_counter: Counter[str] = Counter()
+    range_added_counter: Counter[str] = Counter()
+    for o_iri, rng_cls_iri in unique_range_assertions:
+        short_cls = rng_cls_iri.rsplit("#", 1)[-1]
+        range_unique_counter[short_cls] += 1
+        if (o_iri, rng_cls_iri) not in train_pos_set:
+            range_added_counter[short_cls] += 1
+
+    n_range_assertions_unique = len(unique_range_assertions)
+    n_range_assertions_added = sum(range_added_counter.values())
+    n_total_train_class_assertions = len(train_pos_set | unique_range_assertions)
 
     n_data_prop_assertions = int(
         orig_ont.getAxioms(AxiomType.DATA_PROPERTY_ASSERTION).size()
@@ -596,6 +735,11 @@ def build_helis(
         train_abox.add(
             train_df.getOWLObjectPropertyAssertionAxiom(prop_obj, subj_obj, obj_obj)
         )
+        for rng_cls_iri in prop_ranges.get(r_iri, ()):
+            rng_cls_obj = train_df.getOWLClass(IRI.create(rng_cls_iri))
+            train_abox.add(
+                train_df.getOWLClassAssertionAxiom(rng_cls_obj, obj_obj)
+            )
     train_mgr.addAxioms(train_ont, train_abox)
 
     def _build_assertions_only_ontology(
@@ -650,69 +794,128 @@ def build_helis(
     _write_skip_tsv(skip_test_path, test_eval_inds, inferred_classes_map)
     t_owl_write = time.perf_counter() - t0
 
-    # 4. Build CanonicalModel on training ontology and compute three-way labels
+    # 4. Build CanonicalModel on TBox and training ontology using public API only
     t0 = time.perf_counter()
-    valid_eval_inds_sorted = sorted(valid_eval_inds)
-    test_eval_inds_sorted = sorted(test_eval_inds)
+    cm_tbox = CanonicalModel.from_normalised(no_train_tbox)
+    disjoint_with = precompute_pairwise_disjoint_table(cm_tbox, candidates)
+    tbox_superclasses = precompute_tbox_superclasses(cm_tbox, candidates)
     cm_train = CanonicalModel.from_ontology(train_ont)
-    disjoint_with = _seed_cm_joint_sat_cache(
-        cm_train,
-        candidates,
-        eval_individuals=valid_eval_inds_sorted + test_eval_inds_sorted,
-    )
     t_cm_build = time.perf_counter() - t0
 
     t0 = time.perf_counter()
+    valid_pairs_sorted = sorted(valid_pairs, key=lambda kv: kv[0])
+    test_pairs_sorted = sorted(test_pairs, key=lambda kv: kv[0])
+    train_pairs_sorted = sorted(train_pos_pairs, key=lambda kv: kv[0])
+
     labels_valid_path = out_dir / "labels_valid.parquet"
     labels_test_path = out_dir / "labels_test.parquet"
 
     valid_labels_meta = _write_labels_parquet_from_cm(
         labels_valid_path,
-        valid_eval_inds_sorted,
+        valid_pairs_sorted,
         candidates,
         cm_train,
+        tbox_superclasses,
+        disjoint_with,
     )
     test_labels_meta = _write_labels_parquet_from_cm(
         labels_test_path,
-        test_eval_inds_sorted,
+        test_pairs_sorted,
         candidates,
         cm_train,
+        tbox_superclasses,
+        disjoint_with,
     )
 
-    # Also compute training-individual label summary from cm_train (where food-group
-    # assertions are present in ontology.owl, verifying > 0 contradicted pairs) and
-    # ground-truth contradiction counts on valid/test splits.
-    train_inds_sorted = sorted({ind for ind, _ in train_pos_pairs})
-    cand_set = set(candidates)
+    # Measure held-out pairs that were unknown before range materialisation and became entailed
+    subj_domain_classes: Dict[str, Set[str]] = {}
+    for r_iri, s_iri, _o_iri in opa_triples:
+        for dom_cls_iri in prop_domains.get(r_iri, ()):
+            subj_domain_classes.setdefault(s_iri, set()).add(dom_cls_iri)
+
+    def _pre_range_entailed_for_holdout(ind_iri: str) -> Set[str]:
+        ent: Set[str] = set()
+        for dom_cls in subj_domain_classes.get(ind_iri, ()):
+            ent.update(tbox_superclasses.get(dom_cls, set()))
+        return ent
+
+    newly_entailed_counter: Counter[str] = Counter()
+    n_valid_ent_before = 0
+    n_valid_gold_before = 0
+    n_valid_gold_after = 0
+    for ind_iri, gold_cls in valid_pairs_sorted:
+        before_ent = _pre_range_entailed_for_holdout(ind_iri)
+        after_ent = {c for c in candidates if cm_train.instance_of(ind_iri, c)}
+        n_valid_ent_before += len(before_ent)
+        if gold_cls in before_ent:
+            n_valid_gold_before += 1
+        if gold_cls in after_ent:
+            n_valid_gold_after += 1
+        for c in after_ent - before_ent:
+            newly_entailed_counter[c.rsplit("#", 1)[-1]] += 1
+
+    n_test_ent_before = 0
+    n_test_gold_before = 0
+    n_test_gold_after = 0
+    for ind_iri, gold_cls in test_pairs_sorted:
+        before_ent = _pre_range_entailed_for_holdout(ind_iri)
+        after_ent = {c for c in candidates if cm_train.instance_of(ind_iri, c)}
+        n_test_ent_before += len(before_ent)
+        if gold_cls in before_ent:
+            n_test_gold_before += 1
+        if gold_cls in after_ent:
+            n_test_gold_after += 1
+        for c in after_ent - before_ent:
+            newly_entailed_counter[c.rsplit("#", 1)[-1]] += 1
+
+    n_valid_newly_entailed = valid_labels_meta["n_entailed"] - n_valid_ent_before
+    n_test_newly_entailed = test_labels_meta["n_entailed"] - n_test_ent_before
+    n_heldout_newly_entailed = n_valid_newly_entailed + n_test_newly_entailed
+    n_valid_gold_newly_entailed = n_valid_gold_after - n_valid_gold_before
+    n_test_gold_newly_entailed = n_test_gold_after - n_test_gold_before
+    n_heldout_gold_newly_entailed = (
+        n_valid_gold_newly_entailed + n_test_gold_newly_entailed
+    )
+
+    # Also compute training-individual label summary (KB and gold-conditional)
     n_train_ent = 0
     n_train_contra = 0
-    for ind_iri in train_inds_sorted:
-        nom = cm_train.individuals[ind_iri]
-        ent_cands = cm_train.completion.sub_super.get(nom, set()) & cand_set
+    n_train_ent_gold = 0
+    n_train_contra_gold = 0
+    for ind_iri, gold_cls in train_pairs_sorted:
+        ent_cands = [c for c in candidates if cm_train.instance_of(ind_iri, c)]
+        ent_set = set(ent_cands)
         contra_cands: Set[str] = set()
         for b in ent_cands:
             contra_cands.update(disjoint_with.get(b, set()))
-        n_train_ent += len(ent_cands)
-        n_train_contra += len(contra_cands - ent_cands)
-    n_train_total_rows = len(train_inds_sorted) * len(candidates)
+        n_train_ent += len(ent_set)
+        n_train_contra += len(contra_cands - ent_set)
+
+        gold_ent_set = tbox_superclasses.get(gold_cls, set())
+        gold_contra_set = disjoint_with.get(gold_cls, set()) - gold_ent_set
+        n_train_ent_gold += len(gold_ent_set)
+        n_train_contra_gold += len(gold_contra_set)
+
+    n_train_total_rows = len(train_pairs_sorted) * len(candidates)
     train_labels_summary = {
         "n_rows": n_train_total_rows,
-        "n_individuals": len(train_inds_sorted),
+        "n_individuals": len(train_pairs_sorted),
         "n_candidates": len(candidates),
         "n_entailed": n_train_ent,
         "n_unknown": n_train_total_rows - n_train_ent - n_train_contra,
         "n_contradicted": n_train_contra,
+        "n_entailed_gold": n_train_ent_gold,
+        "n_unknown_gold": (
+            n_train_total_rows - n_train_ent_gold - n_train_contra_gold
+        ),
+        "n_contradicted_gold": n_train_contra_gold,
     }
     assert train_labels_summary["n_contradicted"] > 0, (
         "Expected > 0 contradicted pairs from food-group disjointness on training ontology"
     )
 
-    n_valid_contra_gt = sum(
-        len(disjoint_with.get(cls_iri, set())) for _, cls_iri in valid_pairs
-    )
-    n_test_contra_gt = sum(
-        len(disjoint_with.get(cls_iri, set())) for _, cls_iri in test_pairs
-    )
+    n_valid_contra_gt = valid_labels_meta["n_contradicted_gold"]
+    n_test_contra_gt = test_labels_meta["n_contradicted_gold"]
     t_parquet = time.perf_counter() - t0
     t_total = time.perf_counter() - t_start
 
@@ -751,6 +954,15 @@ def build_helis(
     )
     opa_by_prop_dict = dict(
         sorted(opa_by_prop_counter.items(), key=lambda kv: (-kv[1], kv[0]))
+    )
+    range_unique_dict = dict(
+        sorted(range_unique_counter.items(), key=lambda kv: (-kv[1], kv[0]))
+    )
+    range_added_dict = dict(
+        sorted(range_added_counter.items(), key=lambda kv: (-kv[1], kv[0]))
+    )
+    newly_entailed_dict = dict(
+        sorted(newly_entailed_counter.items(), key=lambda kv: (-kv[1], kv[0]))
     )
 
     n_norm_nf1 = sum(isinstance(a, NF1) for a in no_tbox.axioms)
@@ -805,6 +1017,36 @@ def build_helis(
             "n_test": len(test_pairs),
             "n_object_property_assertions": len(opa_triples),
             "opa_by_property": opa_by_prop_dict,
+            "n_object_property_ranges_named": n_object_property_ranges_named,
+            "n_range_assertions_raw": n_range_assertions_raw,
+            "n_range_assertions_unique": n_range_assertions_unique,
+            "n_range_assertions_added": n_range_assertions_added,
+            "n_total_train_class_assertions": n_total_train_class_assertions,
+            "range_assertions_unique_by_class": range_unique_dict,
+            "range_assertions_added_by_class": range_added_dict,
+            "n_valid_entailed_before_ranges": n_valid_ent_before,
+            "n_test_entailed_before_ranges": n_test_ent_before,
+            "n_valid_newly_entailed_by_ranges": n_valid_newly_entailed,
+            "n_test_newly_entailed_by_ranges": n_test_newly_entailed,
+            "n_heldout_newly_entailed_by_ranges": n_heldout_newly_entailed,
+            "newly_entailed_heldout_by_class": newly_entailed_dict,
+            "n_valid_gold_newly_entailed_by_ranges": n_valid_gold_newly_entailed,
+            "n_test_gold_newly_entailed_by_ranges": n_test_gold_newly_entailed,
+            "n_heldout_gold_newly_entailed_by_ranges": (
+                n_heldout_gold_newly_entailed
+            ),
+            "n_heldout_gold_entailed_before_ranges": (
+                n_valid_gold_before + n_test_gold_before
+            ),
+            "n_heldout_gold_entailed_after_ranges": (
+                n_valid_gold_after + n_test_gold_after
+            ),
+            "n_valid_entailed_gold": valid_labels_meta["n_entailed_gold"],
+            "n_valid_unknown_gold": valid_labels_meta["n_unknown_gold"],
+            "n_valid_contradicted_gold": valid_labels_meta["n_contradicted_gold"],
+            "n_test_entailed_gold": test_labels_meta["n_entailed_gold"],
+            "n_test_unknown_gold": test_labels_meta["n_unknown_gold"],
+            "n_test_contradicted_gold": test_labels_meta["n_contradicted_gold"],
             "n_valid_contradicted_with_ground_truth": n_valid_contra_gt,
             "n_test_contradicted_with_ground_truth": n_test_contra_gt,
         },
@@ -820,7 +1062,11 @@ def build_helis(
         json.dumps(manifest_data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
 
-    if repo_mirror_dir is not None and out_dir == HELIS_OUT_DIR.resolve():
+    if (
+        repo_mirror_dir is not None
+        and out_dir == HELIS_OUT_DIR.resolve()
+        and not is_subset
+    ):
         repo_mirror_dir = Path(repo_mirror_dir).expanduser().resolve()
         repo_mirror_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(manifest_path, repo_mirror_dir / "manifest.json")
@@ -876,11 +1122,13 @@ def main(argv: List[str] | None = None) -> None:
         f"(individuals={info['n_individuals']}, classes={info['n_classes']}, "
         f"split={info['n_train_pos']}/{info['n_valid']}/{info['n_test']}, "
         f"opas={info['n_object_property_assertions']}, "
-        f"dropped_tbox={info['n_dropped_tbox_axioms']}, "
-        f"disjoint_nf2={info['n_disjoint_nf2_pairs']}, "
+        f"range_added={info['n_range_assertions_added']}, "
+        f"newly_ent={info['n_heldout_newly_entailed_by_ranges']}, "
         f"train_contra={info['train_labels_summary']['n_contradicted']}, "
-        f"valid_contra={info['valid_labels']['n_contradicted']} [gt={info['n_valid_contradicted_with_ground_truth']}], "
-        f"test_contra={info['test_labels']['n_contradicted']} [gt={info['n_test_contradicted_with_ground_truth']}], "
+        f"valid_kb_ent={info['valid_labels']['n_entailed']}, "
+        f"valid_gold=({info['valid_labels']['n_entailed_gold']}/{info['valid_labels']['n_unknown_gold']}/{info['valid_labels']['n_contradicted_gold']}), "
+        f"test_kb_ent={info['test_labels']['n_entailed']}, "
+        f"test_gold=({info['test_labels']['n_entailed_gold']}/{info['test_labels']['n_unknown_gold']}/{info['test_labels']['n_contradicted_gold']}), "
         f"time={t['total']:.2f}s)"
     )
 

@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 from pathlib import Path
 import tarfile
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Sequence
 import urllib.request
 
 from experiments.config import RAW_DATA_ROOT
@@ -81,16 +82,37 @@ def _ensure_tarball(path: Path, url: str, expected_sha256: str) -> Dict[str, Any
     }
 
 
-def _safe_extract_tar(tar_path: Path, dest_dir: Path) -> None:
+ARCHIVE_SHA256_STAMP: str = ".archive_sha256"
+
+
+def _safe_extract_tar(
+    tar_path: Path, dest_dir: Path, archive_sha256: str | None = None
+) -> None:
     """Safely extract ``tar_path`` into ``dest_dir`` preventing path traversal."""
     dest_resolved = dest_dir.resolve()
     dest_resolved.mkdir(parents=True, exist_ok=True)
+    dest_prefix = str(dest_resolved) + os.sep
     with tarfile.open(tar_path, "r:gz") as tf:
         for member in tf.getmembers():
             target = (dest_resolved / member.name).resolve()
-            if not str(target).startswith(str(dest_resolved)):
+            if target != dest_resolved and not str(target).startswith(dest_prefix):
                 raise ValueError(f"Unsafe tar member path {member.name!r} in {tar_path}")
         tf.extractall(path=str(dest_resolved))
+    sha = archive_sha256 if archive_sha256 is not None else compute_sha256(tar_path)
+    (dest_resolved / ARCHIVE_SHA256_STAMP).write_text(f"{sha}\n", encoding="utf-8")
+
+
+def _needs_extraction(
+    dest_dir: Path, expected_relpaths: Sequence[str], archive_sha256: str
+) -> bool:
+    """Return True if any expected file is missing or the recorded archive SHA-256 differs."""
+    if not all((dest_dir / rel).exists() for rel in expected_relpaths):
+        return True
+    stamp_path = dest_dir / ARCHIVE_SHA256_STAMP
+    if not stamp_path.exists():
+        return True
+    recorded = stamp_path.read_text(encoding="utf-8").strip()
+    return recorded != archive_sha256
 
 
 def fetch_helis(dl_dir: Path = HELIS_DL_DIR) -> Dict[str, Any]:
@@ -120,12 +142,12 @@ def fetch_helis(dl_dir: Path = HELIS_DL_DIR) -> Dict[str, Any]:
     files_dir = dl_dir / "files"
     onts_dir = dl_dir / "onts"
 
-    if not all((files_dir / fname).exists() for fname in EXPECTED_EXTRACTED_FILES):
-        _safe_extract_tar(files_tar, files_dir)
+    if _needs_extraction(files_dir, EXPECTED_EXTRACTED_FILES, files_meta["sha256"]):
+        _safe_extract_tar(files_tar, files_dir, archive_sha256=files_meta["sha256"])
 
     origin_owl = onts_dir / EXPECTED_ORIGIN_RELPATH
-    if not origin_owl.exists():
-        _safe_extract_tar(onts_tar, onts_dir)
+    if _needs_extraction(onts_dir, [EXPECTED_ORIGIN_RELPATH], onts_meta["sha256"]):
+        _safe_extract_tar(onts_tar, onts_dir, archive_sha256=onts_meta["sha256"])
 
     for fname in EXPECTED_EXTRACTED_FILES:
         fpath = files_dir / fname

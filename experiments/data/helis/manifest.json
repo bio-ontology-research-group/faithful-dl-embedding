@@ -22,6 +22,10 @@
     "n_dropped_rbox_axioms": 3,
     "n_dropped_tbox_axioms": 77,
     "n_dropped_tbox_rbox_total": 80,
+    "n_heldout_gold_entailed_after_ranges": 732,
+    "n_heldout_gold_entailed_before_ranges": 316,
+    "n_heldout_gold_newly_entailed_by_ranges": 416,
+    "n_heldout_newly_entailed_by_ranges": 5229,
     "n_individuals": 20318,
     "n_norm_nf1": 261,
     "n_norm_nf2": 92,
@@ -29,19 +33,51 @@
     "n_norm_nf4": 13,
     "n_norm_tbox_axioms": 372,
     "n_object_property_assertions": 83210,
+    "n_object_property_ranges_named": 15,
     "n_origin_abox_axioms": 143337,
     "n_origin_rbox_axioms": 3,
     "n_origin_tbox_axioms": 359,
+    "n_range_assertions_added": 16458,
+    "n_range_assertions_raw": 83210,
+    "n_range_assertions_unique": 17460,
     "n_test": 4065,
+    "n_test_contradicted_gold": 20169,
     "n_test_contradicted_with_ground_truth": 20169,
+    "n_test_entailed_before_ranges": 420,
+    "n_test_entailed_gold": 12497,
+    "n_test_gold_newly_entailed_by_ranges": 283,
+    "n_test_newly_entailed_by_ranges": 3470,
+    "n_test_unknown_gold": 1093339,
+    "n_total_train_class_assertions": 30680,
     "n_train_neg_dropped": 14222,
     "n_train_pos": 14222,
     "n_valid": 2031,
+    "n_valid_contradicted_gold": 9947,
     "n_valid_contradicted_with_ground_truth": 9947,
+    "n_valid_entailed_before_ranges": 212,
+    "n_valid_entailed_gold": 6332,
+    "n_valid_gold_newly_entailed_by_ranges": 133,
+    "n_valid_newly_entailed_by_ranges": 1759,
+    "n_valid_unknown_gold": 546308,
+    "newly_entailed_heldout_by_class": {
+      "Food": 81,
+      "Nutrient": 4732,
+      "RecipeFood": 416
+    },
     "opa_by_property": {
       "hasFood": 1418,
       "hasNutrient": 79239,
       "hasRecipeFood": 2553
+    },
+    "range_assertions_added_by_class": {
+      "Food": 262,
+      "Nutrient": 15780,
+      "RecipeFood": 416
+    },
+    "range_assertions_unique_by_class": {
+      "Food": 262,
+      "Nutrient": 15780,
+      "RecipeFood": 1418
     }
   },
   "dataset": "helis",
@@ -69,16 +105,16 @@
       "size_bytes": 15178
     },
     "labels_test.parquet": {
-      "sha256": "25d2342d91a3df65e6cbfc5f51edb4dbb7f4e885315825160e86d4607aece476",
-      "size_bytes": 322119
+      "sha256": "cb0cd69bd5c6650ab8922edcc1bb73750c02ea94946291d55ed97ce21fd8bcb8",
+      "size_bytes": 336541
     },
     "labels_valid.parquet": {
-      "sha256": "ef2d8665535d99ae962da9dee0f4dce862213e3e323f17d36486bf833565dec0",
-      "size_bytes": 162526
+      "sha256": "a814d9f1c2075de4861031ba8c921fa49f44839cc8c3244376fad143b5eee16e",
+      "size_bytes": 170852
     },
     "ontology.owl": {
-      "sha256": "94b5d05ad3541e6f54af32166979fc794f94b9732c96b289bebd70dfaf676829",
-      "size_bytes": 14390854
+      "sha256": "0582c8bb6e954cfe85a251701af9e78665eaf9067e0a55393cfbc142cccfb18b",
+      "size_bytes": 15929058
     },
     "skip_test.tsv": {
       "sha256": "98c4d754ea97f633257e5cff6dbd9483d50d0bac4970d60e943c5d8e23f9d0ae",
@@ -101,33 +137,42 @@
   "test_labels": {
     "n_candidates": 277,
     "n_contradicted": 0,
-    "n_entailed": 420,
+    "n_contradicted_gold": 20169,
+    "n_entailed": 3890,
+    "n_entailed_gold": 12497,
     "n_individuals": 4065,
     "n_rows": 1126005,
-    "n_unknown": 1125585
+    "n_unknown": 1122115,
+    "n_unknown_gold": 1093339
   },
   "timings_sec": {
-    "cm_build": 4.026,
-    "labels_parquet": 6.5613,
-    "load": 1.2327,
-    "owl_write": 3.2229,
-    "tbox_normalise": 0.3461,
-    "total": 17.0639
+    "cm_build": 29.7937,
+    "labels_parquet": 15.2346,
+    "load": 3.3244,
+    "owl_write": 5.3719,
+    "tbox_normalise": 0.3838,
+    "total": 55.8373
   },
   "train_labels_summary": {
     "n_candidates": 277,
     "n_contradicted": 69722,
-    "n_entailed": 43795,
+    "n_contradicted_gold": 69722,
+    "n_entailed": 43796,
+    "n_entailed_gold": 43795,
     "n_individuals": 14222,
     "n_rows": 3939494,
-    "n_unknown": 3825977
+    "n_unknown": 3825976,
+    "n_unknown_gold": 3825977
   },
   "valid_labels": {
     "n_candidates": 277,
     "n_contradicted": 0,
-    "n_entailed": 212,
+    "n_contradicted_gold": 9947,
+    "n_entailed": 1971,
+    "n_entailed_gold": 6332,
     "n_individuals": 2031,
     "n_rows": 562587,
-    "n_unknown": 562375
+    "n_unknown": 560616,
+    "n_unknown_gold": 546308
   }
 }

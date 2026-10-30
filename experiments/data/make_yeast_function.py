@@ -43,6 +43,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from experiments.config import DATA_DIR, RAW_DATA_ROOT, RESULTS_DIR
+from experiments.data.stats_md import update_stats_section
 
 YEAST_RAW_ONTOLOGY_PATH: Path = (
     RAW_DATA_ROOT / "yeast" / "ppi_yeast" / "ontology.owl"
@@ -244,28 +245,9 @@ def update_dataset_stats_file(stats_path: Path, info: Mapping[str, Any]) -> None
     ``## `` header or EOF, preserving all preceding and following sections
     byte-for-byte.
     """
-    stats_path = Path(stats_path).expanduser().resolve()
-    stats_path.parent.mkdir(parents=True, exist_ok=True)
-    section_md = render_yeast_function_stats_section(info)
-
-    if stats_path.exists():
-        existing = stats_path.read_text(encoding="utf-8")
-        start_idx = existing.find(STATS_SECTION_HEADER)
-        if start_idx != -1:
-            prefix = existing[:start_idx]
-            rest = existing[start_idx + len(STATS_SECTION_HEADER) :]
-            next_rel = rest.find("\n## ")
-            if next_rel != -1:
-                suffix = rest[next_rel + 1 :]
-                updated = prefix + section_md.rstrip("\n") + "\n\n" + suffix
-            else:
-                updated = prefix + section_md
-        else:
-            updated = existing.rstrip() + "\n\n" + section_md
-    else:
-        updated = section_md
-
-    stats_path.write_text(updated, encoding="utf-8")
+    update_stats_section(
+        stats_path, STATS_SECTION_HEADER, render_yeast_function_stats_section(info)
+    )
 
 
 def build_yeast_function(
