@@ -6,9 +6,12 @@ from experiments.config import (
     LR_GRID,
     METHODS,
     OBJECTIVE_DATASETS,
+    OBJECTIVE_METHODS,
+    PRISM_METHODS,
     SYNTHETIC_DATASETS,
     methods_for_dataset,
 )
+from experiments import sweep
 
 EXPECTED_ORIGINAL_METHODS = {
     "elbe",
@@ -120,3 +123,20 @@ def test_methods_for_dataset_includes_objectives_and_prisms_where_allowed() -> N
         assert ds_methods.isdisjoint(new_ids), (
             f"Objective/prism methods should not be in {ds!r}"
         )
+
+
+def test_suites_exclude_new_objective_and_prism_ids_except_objectives_suite() -> None:
+    """Verify synthetic/pizza/all suites do NOT include the 32 new ids, while objectives suite owns them."""
+    new_ids = set(OBJECTIVE_METHODS) | set(PRISM_METHODS)
+    assert len(new_ids) == 32
+
+    for old_suite in ("synthetic", "pizza", "real", "abox", "all"):
+        cells = sweep.enumerate_cells(old_suite, smoke=True)
+        suite_methods = {c.method for c in cells}
+        assert suite_methods.isdisjoint(new_ids), (
+            f"Suite {old_suite!r} must not include objective/prism ids, got {suite_methods & new_ids}"
+        )
+
+    obj_cells = sweep.enumerate_cells("objectives", smoke=True)
+    obj_methods = {c.method for c in obj_cells}
+    assert obj_methods == new_ids

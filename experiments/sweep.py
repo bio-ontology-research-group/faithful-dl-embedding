@@ -123,13 +123,28 @@ def enumerate_cells(
             else (3 if smoke else int(DATASET_EPOCHS[ds_name]))
         )
         if methods is not None:
-            ds_methods = list(methods)
+            allowed_for_ds = set(methods_for_dataset(ds_name))
+            ds_methods = []
+            for m_id in methods:
+                if m_id not in METHODS:
+                    raise ValueError(
+                        f"Unknown method {m_id!r}; expected one of {list(METHODS)}"
+                    )
+                if m_id not in allowed_for_ds:
+                    raise ValueError(
+                        f"Method {m_id!r} is not allowed on dataset {ds_name!r}; "
+                        f"allowed methods for {ds_name!r}: {sorted(allowed_for_ds)}"
+                    )
+                ds_methods.append(m_id)
         elif suite == "objectives":
             ds_methods = [
                 m for m in (OBJECTIVE_METHODS + PRISM_METHODS) if m in methods_for_dataset(ds_name)
             ]
         else:
-            ds_methods = methods_for_dataset(ds_name)
+            obj_prism_set = set(OBJECTIVE_METHODS) | set(PRISM_METHODS)
+            ds_methods = [
+                m for m in methods_for_dataset(ds_name) if m not in obj_prism_set
+            ]
 
         for lr_val in lr_list:
             for dim in ds_dims:

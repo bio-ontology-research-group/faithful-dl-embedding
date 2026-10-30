@@ -179,6 +179,25 @@ def _decimals_for_key(metric_key: str) -> int:
     return 4
 
 
+def _infer_effective_dim(cfg: Dict[str, Any]) -> int:
+    """Return ``cfg['effective_dim']`` if present, else infer ``max(d, 3)`` for ``PrismEL`` and ``d`` otherwise."""
+    if cfg.get("effective_dim") is not None:
+        return int(cfg["effective_dim"])
+    d = int(cfg["dim"])
+    m_id = str(cfg.get("method", ""))
+    model_name = str(cfg.get("model") or METHODS.get(m_id, {}).get("model", ""))
+    if model_name == "PrismEL":
+        return max(d, 3)
+    return d
+
+
+def _method_suite_label(m_id: str) -> str:
+    """Return ``'objectives'`` for the 30 objective and 2 prism methods, else ``'baseline'``."""
+    if m_id in OBJECTIVE_METHODS or m_id in PRISM_METHODS:
+        return "objectives"
+    return "baseline"
+
+
 def render_dataset_markdown(
     dataset: str,
     runs: Sequence[Dict[str, Any]],
@@ -189,12 +208,17 @@ def render_dataset_markdown(
 
     by_dim_method: Dict[Tuple[int, str], List[Dict[str, Any]]] = defaultdict(list)
     dims_seen = set()
+    has_nominal_d2_prism = False
     for r in runs:
         cfg = r["config"]
-        d = int(cfg["dim"])
+        nom_d = int(cfg["dim"])
+        eff_d = _infer_effective_dim(cfg)
         m = str(cfg["method"])
-        dims_seen.add(d)
-        by_dim_method[(d, m)].append(r)
+        model_name = str(cfg.get("model") or METHODS.get(m, {}).get("model", ""))
+        if model_name == "PrismEL" and nom_d < 3 and eff_d == 3:
+            has_nominal_d2_prism = True
+        dims_seen.add(eff_d)
+        by_dim_method[(eff_d, m)].append(r)
 
     sorted_dims = sorted(dims_seen)
     method_order = list(METHODS.keys())
@@ -206,6 +230,11 @@ def render_dataset_markdown(
         f"# Results: `{dataset}` ({task})",
         "",
     ]
+    if has_nominal_d2_prism:
+        lines.append(
+            "- Note: prism needs ≥ 3 dims; nominal d=2 cells trained at d=3."
+        )
+        lines.append("")
 
     for dim in sorted_dims:
         lines.append(f"## Dimension `d = {dim}`")
@@ -324,6 +353,7 @@ def render_objectives_markdown(
     grouped: Dict[Tuple[int, float, str], List[Dict[str, Any]]] = defaultdict(list)
     dims_seen = set()
     lrs_seen = set()
+    has_nominal_d2_prism = False
     dirty_exp = any(bool(r.get("env", {}).get("git_dirty_experiments")) for r in runs)
     dirty_mowl = any(bool(r.get("env", {}).get("git_dirty_mowl")) for r in runs)
     exp_hashes = sorted(
@@ -335,12 +365,16 @@ def render_objectives_markdown(
 
     for r in runs:
         cfg = r["config"]
-        d = int(cfg["dim"])
+        nom_d = int(cfg["dim"])
+        eff_d = _infer_effective_dim(cfg)
         lr = float(cfg.get("lr", cfg.get("learning_rate", 0.001)))
         m_id = str(cfg["method"])
-        dims_seen.add(d)
+        model_name = str(cfg.get("model") or METHODS.get(m_id, {}).get("model", ""))
+        if model_name == "PrismEL" and nom_d < 3 and eff_d == 3:
+            has_nominal_d2_prism = True
+        dims_seen.add(eff_d)
         lrs_seen.add(lr)
-        grouped[(d, lr, m_id)].append(r)
+        grouped[(eff_d, lr, m_id)].append(r)
 
     method_order = list(METHODS.keys())
     for _, _, m_id in sorted(grouped.keys()):
@@ -355,10 +389,19 @@ def render_objectives_markdown(
         f"- Provenance: `experiments` `{','.join(exp_hashes) or 'n/a'}` ({exp_flag}), "
         f"`mowl` `{','.join(mowl_hashes) or 'n/a'}` ({mowl_flag}).",
         "- Margin semantics: `Mod strict` evaluates GCI losses at `margin = 0`; `Mod@γ` evaluates at the training margin `γ` (`relaxing` for Box²EL/MultiBoxEL, `tightening` for ELBE/MultiELBE/PrismEL).",
-        "",
-        "| method | backbone | k | objective | lr | d | Mod strict | Mod@γ | point-Mod (pos/hardneg) | HVR | Deg | eff-k | seeds n/k |",
-        "|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "- Suite membership: the `suite` column distinguishes `objectives` methods (30 objective-grid methods + `prism`/`prism-init`) from `baseline` 10-29 methods.",
     ]
+    if has_nominal_d2_prism:
+        lines.append(
+            "- Prism dimension note (*): prism needs ≥ 3 dims; nominal d=2 cells trained at d=3."
+        )
+    lines.extend(
+        [
+            "",
+            "| method | suite | backbone | k | objective | lr | d | Mod strict | Mod@γ | point-Mod (pos/hardneg) | HVR | Deg | eff-k | seeds n/k |",
+            "|---|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
 
     for dim in sorted(dims_seen):
         for lr in sorted(lrs_seen):
@@ -368,6 +411,7 @@ def render_objectives_markdown(
                     continue
                 cfg0 = cell_runs[0]["config"]
                 spec = METHODS.get(m_id, {})
+                suite_label = _method_suite_label(m_id)
                 backbone = str(
                     cfg0.get("backbone")
                     or spec.get("backbone")
@@ -412,6 +456,7 @@ def render_objectives_markdown(
 
                 row = [
                     f"`{m_id}`",
+                    suite_label,
                     backbone,
                     k_val,
                     obj_val,
@@ -427,6 +472,9 @@ def render_objectives_markdown(
                 ]
                 lines.append("| " + " | ".join(row) + " |")
 
+    if has_nominal_d2_prism:
+        lines.append("")
+        lines.append("*Footnote: prism needs ≥ 3 dims; nominal d=2 cells trained at d=3.*")
     lines.append("")
     return "\n".join(lines)
 
@@ -451,6 +499,7 @@ def write_all_runs_csv(runs: Sequence[Dict[str, Any]], csv_path: Path) -> None:
         "lr",
         "learning_rate",
         "dim",
+        "effective_dim",
         "seed",
         "epochs",
         "batch_size",
@@ -498,7 +547,10 @@ def write_all_runs_csv(runs: Sequence[Dict[str, Any]], csv_path: Path) -> None:
             env = r.get("env", {})
             row: Dict[str, Any] = {"source_file": r.get("_source_file", "")}
             for k in config_fields:
-                row[k] = cfg.get(k)
+                if k == "effective_dim" and cfg.get("effective_dim") is None and "dim" in cfg:
+                    row[k] = _infer_effective_dim(cfg)
+                else:
+                    row[k] = cfg.get(k)
             for k in metric_fields:
                 row[k] = m.get(k)
             for k in timing_fields:

@@ -17,6 +17,8 @@ from experiments.config import (
     DATASET_SEEDS,
     EXPERIMENTS_DIR,
     METHODS,
+    OBJECTIVE_METHODS,
+    PRISM_METHODS,
     SUBSUMPTION_DATASETS,
     SYNTHETIC_DATASETS,
     methods_for_dataset,
@@ -180,29 +182,44 @@ def test_sweep_dry_run_lists_all_cells(scratch_dir: Path) -> None:
     assert "canonical-mixture" not in methods_for_dataset("pizza")
     assert "canonical-mixture" not in methods_for_dataset("tk3")
 
+    obj_prism_set = set(OBJECTIVE_METHODS) | set(PRISM_METHODS)
+
     def _expected_count(ds_list: List[str], smoke: bool = False) -> int:
         total = 0
         for d in ds_list:
-            n_m = len(methods_for_dataset(d))
+            n_m = len([m for m in methods_for_dataset(d) if m not in obj_prism_set])
             n_dims = len(DATASET_DIMS[d])
             n_seeds = 1 if smoke else len(DATASET_SEEDS[d])
             total += n_m * n_dims * n_seeds
         return total
 
     cells_syn = sweep.enumerate_cells("synthetic", smoke=False)
-    assert len(cells_syn) == _expected_count(SYNTHETIC_DATASETS, smoke=False) == 43 * 4 * 2 * 3
+    assert len(cells_syn) == _expected_count(SYNTHETIC_DATASETS, smoke=False) == 11 * 4 * 2 * 3
+    assert all(c.method not in obj_prism_set for c in cells_syn)
 
     cells_pizza = sweep.enumerate_cells("pizza", smoke=False)
-    assert len(cells_pizza) == _expected_count(["pizza"], smoke=False) == 44 * 1 * 1 * 3
+    assert len(cells_pizza) == _expected_count(["pizza"], smoke=False) == 12 * 1 * 1 * 3
+    assert all(c.method not in obj_prism_set for c in cells_pizza)
 
     cells_real = sweep.enumerate_cells("real", smoke=False)
     assert len(cells_real) == _expected_count(["go", "foodon"], smoke=False) == 11 * 2 * 1 * 3
 
     cells_all = sweep.enumerate_cells("all", smoke=False)
     assert len(cells_all) == _expected_count(DATASETS, smoke=False)
+    assert all(c.method not in obj_prism_set for c in cells_all)
 
     cells_smoke = sweep.enumerate_cells("all", smoke=True)
     assert len(cells_smoke) == _expected_count(DATASETS, smoke=True)
+
+    cells_obj = sweep.enumerate_cells("objectives", smoke=False)
+    assert len(cells_obj) == 32 * 4 * 2 * 3 * 2
+    assert {c.method for c in cells_obj} == obj_prism_set
+
+    # Disallowed --methods override for a dataset raises a clear ValueError
+    with pytest.raises(ValueError, match="not allowed on dataset 'go'"):
+        sweep.enumerate_cells("real", datasets=["go"], methods=["prism"])
+    with pytest.raises(ValueError, match="not allowed on dataset 'tk3'"):
+        sweep.enumerate_cells("synthetic", datasets=["tk3"], methods=["box2el-milp"])
 
     # Also test CLI --dry-run does not execute training or write files
     out_dir = scratch_dir / "dry_out"
@@ -564,50 +581,94 @@ def test_run_lr_filename_and_objectives_table(scratch_dir: Path) -> None:
     assert run.run_filename("tk3", "multibox-k2-point", 2, 0) == "tk3__multibox-k2-point__d2__s0.json"
     assert run.run_filename("tk3", "multibox-k2-point", 2, 0, lr=0.001) == "tk3__multibox-k2-point__d2__s0.json"
     assert run.run_filename("tk3", "multibox-k2-point", 2, 0, lr=0.01) == "tk3__multibox-k2-point__d2__s0__lr0.01.json"
+    assert (
+        run.run_filename("tk3", "multibox-k2", 2, 0, objective="point")
+        == "tk3__multibox-k2__d2__s0__obj-point.json"
+    )
+    assert (
+        run.run_filename("tk3", "multibox-k2", 2, 0, lr=0.01, objective="mixed")
+        == "tk3__multibox-k2__d2__s0__lr0.01__obj-mixed.json"
+    )
 
-    for method, lr in (("multibox-k2-point", "0.001"), ("multibox-k2-point", "0.01"), ("prism", "0.001")):
-        rc = run.main(
-            [
-                "--dataset",
-                "tk3",
-                "--method",
-                method,
-                "--dim",
-                "2",
-                "--seed",
-                "0",
-                "--epochs",
-                "2",
-                "--lr",
-                lr,
-                "--device",
-                "cpu",
-                "--out",
-                str(raw_dir),
-                "--runs-dir",
-                str(ckpts_dir),
-            ]
-        )
+    for method, lr, obj_override in (
+        ("multibox-k2-point", "0.001", None),
+        ("multibox-k2-point", "0.01", None),
+        ("multibox-k2-softdiv", "0.001", None),
+        ("prism", "0.001", None),
+        ("multibox-k2", "0.001", "point"),
+    ):
+        argv = [
+            "--dataset",
+            "tk3",
+            "--method",
+            method,
+            "--dim",
+            "2",
+            "--seed",
+            "0",
+            "--epochs",
+            "2",
+            "--lr",
+            lr,
+            "--device",
+            "cpu",
+            "--out",
+            str(raw_dir),
+            "--runs-dir",
+            str(ckpts_dir),
+        ]
+        if obj_override is not None:
+            argv.extend(["--objective", obj_override])
+        rc = run.main(argv)
         assert rc in (0, None)
 
     p_default = raw_dir / "tk3__multibox-k2-point__d2__s0.json"
     p_lr01 = raw_dir / "tk3__multibox-k2-point__d2__s0__lr0.01.json"
+    p_softdiv = raw_dir / "tk3__multibox-k2-softdiv__d2__s0.json"
     p_prism = raw_dir / "tk3__prism__d2__s0.json"
+    p_obj_override = raw_dir / "tk3__multibox-k2__d2__s0__obj-point.json"
     assert p_default.exists()
     assert p_lr01.exists()
+    assert p_softdiv.exists()
     assert p_prism.exists()
+    assert p_obj_override.exists()
 
     j_point = json.loads(p_lr01.read_text(encoding="utf-8"))
     assert j_point["config"]["lr"] == pytest.approx(0.01)
+    assert j_point["config"]["dim"] == 2
+    assert j_point["config"]["effective_dim"] == 2
     assert j_point["config"]["objective"] == "point"
-    assert "tau_start" in j_point["config"]
-    assert "diversity_reg" in j_point["config"]
+    assert j_point["config"]["tau_start"] == pytest.approx(1.0)
+    assert j_point["config"]["tau_end"] == pytest.approx(0.05)
+    assert j_point["config"]["tau_anneal"] is False
+    assert j_point["config"]["diversity_reg"] == pytest.approx(0.0)
     pm = j_point["metrics"]["point_modelness"]
     assert isinstance(pm, dict)
     assert "pos_frac" in pm and "hardneg_frac" in pm
 
+    j_softdiv = json.loads(p_softdiv.read_text(encoding="utf-8"))
+    assert j_softdiv["config"]["component_aggregation"] == "soft"
+    assert j_softdiv["config"]["tau_anneal"] is True
+    assert j_softdiv["config"]["tau_schedule"] == {
+        "tau_start": 1.0,
+        "tau_end": 0.05,
+        "tau_anneal": True,
+    }
+    assert j_softdiv["config"]["diversity_reg"] == pytest.approx(0.1)
+
     j_prism = json.loads(p_prism.read_text(encoding="utf-8"))
+    assert j_prism["config"]["dim"] == 2
+    assert j_prism["config"]["effective_dim"] == 3
+    assert j_prism["config"]["tau_start"] is None
+    assert j_prism["config"]["tau_end"] is None
+    assert j_prism["config"]["tau_anneal"] is None
+    assert j_prism["config"]["tau_schedule"] is None
     assert j_prism["metrics"]["point_modelness"] is None
+
+    # Also test older prism JSON without effective_dim key -> aggregate infers effective_dim=3
+    legacy_prism = json.loads(p_prism.read_text(encoding="utf-8"))
+    del legacy_prism["config"]["effective_dim"]
+    assert aggregate._infer_effective_dim(legacy_prism["config"]) == 3
 
     rc_agg = aggregate.main(
         [
@@ -625,6 +686,7 @@ def test_run_lr_filename_and_objectives_table(scratch_dir: Path) -> None:
     text = obj_table.read_text(encoding="utf-8")
     for col in (
         "method",
+        "suite",
         "backbone",
         "k",
         "objective",
@@ -639,6 +701,25 @@ def test_run_lr_filename_and_objectives_table(scratch_dir: Path) -> None:
         "seeds n/k",
     ):
         assert col in text
+
+    # Verify lr 0.001 and 0.01 produce separate rows for multibox-k2-point at d=2
+    mb_point_rows = [
+        line for line in text.splitlines() if line.startswith("| `multibox-k2-point` |")
+    ]
+    assert len(mb_point_rows) == 2
+    assert any("| `multibox-k2-point` | objectives | multibox | 2 | point | 0.001 | 2 |" in r for r in mb_point_rows)
+    assert any("| `multibox-k2-point` | objectives | multibox | 2 | point | 0.01 | 2 |" in r for r in mb_point_rows)
+
+    # Verify prism trained at nominal d=2 appears under d=3 with the footnote
+    prism_rows = [line for line in text.splitlines() if line.startswith("| `prism` |")]
+    assert len(prism_rows) == 1
+    assert "| `prism` | objectives | prism | 1 | axiom | 0.001 | 3 |" in prism_rows[0]
+    assert "prism needs ≥ 3 dims; nominal d=2 cells trained at d=3" in text
+
+    # Verify baseline method (multibox-k2) has suite 'baseline'
+    baseline_rows = [line for line in text.splitlines() if line.startswith("| `multibox-k2` |")]
+    assert len(baseline_rows) == 1
+    assert "| `multibox-k2` | baseline |" in baseline_rows[0]
 
 
 

@@ -461,7 +461,14 @@ def _supports_to_center_inradius(h: Tuple[float, float, float]) -> Tuple[Tuple[f
 
 
 def test_helly_metrics_prism_exact_t3_zero(t3_bundle: DatasetBundle) -> None:
-    """Verify PrismRegion and helly_metrics on the exact T3 prism configuration achieve HVR 0 and Deg 0."""
+    """Verify PrismRegion and helly_metrics on the exact T3 prism configuration achieve HVR 0 and Deg 0.
+
+    Degeneracy threshold rule (Task 6 dispatch):
+    - A prism region is degenerate iff ``sum(supports) <= deg_eps`` (where ``sum(supports) = 3 * r_in``,
+      so ``r_in <= deg_eps / 3``, corresponding to ``sum(supports) <= 1e-3 * 3`` when scaled by 3
+      relative to inradius) or any box side ``(upper - lower) <= deg_eps`` (``side <= 1e-3``,
+      whereas standalone box models test half-side ``offset <= deg_eps``).
+    """
     from mowl.models import PrismEL
     from experiments.metrics import PrismRegion
 
@@ -482,6 +489,28 @@ def test_helly_metrics_prism_exact_t3_zero(t3_bundle: DatasetBundle) -> None:
     assert not p1.is_empty() and not p1.is_degenerate()
     assert not p2.is_empty() and not p2.is_degenerate()
     assert not p3.is_empty() and not p3.is_degenerate()
+
+    # Degeneracy boundary checks: sum(supports) <= 1e-3 or box side (upper - lower) <= 1e-3
+    deg_tri = PrismRegion(
+        supports=np.array([[1e-3 / 3.0, 1e-3 / 3.0, 1e-3 / 3.0]]),
+        lower=np.zeros((1, 2)),
+        upper=np.ones((1, 2)),
+    )
+    assert deg_tri.is_degenerate(deg_eps=1e-3)
+    nondeg_tri = PrismRegion(
+        supports=np.array([[1e-3, 1e-3, 1e-3]]),  # sum = 3e-3 > 1e-3
+        lower=np.zeros((1, 2)),
+        upper=np.ones((1, 2)),
+    )
+    assert not nondeg_tri.is_degenerate(deg_eps=1e-3)
+    assert nondeg_tri.is_degenerate(deg_eps=1e-3 * 3.0)
+
+    deg_box = PrismRegion(
+        supports=np.array([[1.0, 1.0, 1.0]]),
+        lower=np.zeros((1, 2)),
+        upper=np.array([[1e-3, 1.0]]),  # side <= 1e-3
+    )
+    assert deg_box.is_degenerate(deg_eps=1e-3)
 
     # Pairwise non-empty
     assert not p1.intersect(p2).is_empty()

@@ -245,12 +245,16 @@ def run_filename(
     dim: int,
     seed: int,
     lr: Optional[float] = None,
+    objective: Optional[str] = None,
 ) -> str:
-    """Return canonical JSON filename ``{dataset}__{method}__d{dim}__s{seed}[__lr{lr}].json``."""
+    """Return canonical JSON filename ``{dataset}__{method}__d{dim}__s{seed}[__lr{lr}][__obj-{objective}].json``."""
     default_lr = float(DEFAULT_HYPERPARAMS["learning_rate"])
-    if lr is None or abs(float(lr) - default_lr) <= 1e-12:
-        return f"{dataset}__{method}__d{dim}__s{seed}.json"
-    return f"{dataset}__{method}__d{dim}__s{seed}__lr{float(lr):g}.json"
+    stem = f"{dataset}__{method}__d{dim}__s{seed}"
+    if lr is not None and abs(float(lr) - default_lr) > 1e-12:
+        stem += f"__lr{float(lr):g}"
+    if objective is not None:
+        stem += f"__obj-{objective}"
+    return f"{stem}.json"
 
 
 def _resolve_certificates(
@@ -661,7 +665,9 @@ def execute_run(
 
     runs_dir = Path(runs_dir).expanduser().resolve()
     runs_dir.mkdir(parents=True, exist_ok=True)
-    json_fname = run_filename(dataset, method, dim, seed, lr=resolved_lr)
+    json_fname = run_filename(
+        dataset, method, dim, seed, lr=resolved_lr, objective=objective
+    )
     ckpt_path = runs_dir / f"{Path(json_fname).stem}.pt"
 
     margin = float(DEFAULT_HYPERPARAMS["margin"])
@@ -883,19 +889,54 @@ def execute_run(
     }
 
     mod_obj = getattr(model, "module", model)
-    tau_start_val = float(getattr(mod_obj, "tau_start", 1.0))
-    tau_end_val = float(getattr(mod_obj, "tau_end", 0.05))
-    tau_anneal_val = bool(
-        getattr(mod_obj, "tau_anneal", METHODS[method].get("tau_anneal", False))
+    effective_dim_val = int(
+        getattr(
+            model,
+            "embed_dim",
+            getattr(
+                mod_obj,
+                "embed_dim",
+                max(int(dim), 3) if METHODS[method]["model"] == "PrismEL" else int(dim),
+            ),
+        )
+    )
+    has_tau = hasattr(model, "tau_start") and hasattr(model, "tau_end")
+    tau_start_val: Optional[float] = (
+        float(getattr(model, "tau_start")) if has_tau else None
+    )
+    tau_end_val: Optional[float] = (
+        float(getattr(model, "tau_end")) if has_tau else None
+    )
+    tau_anneal_val: Optional[bool] = (
+        bool(getattr(model, "tau_anneal", METHODS[method].get("tau_anneal", False)))
+        if has_tau
+        else None
+    )
+    tau_schedule_val: Optional[Dict[str, Any]] = (
+        {
+            "tau_start": tau_start_val,
+            "tau_end": tau_end_val,
+            "tau_anneal": tau_anneal_val,
+        }
+        if has_tau
+        else None
     )
     diversity_reg_val = float(
-        getattr(mod_obj, "diversity_reg", METHODS[method].get("diversity_reg", 0.0))
+        getattr(
+            model,
+            "diversity_reg",
+            getattr(mod_obj, "diversity_reg", METHODS[method].get("diversity_reg", 0.0)),
+        )
     )
     comp_agg_val = str(
         getattr(
-            mod_obj,
+            model,
             "component_aggregation",
-            METHODS[method].get("component_aggregation", "hard"),
+            getattr(
+                mod_obj,
+                "component_aggregation",
+                METHODS[method].get("component_aggregation", "hard"),
+            ),
         )
     )
 
@@ -929,19 +970,18 @@ def execute_run(
         "anchor_weight": float(method_spec["anchor_weight"]),
         "objective": str(effective_objective),
         "objective_variant": str(
-            method_spec.get("objective_variant", effective_objective)
+            effective_objective
+            if objective is not None
+            else method_spec.get("objective_variant", effective_objective)
         ),
         "component_aggregation": comp_agg_val,
         "tau_start": tau_start_val,
         "tau_end": tau_end_val,
         "tau_anneal": tau_anneal_val,
-        "tau_schedule": {
-            "tau_start": tau_start_val,
-            "tau_end": tau_end_val,
-            "tau_anneal": tau_anneal_val,
-        },
+        "tau_schedule": tau_schedule_val,
         "diversity_reg": diversity_reg_val,
         "dim": int(dim),
+        "effective_dim": int(effective_dim_val),
         "seed": int(seed),
         "epochs": int(resolved_epochs),
         "validate_every": 50 if bundle.task == "abox" else int(validate_every),
