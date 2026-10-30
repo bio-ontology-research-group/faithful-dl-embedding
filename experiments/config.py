@@ -221,6 +221,7 @@ _OBJECTIVE_KWARGS_MAP: Dict[str, Dict[str, Any]] = {
     "softdiv": {"component_aggregation": "soft", "tau_anneal": True, "diversity_reg": 0.1},
     "point": {"objective": "point"},
     "mixed": {"objective": "mixed"},
+    "hybrid": {"objective": "hybrid"},
 }
 
 OBJECTIVE_METHODS: List[str] = []

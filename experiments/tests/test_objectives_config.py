@@ -33,7 +33,7 @@ EXPECTED_OBJECTIVE_IDS = [
     f"{backbone}-k{k}-{obj}"
     for backbone in ("multibox", "multielbe")
     for k in (1, 2, 3)
-    for obj in ("axiom", "soft", "softdiv", "point", "mixed")
+    for obj in ("axiom", "soft", "softdiv", "point", "mixed", "hybrid")
 ]
 
 
@@ -58,8 +58,8 @@ def test_existing_methods_untouched() -> None:
 
 
 def test_objective_method_id_scheme_and_kwargs() -> None:
-    """Verify all 30 programmatic objective method ids and their exact kwargs."""
-    assert len(EXPECTED_OBJECTIVE_IDS) == 30
+    """Verify all 36 programmatic objective method ids and their exact kwargs."""
+    assert len(EXPECTED_OBJECTIVE_IDS) == 36
     expected_obj_kwargs = {
         "axiom": {},
         "soft": {"component_aggregation": "soft", "tau_anneal": True},
@@ -70,6 +70,7 @@ def test_objective_method_id_scheme_and_kwargs() -> None:
         },
         "point": {"objective": "point"},
         "mixed": {"objective": "mixed"},
+        "hybrid": {"objective": "hybrid"},
     }
 
     for backbone, model_name in (("multibox", "MultiBoxEL"), ("multielbe", "MultiELBE")):
@@ -112,7 +113,7 @@ def test_prism_methods_config() -> None:
 def test_methods_for_dataset_includes_objectives_and_prisms_where_allowed() -> None:
     """Verify objective ids and prism/prism-init are allowed on synthetic, pizza, and abox datasets only."""
     new_ids = set(EXPECTED_OBJECTIVE_IDS) | {"prism", "prism-init"}
-    assert len(new_ids) == 32
+    assert len(new_ids) == 38
 
     for ds in OBJECTIVE_DATASETS + ["pizza"] + ABOX_DATASETS:
         ds_methods = set(methods_for_dataset(ds))
@@ -126,9 +127,9 @@ def test_methods_for_dataset_includes_objectives_and_prisms_where_allowed() -> N
 
 
 def test_suites_exclude_new_objective_and_prism_ids_except_objectives_suite() -> None:
-    """Verify synthetic/pizza/all suites do NOT include the 32 new ids, while objectives suite owns them."""
+    """Verify synthetic/pizza/all suites do NOT include the 38 new ids, while objectives suite owns them."""
     new_ids = set(OBJECTIVE_METHODS) | set(PRISM_METHODS)
-    assert len(new_ids) == 32
+    assert len(new_ids) == 38
 
     for old_suite in ("synthetic", "pizza", "real", "abox", "all"):
         cells = sweep.enumerate_cells(old_suite, smoke=True)

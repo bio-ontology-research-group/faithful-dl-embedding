@@ -170,9 +170,9 @@ def test_run_smoke_tk3_multibox_k2_cpu(scratch_dir: Path) -> None:
 
 def test_sweep_dry_run_lists_all_cells(scratch_dir: Path) -> None:
     """Verify sweep dry-run enumerates methods_for_dataset(d) x datasets x dims x seeds for every suite."""
-    assert len(METHODS) >= 45
-    assert len(methods_for_dataset("tk3")) == 43
-    assert len(methods_for_dataset("pizza")) == 44
+    assert len(METHODS) >= 51
+    assert len(methods_for_dataset("tk3")) == 49
+    assert len(methods_for_dataset("pizza")) == 50
     assert len(methods_for_dataset("go")) == 11
     assert "box2el-milp" in methods_for_dataset("pizza")
     assert "box2el-milp" not in methods_for_dataset("tk3")
@@ -212,7 +212,7 @@ def test_sweep_dry_run_lists_all_cells(scratch_dir: Path) -> None:
     assert len(cells_smoke) == _expected_count(DATASETS, smoke=True)
 
     cells_obj = sweep.enumerate_cells("objectives", smoke=False)
-    assert len(cells_obj) == 32 * 4 * 2 * 3 * 2
+    assert len(cells_obj) == 38 * 4 * 2 * 3 * 2
     assert {c.method for c in cells_obj} == obj_prism_set
 
     # Disallowed --methods override for a dataset raises a clear ValueError
