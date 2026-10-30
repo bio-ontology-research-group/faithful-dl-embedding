@@ -338,22 +338,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     n_failed = 0
     t_sweep0 = time.monotonic()
 
-    oom_types = tuple(
-        t
-        for t in (
-            getattr(torch, "OutOfMemoryError", None),
-            getattr(torch.cuda, "OutOfMemoryError", None),
-        )
-        if isinstance(t, type) and issubclass(t, BaseException)
-    )
-
-    def _is_oom(exc: BaseException) -> bool:
-        if oom_types and isinstance(exc, oom_types):
-            return True
-        if isinstance(exc, RuntimeError) and "out of memory" in str(exc).lower():
-            return True
-        return False
-
     for idx, cell in enumerate(cells, start=1):
         target_json = out_dir / cell.filename
         if target_json.exists() and not args.force:
@@ -361,93 +345,71 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             _log(f"[{idx:3d}/{len(cells):3d}] SKIP {cell.filename} (exists)")
             continue
 
-        t_cell0 = time.monotonic()
-        eff_bs = int(DEFAULT_HYPERPARAMS["batch_size"])
-        oom_retries = 0
-        max_oom_retries = 3
-        payload = None
+        try:
+            if cell.dataset != current_ds_name:
+                if current_bundle is not None:
+                    setattr(current_bundle, "_subsumption_evaluator", None)
+                    setattr(current_bundle, "_normalized_gcis_cache", None)
+                    setattr(current_bundle, "_exact_box_init_cache", None)
+                current_ds_name = None
+                current_bundle = None
+                current_cm = None
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
-        while True:
-            try:
-                if cell.dataset != current_ds_name:
-                    if current_bundle is not None:
-                        setattr(current_bundle, "_subsumption_evaluator", None)
-                        setattr(current_bundle, "_normalized_gcis_cache", None)
-                        setattr(current_bundle, "_exact_box_init_cache", None)
-                    current_bundle = None
-                    current_cm = None
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-
-                    t_ds0 = time.monotonic()
-                    current_bundle = load_dataset(cell.dataset)
-                    current_cm = get_canonical_model(current_bundle)
-                    current_ds_name = cell.dataset
-                    _log(
-                        f"Loaded dataset={cell.dataset} and CanonicalModel "
-                        f"({len(current_cm.names)} names) in {time.monotonic() - t_ds0:.2f}s"
-                    )
-
-                payload = execute_run(
-                    dataset=cell.dataset,
-                    method=cell.method,
-                    dim=cell.dim,
-                    seed=cell.seed,
-                    epochs=cell.epochs,
-                    batch_size=eff_bs,
-                    learning_rate=cell.lr,
-                    lr=cell.lr,
-                    device=resolved_device,
-                    out_dir=out_dir,
-                    runs_dir=args.runs_dir,
-                    bundle=current_bundle,
-                    cm=current_cm,
-                )
-                break
-            except Exception as exc:
-                torch.cuda.empty_cache()
-                if _is_oom(exc) and oom_retries < max_oom_retries and eff_bs > 1:
-                    oom_retries += 1
-                    eff_bs = max(1, eff_bs // 2)
-                    first_line = (str(exc).splitlines() or [""])[0]
-                    _log(
-                        f"[{idx:3d}/{len(cells):3d}] OOM RETRY {oom_retries}/{max_oom_retries} "
-                        f"{cell.filename} | eff_bs={eff_bs} | {type(exc).__name__}: {first_line}"
-                    )
-                    continue
-
-                n_failed += 1
-                first_line = (str(exc).splitlines() or [""])[0]
-                tb_str = traceback.format_exc()
+                t_ds0 = time.monotonic()
+                current_bundle = load_dataset(cell.dataset)
+                current_cm = get_canonical_model(current_bundle)
+                current_ds_name = cell.dataset
                 _log(
-                    f"[{idx:3d}/{len(cells):3d}] FAILED {cell.filename} | "
-                    f"{type(exc).__name__}: {first_line}"
+                    f"Loaded dataset={cell.dataset} and CanonicalModel "
+                    f"({len(current_cm.names)} names) in {time.monotonic() - t_ds0:.2f}s"
                 )
-                with log_path.open("a", encoding="utf-8") as lf:
-                    lf.write(tb_str if tb_str.endswith("\n") else tb_str + "\n")
 
-                failed_path = out_dir / f"{cell.filename}.failed.json"
-                failed_payload = {
-                    "dataset": cell.dataset,
-                    "method": cell.method,
-                    "dim": cell.dim,
-                    "seed": cell.seed,
-                    "epochs": cell.epochs,
-                    "lr": cell.lr,
-                    "effective_batch_size": eff_bs,
-                    "oom_retries": oom_retries,
-                    "exception_type": type(exc).__name__,
-                    "exception": f"{type(exc).__name__}: {exc}",
-                    "message": str(exc),
-                    "traceback": tb_str,
-                }
-                failed_path.write_text(
-                    json.dumps(failed_payload, indent=2, sort_keys=True) + "\n",
-                    encoding="utf-8",
-                )
-                break
+            t_cell0 = time.monotonic()
+            payload = execute_run(
+                dataset=cell.dataset,
+                method=cell.method,
+                dim=cell.dim,
+                seed=cell.seed,
+                epochs=cell.epochs,
+                learning_rate=cell.lr,
+                lr=cell.lr,
+                device=resolved_device,
+                out_dir=out_dir,
+                runs_dir=args.runs_dir,
+                bundle=current_bundle,
+                cm=current_cm,
+            )
+        except Exception as exc:
+            torch.cuda.empty_cache()
+            n_failed += 1
+            first_line = (str(exc).splitlines() or [""])[0]
+            tb_str = traceback.format_exc()
+            _log(
+                f"[{idx:3d}/{len(cells):3d}] FAILED {cell.filename} | "
+                f"{type(exc).__name__}: {first_line}"
+            )
+            with log_path.open("a", encoding="utf-8") as lf:
+                lf.write(tb_str if tb_str.endswith("\n") else tb_str + "\n")
 
-        if payload is None:
+            failed_path = out_dir / f"{cell.filename}.failed.json"
+            failed_payload = {
+                "dataset": cell.dataset,
+                "method": cell.method,
+                "dim": cell.dim,
+                "seed": cell.seed,
+                "epochs": cell.epochs,
+                "lr": cell.lr,
+                "exception_type": type(exc).__name__,
+                "exception": f"{type(exc).__name__}: {exc}",
+                "message": str(exc),
+                "traceback": tb_str,
+            }
+            failed_path.write_text(
+                json.dumps(failed_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
             continue
 
         failed_marker = out_dir / f"{cell.filename}.failed.json"

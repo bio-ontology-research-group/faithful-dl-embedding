@@ -145,7 +145,11 @@ def process_raw_directory(
             "total_json": 0,
         }
 
-    json_paths = sorted(raw_dir.glob("*.json"))
+    json_paths = [
+        p
+        for p in sorted(raw_dir.glob("*.json"))
+        if not p.name.endswith(".failed.json")
+    ]
     now = time.time()
     git_hash = _git_rev_parse(REPO_ROOT)
 
