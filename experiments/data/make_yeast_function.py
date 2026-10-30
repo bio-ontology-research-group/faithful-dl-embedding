@@ -203,6 +203,9 @@ def _write_labels_parquet(
 def render_yeast_function_stats_section(info: Mapping[str, Any]) -> str:
     """Render the Markdown section for B1 ``yeast-function`` in ``dataset_stats.md``."""
     timings = info["timings_sec"]
+    hp = info["holdout_positives_outside_candidates"]
+    hp_val = hp["valid"]
+    hp_test = hp["test"]
     lines = [
         STATS_SECTION_HEADER,
         "",
@@ -219,30 +222,44 @@ def render_yeast_function_stats_section(info: Mapping[str, Any]) -> str:
         f"| Mean Leaves per Annotated Protein (All Proteins) | {info['mean_leaves_per_annotated_protein']:.2f} ({info['mean_leaves_per_protein']:.2f}) |",
         f"| Single-Leaf Proteins Kept in Training | {info['n_single_leaf_proteins']:,} |",
         f"| Annotations per Split (`train / valid / test`, seed `{info['seed']}`) | {info['n_train_annotations']:,} / {info['n_valid_annotations']:,} / {info['n_test_annotations']:,} |",
-        f"| Entailed Holdouts Dropped (`valid + test`) | {info['n_entailed_holdouts_dropped']:,} |",
+        f"| Entailed Holdouts Dropped (`valid + test`) | {info['n_entailed_holdouts_dropped']:,} (`0` by construction after per-protein leaf reduction) |",
         f"| Candidate Classes (`Aux_G` with `>= 1` training annotation) | {info['n_candidates']:,} |",
+        f"| Held-Out Positives Outside Candidates (`valid` / `test`) | {hp_val['count']:,} / {hp_val['total']:,} ({100.0 * hp_val['fraction']:.2f}%, frac `{hp_val['fraction']:.6f}`) / {hp_test['count']:,} / {hp_test['total']:,} ({100.0 * hp_test['fraction']:.2f}%, frac `{hp_test['fraction']:.6f}`) |",
         f"| Training PPI Assertions (`interacts_with(p, q)`) | {info['n_interactions']:,} |",
         f"| Validation Label Pairs (`individual × candidate`) | {info['valid_labels']['n_rows']:,} (`entailed`: {info['valid_labels']['n_entailed']:,}, `unknown`: {info['valid_labels']['n_unknown']:,}, `contradicted`: {info['valid_labels']['n_contradicted']:,} — `contradicted = 0` by design) |",
         f"| Test Label Pairs (`individual × candidate`) | {info['test_labels']['n_rows']:,} (`entailed`: {info['test_labels']['n_entailed']:,}, `unknown`: {info['test_labels']['n_unknown']:,}, `contradicted`: {info['test_labels']['n_contradicted']:,} — `contradicted = 0` by design) |",
         f"| Build Time (`total`: `load / normalise / elk_closure / owl_write / parquet`) | {timings['total']:.2f} s ({timings['load']:.2f} / {timings['go_normalise']:.2f} / {timings['elk_closure']:.2f} / {timings['owl_write']:.2f} / {timings['labels_parquet']:.2f} s) |",
         "",
         "- **Protocol Note (`contradicted = 0` by design)**: Each annotation is encoded via `Aux_G(p)` with `Aux_G ⊑ ∃has_function.G` and `∃has_function.G ⊑ Aux_G`. Because existential restrictions `∃has_function.G₁ ⊓ ∃has_function.G₂` remain satisfiable even when `G₁ ⊓ G₂ ⊑ ⊥` in GO, `contradicted = 0` by design for all candidate pairs (`labels_valid.parquet` and `labels_test.parquet` retain the three-way schema with `0` `'contradicted'` entries).",
+        f"- **Protocol Note (Candidate Coverage of Held-Out Positives)**: Candidates are defined by Spec §3.1 as `Aux_G` classes with `>= 1` training annotation (`{info['n_candidates']:,}` of `{info['n_go_classes_annotated']:,}` annotated GO classes). Consequently, `{hp_val['count']:,} / {hp_val['total']:,}` (`{100.0 * hp_val['fraction']:.2f}%`, fraction `{hp_val['fraction']:.6f}`) held-out validation positives and `{hp_test['count']:,} / {hp_test['total']:,}` (`{100.0 * hp_test['fraction']:.2f}%`, fraction `{hp_test['fraction']:.6f}`) held-out test positives have a class `Aux_G` outside `candidates.txt` (leaving `{hp_val['in_candidates']:,}` validation and `{hp_test['in_candidates']:,}` test positives inside `candidates.txt`). Both `{{valid,test}}_annotations.tsv` and `{{valid,test}}.owl` retain all held-out positives so the evaluator can report both candidate-filtered and unfiltered metrics.",
         "",
     ]
     return "\n".join(lines)
 
 
 def update_dataset_stats_file(stats_path: Path, info: Mapping[str, Any]) -> None:
-    """Append or replace the B1 ``yeast-function`` section in ``stats_path``."""
+    """Append or replace only the B1 ``yeast-function`` section in ``stats_path``.
+
+    Replaces from ``STATS_SECTION_HEADER`` up to (not including) the next
+    ``## `` header or EOF, preserving all preceding and following sections
+    byte-for-byte.
+    """
     stats_path = Path(stats_path).expanduser().resolve()
     stats_path.parent.mkdir(parents=True, exist_ok=True)
     section_md = render_yeast_function_stats_section(info)
 
     if stats_path.exists():
         existing = stats_path.read_text(encoding="utf-8")
-        if STATS_SECTION_HEADER in existing:
-            prefix, _ = existing.split(STATS_SECTION_HEADER, 1)
-            updated = prefix.rstrip() + "\n\n" + section_md
+        start_idx = existing.find(STATS_SECTION_HEADER)
+        if start_idx != -1:
+            prefix = existing[:start_idx]
+            rest = existing[start_idx + len(STATS_SECTION_HEADER) :]
+            next_rel = rest.find("\n## ")
+            if next_rel != -1:
+                suffix = rest[next_rel + 1 :]
+                updated = prefix + section_md.rstrip("\n") + "\n\n" + suffix
+            else:
+                updated = prefix + section_md
         else:
             updated = existing.rstrip() + "\n\n" + section_md
     else:
@@ -396,6 +413,14 @@ def build_yeast_function(
             }
             refl = sups | eqs | {g}
             go_superclasses[g] = refl
+            # Note on GO equivalent-class edge case: go_strict_superclasses[g] includes
+            # any named GO class equivalent to g (eqs - {g}). If a protein were annotated
+            # with two distinct named GO classes that are mutually equivalent in GO, each
+            # would appear in the other's go_strict_superclasses and both would be dropped
+            # during leaf reduction below. In the GO release bundled with PPIYeastDataset
+            # (2021-10), no two distinct named GO_* classes are mutually equivalent
+            # (equivalences are only between a named GO_* class and a complex expression),
+            # so eqs == {g} for every annotated GO class and no annotations are lost.
             go_strict_superclasses[g] = refl - {g}
     finally:
         reasoner.dispose()
@@ -450,6 +475,7 @@ def build_yeast_function(
     test_kept = sorted(test_kept)
 
     # Drop any held-out leaf entailed by training leaves of the same protein
+    # (0 by construction after per-protein leaf reduction when no two leaves are equivalent)
     valid_pairs, test_pairs, n_entailed_holdouts_dropped = filter_entailed_holdouts(
         train_pairs, valid_kept, test_kept, go_superclasses
     )
@@ -460,7 +486,44 @@ def build_yeast_function(
         | {g for _, g in test_pairs}
     )
     candidates_go = sorted({g for _, g in train_pairs})
+    candidates_go_set = set(candidates_go)
     candidates_aux = [aux_iri_for_go(g) for g in candidates_go]
+
+    # Per split (valid, test), count held-out positives whose class is NOT in candidates.txt.
+    # The TSVs and {valid,test}.owl retain all held-out positives so the evaluator decides
+    # whether to report filtered or unfiltered metrics.
+    n_valid_total = len(valid_pairs)
+    n_valid_outside = sum(1 for _, g in valid_pairs if g not in candidates_go_set)
+    n_valid_in_cands = n_valid_total - n_valid_outside
+    frac_valid_outside = (
+        round(float(n_valid_outside) / float(n_valid_total), 6)
+        if n_valid_total > 0
+        else 0.0
+    )
+
+    n_test_total = len(test_pairs)
+    n_test_outside = sum(1 for _, g in test_pairs if g not in candidates_go_set)
+    n_test_in_cands = n_test_total - n_test_outside
+    frac_test_outside = (
+        round(float(n_test_outside) / float(n_test_total), 6)
+        if n_test_total > 0
+        else 0.0
+    )
+
+    holdout_positives_outside_candidates: Dict[str, Dict[str, int | float]] = {
+        "valid": {
+            "count": n_valid_outside,
+            "total": n_valid_total,
+            "in_candidates": n_valid_in_cands,
+            "fraction": frac_valid_outside,
+        },
+        "test": {
+            "count": n_test_outside,
+            "total": n_test_total,
+            "in_candidates": n_test_in_cands,
+            "fraction": frac_test_outside,
+        },
+    }
     t_split = time.perf_counter() - t0
 
     # 5. Write TSVs, candidates.txt, and OWL files (ontology.owl, valid.owl, test.owl)
@@ -648,9 +711,11 @@ def build_yeast_function(
             "n_test_annotations": len(test_pairs),
             "n_entailed_holdouts_dropped": n_entailed_holdouts_dropped,
             "n_candidates": len(candidates_aux),
+            "holdout_positives_outside_candidates": holdout_positives_outside_candidates,
             "n_interactions": len(interactions),
             "contradicted": 0,
         },
+        "holdout_positives_outside_candidates": holdout_positives_outside_candidates,
         "valid_labels": valid_labels_meta,
         "test_labels": test_labels_meta,
         "timings_sec": timings_sec,

@@ -1,0 +1,7 @@
+# Runtime dependencies for experiments/
+# Note: mowl is imported from this worktree (install editable with `pip install -e .` or set PYTHONPATH to the repo root).
+torch>=2.0
+numpy>=1.24
+pandas>=2.0
+pyarrow>=14.0
+scipy>=1.10

@@ -1,6 +1,20 @@
 {
   "counts": {
     "contradicted": 0,
+    "holdout_positives_outside_candidates": {
+      "test": {
+        "count": 216,
+        "fraction": 0.071405,
+        "in_candidates": 2809,
+        "total": 3025
+      },
+      "valid": {
+        "count": 202,
+        "fraction": 0.066821,
+        "in_candidates": 2821,
+        "total": 3023
+      }
+    },
     "mean_leaves_per_annotated_protein": 5.7243,
     "mean_leaves_per_protein": 5.0816,
     "n_ancestor_annotations_dropped": 1472,
@@ -22,6 +36,20 @@
     "n_valid_annotations": 3023
   },
   "dataset": "yeast-function",
+  "holdout_positives_outside_candidates": {
+    "test": {
+      "count": 216,
+      "fraction": 0.071405,
+      "in_candidates": 2809,
+      "total": 3025
+    },
+    "valid": {
+      "count": 202,
+      "fraction": 0.066821,
+      "in_candidates": 2821,
+      "total": 3023
+    }
+  },
   "input": {
     "path": "/home/leechuck/tmp/gfe-data/yeast/ppi_yeast/ontology.owl",
     "sha256": "a7d6d713bd025672123f9c848014b86ef2fb9ecfcdbe3f7ecc3c722092343083",
@@ -75,13 +103,13 @@
     "n_unknown": 9826137
   },
   "timings_sec": {
-    "elk_closure": 4.8293,
-    "go_normalise": 9.0006,
-    "labels_parquet": 1.7366,
-    "load": 14.2022,
-    "owl_write": 8.6294,
-    "split_and_filter": 0.0911,
-    "total": 40.4719
+    "elk_closure": 3.2407,
+    "go_normalise": 6.5949,
+    "labels_parquet": 1.6914,
+    "load": 11.2625,
+    "owl_write": 7.444,
+    "split_and_filter": 0.0769,
+    "total": 31.9031
   },
   "valid_labels": {
     "n_candidates": 4447,
