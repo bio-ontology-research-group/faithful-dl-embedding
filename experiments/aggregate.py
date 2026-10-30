@@ -94,6 +94,8 @@ def load_raw_runs(raw_dir: Path) -> List[Dict[str, Any]]:
         return []
     records: List[Dict[str, Any]] = []
     for p in sorted(raw_dir.glob("*.json")):
+        if p.name.endswith(".failed.json"):
+            continue
         payload = json.loads(p.read_text(encoding="utf-8"))
         payload["_source_file"] = p.name
         records.append(payload)
