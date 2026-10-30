@@ -1,0 +1,133 @@
+{
+  "counts": {
+    "dropped_rbox_by_construct": {
+      "InverseObjectProperties": 1,
+      "SubDataPropertyOf": 2
+    },
+    "dropped_tbox_by_construct": {
+      "DataPropertyDomain": 26,
+      "DataPropertyDomain (with ObjectUnionOf)": 7,
+      "DataPropertyRange": 22,
+      "DataPropertyRange (with DataOneOf)": 2,
+      "EquivalentClasses (with ObjectUnionOf)": 1,
+      "ObjectPropertyDomain (with ObjectUnionOf)": 3,
+      "ObjectPropertyRange": 15,
+      "SubClassOf (with ExactCardinality)": 1
+    },
+    "n_candidates": 277,
+    "n_classes": 277,
+    "n_disjoint_nf2_pairs": 92,
+    "n_dropped_anon_class_assertions": 1,
+    "n_dropped_data_property_assertions": 39808,
+    "n_dropped_rbox_axioms": 3,
+    "n_dropped_tbox_axioms": 77,
+    "n_dropped_tbox_rbox_total": 80,
+    "n_individuals": 20318,
+    "n_norm_nf1": 261,
+    "n_norm_nf2": 92,
+    "n_norm_nf3": 6,
+    "n_norm_nf4": 13,
+    "n_norm_tbox_axioms": 372,
+    "n_object_property_assertions": 83210,
+    "n_origin_abox_axioms": 143337,
+    "n_origin_rbox_axioms": 3,
+    "n_origin_tbox_axioms": 359,
+    "n_test": 4065,
+    "n_test_contradicted_with_ground_truth": 20169,
+    "n_train_neg_dropped": 14222,
+    "n_train_pos": 14222,
+    "n_valid": 2031,
+    "n_valid_contradicted_with_ground_truth": 9947,
+    "opa_by_property": {
+      "hasFood": 1418,
+      "hasNutrient": 79239,
+      "hasRecipeFood": 2553
+    }
+  },
+  "dataset": "helis",
+  "inputs": {
+    "helis_membership_files.tar.gz": {
+      "sha256": "88dcc42994dde689dadeecf159562f873d30af0da63aeb3cf46aafbd29a67cd1",
+      "size_bytes": 14757563,
+      "url": "https://raw.githubusercontent.com/KRR-Oxford/OWL2Vec-Star/master/case_studies/helis_membership/files.tar.gz"
+    },
+    "helis_v1.00.origin.owl": {
+      "path": "/home/leechuck/tmp/gfe-data/helis-dl/onts/data/helis_v1.00.origin.owl",
+      "sha256": "ed42517745a8f56c02604524f0d1e3c85ab658a9a699f07a1cfedbd9c7935401",
+      "size_bytes": 18103517
+    },
+    "ontologies.tar.gz": {
+      "sha256": "44ddca245e1cd98cb59def740e454b55536ce6835180919f45689da97c92a8f1",
+      "size_bytes": 9467812,
+      "url": "https://raw.githubusercontent.com/KRR-Oxford/OWL2Vec-Star/master/case_studies/ontologies.tar.gz"
+    }
+  },
+  "license": "Apache-2.0 (OWL2Vec-Star case_studies)",
+  "outputs": {
+    "candidates.txt": {
+      "sha256": "5dfb3426a12d15f6cdff1fc1c50bcad8d1ce24a9bb21230f8411ce3959a30091",
+      "size_bytes": 15178
+    },
+    "labels_test.parquet": {
+      "sha256": "25d2342d91a3df65e6cbfc5f51edb4dbb7f4e885315825160e86d4607aece476",
+      "size_bytes": 322119
+    },
+    "labels_valid.parquet": {
+      "sha256": "ef2d8665535d99ae962da9dee0f4dce862213e3e323f17d36486bf833565dec0",
+      "size_bytes": 162526
+    },
+    "ontology.owl": {
+      "sha256": "94b5d05ad3541e6f54af32166979fc794f94b9732c96b289bebd70dfaf676829",
+      "size_bytes": 14390854
+    },
+    "skip_test.tsv": {
+      "sha256": "98c4d754ea97f633257e5cff6dbd9483d50d0bac4970d60e943c5d8e23f9d0ae",
+      "size_bytes": 714044
+    },
+    "skip_valid.tsv": {
+      "sha256": "736d324f403fc41e6c3d65e2c172d8c22a3e5054eba9ab94c7c4c5271b394019",
+      "size_bytes": 361267
+    },
+    "test.owl": {
+      "sha256": "078afb503c8e7fec7df68de9c71bd4366f18c675373d167a31580e6c8889aaf1",
+      "size_bytes": 1212271
+    },
+    "valid.owl": {
+      "sha256": "b3c71bb843f6a6875846e5da77473c92f83cf1b32a4268f40901efa1b1ae09b3",
+      "size_bytes": 616246
+    }
+  },
+  "source_repository": "https://github.com/KRR-Oxford/OWL2Vec-Star",
+  "test_labels": {
+    "n_candidates": 277,
+    "n_contradicted": 0,
+    "n_entailed": 420,
+    "n_individuals": 4065,
+    "n_rows": 1126005,
+    "n_unknown": 1125585
+  },
+  "timings_sec": {
+    "cm_build": 4.026,
+    "labels_parquet": 6.5613,
+    "load": 1.2327,
+    "owl_write": 3.2229,
+    "tbox_normalise": 0.3461,
+    "total": 17.0639
+  },
+  "train_labels_summary": {
+    "n_candidates": 277,
+    "n_contradicted": 69722,
+    "n_entailed": 43795,
+    "n_individuals": 14222,
+    "n_rows": 3939494,
+    "n_unknown": 3825977
+  },
+  "valid_labels": {
+    "n_candidates": 277,
+    "n_contradicted": 0,
+    "n_entailed": 212,
+    "n_individuals": 2031,
+    "n_rows": 562587,
+    "n_unknown": 562375
+  }
+}
