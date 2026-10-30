@@ -206,6 +206,13 @@ METHODS: Dict[str, Dict[str, Any]] = {
         "anchor_weight": 0.0,
         "datasets": ["yeast-function", "helis"],
     },
+    "elem": {
+        "model": "ELEm",
+        "n_components": 1,
+        "init": None,
+        "anchor_weight": 0.0,
+        "datasets": ["pizza", "go", "foodon", "yeast-function", "helis"],
+    },
 }
 
 _OBJECTIVE_ALLOWED_DATASETS: List[str] = list(OBJECTIVE_DATASETS) + ["pizza"] + list(ABOX_DATASETS)

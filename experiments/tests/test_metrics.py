@@ -573,26 +573,27 @@ def test_helly_metrics_prism_exact_t3_zero(t3_bundle: DatasetBundle) -> None:
 
 
 def test_point_modelness_metric(t3_bundle: DatasetBundle) -> None:
-    """Verify point_modelness returns None for axiom objective and pos/hardneg dict for point/mixed."""
+    """Verify point_modelness returns None for axiom objective and pos/hardneg dict for point/mixed/hybrid."""
     from mowl.models import MultiELBE
     from experiments.metrics import point_modelness
 
     m_axiom = MultiBoxEL(t3_bundle.dataset, embed_dim=2, n_components=2, objective="axiom")
     assert point_modelness(m_axiom) is None
 
-    m_point = MultiELBE(
-        t3_bundle.dataset,
-        embed_dim=2,
-        n_components=2,
-        objective="point",
-        points_per_epoch=16,
-        points_seed=0,
-        device="cpu",
-    )
-    m_point.train(epochs=1)
-    pm = point_modelness(m_point)
-    assert isinstance(pm, dict)
-    assert set(pm.keys()) == {"pos_frac", "hardneg_frac"}
-    assert 0.0 <= pm["pos_frac"] <= 1.0
-    assert 0.0 <= pm["hardneg_frac"] <= 1.0
+    for obj in ("point", "mixed", "hybrid"):
+        m_obj = MultiELBE(
+            t3_bundle.dataset,
+            embed_dim=2,
+            n_components=2,
+            objective=obj,
+            points_per_epoch=16,
+            points_seed=0,
+            device="cpu",
+        )
+        m_obj.train(epochs=1)
+        pm = point_modelness(m_obj)
+        assert isinstance(pm, dict), f"Expected dict for objective={obj!r}, got {pm!r}"
+        assert set(pm.keys()) == {"pos_frac", "hardneg_frac"}
+        assert 0.0 <= pm["pos_frac"] <= 1.0
+        assert 0.0 <= pm["hardneg_frac"] <= 1.0
 

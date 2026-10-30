@@ -170,10 +170,10 @@ def test_run_smoke_tk3_multibox_k2_cpu(scratch_dir: Path) -> None:
 
 def test_sweep_dry_run_lists_all_cells(scratch_dir: Path) -> None:
     """Verify sweep dry-run enumerates methods_for_dataset(d) x datasets x dims x seeds for every suite."""
-    assert len(METHODS) >= 51
+    assert len(METHODS) >= 52
     assert len(methods_for_dataset("tk3")) == 49
-    assert len(methods_for_dataset("pizza")) == 50
-    assert len(methods_for_dataset("go")) == 11
+    assert len(methods_for_dataset("pizza")) == 51
+    assert len(methods_for_dataset("go")) == 12
     assert "box2el-milp" in methods_for_dataset("pizza")
     assert "box2el-milp" not in methods_for_dataset("tk3")
     assert "box2el-milp" not in methods_for_dataset("go")
@@ -181,6 +181,12 @@ def test_sweep_dry_run_lists_all_cells(scratch_dir: Path) -> None:
     assert "canonical-mixture" in methods_for_dataset("helis")
     assert "canonical-mixture" not in methods_for_dataset("pizza")
     assert "canonical-mixture" not in methods_for_dataset("tk3")
+    assert "elem" in methods_for_dataset("yeast-function")
+    assert "elem" in methods_for_dataset("helis")
+    assert "elem" in methods_for_dataset("pizza")
+    assert "elem" in methods_for_dataset("go")
+    assert "elem" in methods_for_dataset("foodon")
+    assert "elem" not in methods_for_dataset("tk3")
 
     obj_prism_set = set(OBJECTIVE_METHODS) | set(PRISM_METHODS)
 
@@ -198,11 +204,11 @@ def test_sweep_dry_run_lists_all_cells(scratch_dir: Path) -> None:
     assert all(c.method not in obj_prism_set for c in cells_syn)
 
     cells_pizza = sweep.enumerate_cells("pizza", smoke=False)
-    assert len(cells_pizza) == _expected_count(["pizza"], smoke=False) == 12 * 1 * 1 * 3
+    assert len(cells_pizza) == _expected_count(["pizza"], smoke=False) == 13 * 1 * 1 * 3
     assert all(c.method not in obj_prism_set for c in cells_pizza)
 
     cells_real = sweep.enumerate_cells("real", smoke=False)
-    assert len(cells_real) == _expected_count(["go", "foodon"], smoke=False) == 11 * 2 * 1 * 3
+    assert len(cells_real) == _expected_count(["go", "foodon"], smoke=False) == 12 * 2 * 1 * 3
 
     cells_all = sweep.enumerate_cells("all", smoke=False)
     assert len(cells_all) == _expected_count(DATASETS, smoke=False)
@@ -527,6 +533,7 @@ def test_run_rejects_point_objective_for_plain_backbone(
     for plain_method, model_cls in (
         ("elbe", "ELBE"),
         ("box2el", "BoxSquaredEL"),
+        ("elem", "ELEm"),
         ("prism", "PrismEL"),
         ("canonical-mixture", "CanonicalMixture"),
     ):
@@ -541,6 +548,24 @@ def test_run_rejects_point_objective_for_plain_backbone(
                 out_dir=scratch_dir / "out",
                 runs_dir=scratch_dir / "ckpts",
                 objective="point",
+            )
+
+    # Also verify ELEm rejects *-init / *-anchor variants
+    for bad_spec in (
+        {"model": "ELEm", "n_components": 1, "init": "projected", "anchor_weight": 0.0},
+        {"model": "ELEm", "n_components": 1, "init": None, "anchor_weight": 0.1},
+    ):
+        monkeypatch.setitem(METHODS, "elem-init", bad_spec)
+        with pytest.raises(ValueError, match="ELEm"):
+            run.execute_run(
+                dataset="tk3",
+                method="elem-init",
+                dim=2,
+                seed=0,
+                epochs=1,
+                device="cpu",
+                out_dir=scratch_dir / "out",
+                runs_dir=scratch_dir / "ckpts",
             )
 
     # Also test when a method spec in METHODS has a plain backbone with objective != "axiom"
@@ -593,6 +618,7 @@ def test_run_lr_filename_and_objectives_table(scratch_dir: Path) -> None:
     for method, lr, obj_override in (
         ("multibox-k2-point", "0.001", None),
         ("multibox-k2-point", "0.01", None),
+        ("multibox-k2-hybrid", "0.001", None),
         ("multibox-k2-softdiv", "0.001", None),
         ("prism", "0.001", None),
         ("multibox-k2", "0.001", "point"),
@@ -624,14 +650,22 @@ def test_run_lr_filename_and_objectives_table(scratch_dir: Path) -> None:
 
     p_default = raw_dir / "tk3__multibox-k2-point__d2__s0.json"
     p_lr01 = raw_dir / "tk3__multibox-k2-point__d2__s0__lr0.01.json"
+    p_hybrid = raw_dir / "tk3__multibox-k2-hybrid__d2__s0.json"
     p_softdiv = raw_dir / "tk3__multibox-k2-softdiv__d2__s0.json"
     p_prism = raw_dir / "tk3__prism__d2__s0.json"
     p_obj_override = raw_dir / "tk3__multibox-k2__d2__s0__obj-point.json"
     assert p_default.exists()
     assert p_lr01.exists()
+    assert p_hybrid.exists()
     assert p_softdiv.exists()
     assert p_prism.exists()
     assert p_obj_override.exists()
+
+    j_hybrid = json.loads(p_hybrid.read_text(encoding="utf-8"))
+    assert j_hybrid["config"]["objective"] == "hybrid"
+    pm_hyb = j_hybrid["metrics"]["point_modelness"]
+    assert isinstance(pm_hyb, dict)
+    assert "pos_frac" in pm_hyb and "hardneg_frac" in pm_hyb
 
     j_point = json.loads(p_lr01.read_text(encoding="utf-8"))
     assert j_point["config"]["lr"] == pytest.approx(0.01)
@@ -720,6 +754,53 @@ def test_run_lr_filename_and_objectives_table(scratch_dir: Path) -> None:
     baseline_rows = [line for line in text.splitlines() if line.startswith("| `multibox-k2` |")]
     assert len(baseline_rows) == 1
     assert "| `multibox-k2` | baseline |" in baseline_rows[0]
+
+    # Verify hybrid row shows point-Mod (pos/hardneg) and not '—'
+    hybrid_rows = [
+        line for line in text.splitlines() if line.startswith("| `multibox-k2-hybrid` |")
+    ]
+    assert len(hybrid_rows) == 1
+    hybrid_cells = [c.strip() for c in hybrid_rows[0].strip("|").split("|")]
+    # Column index 9 is 'point-Mod (pos/hardneg)'
+    assert hybrid_cells[9] != "—" and "/" in hybrid_cells[9]
+
+
+def test_run_smoke_tk3_elem_cpu(scratch_dir: Path) -> None:
+    """Verify elem method builds ELEmbeddings and runs cleanly through execute_run."""
+    out_dir = scratch_dir / "raw"
+    runs_dir = scratch_dir / "checkpoints"
+
+    rc = run.main(
+        [
+            "--dataset",
+            "tk3",
+            "--method",
+            "elem",
+            "--dim",
+            "4",
+            "--seed",
+            "0",
+            "--epochs",
+            "2",
+            "--device",
+            "cpu",
+            "--out",
+            str(out_dir),
+            "--runs-dir",
+            str(runs_dir),
+        ]
+    )
+    assert rc in (0, None)
+    json_path = out_dir / "tk3__elem__d4__s0.json"
+    assert json_path.exists()
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    assert payload["config"]["method"] == "elem"
+    assert payload["config"]["model"] == "ELEm"
+    assert payload["config"]["n_components"] == 1
+    assert payload["config"]["init"] is None
+    assert payload["metrics"]["point_modelness"] is None
+    assert payload["metrics"]["helly_violation_rate"] is None
+    assert 0.0 <= payload["metrics"]["modelness_all"] <= 1.0
 
 
 

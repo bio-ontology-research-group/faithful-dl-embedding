@@ -290,8 +290,15 @@ def _validate_method_objective(
     spec: Dict[str, Any],
     objective_override: Optional[str] = None,
 ) -> str:
-    """Validate that plain backbones are not run with non-axiom objectives; return effective objective."""
+    """Validate that plain backbones are not run with non-axiom objectives (and ELEm has no init/anchor); return effective objective."""
     model_cls_name = str(spec["model"])
+    if model_cls_name == "ELEm" and (
+        spec.get("init") is not None or float(spec.get("anchor_weight", 0.0)) != 0.0
+    ):
+        raise ValueError(
+            f"ELEm (method {method_id!r}) does not support box initialization or anchor "
+            f"regularization (got init={spec.get('init')!r}, anchor_weight={spec.get('anchor_weight', 0.0)!r})."
+        )
     obj_kw = dict(spec.get("objective_kwargs", {}))
     effective_objective = str(
         objective_override
@@ -328,6 +335,7 @@ def _build_model(
         BoxSquaredEL,
         CanonicalMixture,
         ELBE,
+        ELEmbeddings,
         MultiBoxEL,
         MultiELBE,
         PrismEL,
@@ -392,6 +400,16 @@ def _build_model(
                 device=device,
                 init_boxes=None,
                 anchor_weight=anchor_weight,
+            )
+        elif model_cls_name == "ELEm":
+            model = ELEmbeddings(
+                bundle.dataset,
+                embed_dim=effective_dim,
+                margin=margin,
+                learning_rate=learning_rate,
+                batch_size=batch_size,
+                model_filepath=ckpt_str,
+                device=device,
             )
         elif model_cls_name == "BoxSquaredEL":
             model = BoxSquaredEL(
@@ -815,7 +833,7 @@ def execute_run(
     modelness_time_s = time.monotonic() - t_m0
 
     t_h0 = time.monotonic()
-    if cm is not None and METHODS[method]["model"] != "CanonicalMixture":
+    if cm is not None and METHODS[method]["model"] not in ("CanonicalMixture", "ELEm"):
         certs = _resolve_certificates(bundle, cm)
         m_helly = helly_metrics(model, bundle=bundle, cm=cm, certificates=certs)
     else:

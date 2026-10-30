@@ -919,10 +919,10 @@ def modelness(
 
 
 def point_modelness(model: Any) -> Optional[Dict[str, float]]:
-    """Return ``{"pos_frac": float, "hardneg_frac": float}`` when objective is ``point``/``mixed``, else ``None``."""
+    """Return ``{"pos_frac": float, "hardneg_frac": float}`` when objective is non-axiom (``point``/``mixed``/``hybrid``), else ``None``."""
     module = getattr(model, "module", model)
     objective = getattr(module, "objective", getattr(model, "objective", "axiom"))
-    if objective not in ("point", "mixed"):
+    if objective == "axiom":
         return None
     ps = getattr(module, "point_supervision", getattr(model, "point_supervision", None))
     if ps is None or not hasattr(module, "point_modelness"):

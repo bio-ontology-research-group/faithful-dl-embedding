@@ -55,6 +55,19 @@ def test_existing_methods_untouched() -> None:
     assert METHODS["multibox-k2"]["n_components"] == 2
     assert METHODS["canonical-mixture"]["model"] == "CanonicalMixture"
     assert METHODS["canonical-mixture"]["datasets"] == ["yeast-function", "helis"]
+    assert "elem" in METHODS
+    assert METHODS["elem"]["model"] == "ELEm"
+    assert METHODS["elem"]["n_components"] == 1
+    assert METHODS["elem"]["init"] is None
+    assert METHODS["elem"]["anchor_weight"] == 0.0
+    for ds in ("pizza", "go", "foodon", "yeast-function", "helis"):
+        assert "elem" in methods_for_dataset(ds)
+    for ds in SYNTHETIC_DATASETS:
+        assert "elem" not in methods_for_dataset(ds)
+    abox_cells = sweep.enumerate_cells("abox", smoke=True)
+    assert "elem" in {c.method for c in abox_cells}
+    syn_cells = sweep.enumerate_cells("synthetic", smoke=True)
+    assert "elem" not in {c.method for c in syn_cells}
 
 
 def test_objective_method_id_scheme_and_kwargs() -> None:
