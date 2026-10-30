@@ -1,0 +1,94 @@
+{
+  "counts": {
+    "contradicted": 0,
+    "mean_leaves_per_annotated_protein": 5.7243,
+    "mean_leaves_per_protein": 5.0816,
+    "n_ancestor_annotations_dropped": 1472,
+    "n_annotated_proteins": 5353,
+    "n_candidates": 4447,
+    "n_entailed_holdouts_dropped": 0,
+    "n_go_classes_annotated": 4835,
+    "n_go_classes_total": 50713,
+    "n_go_dropped_axioms": 1,
+    "n_interactions": 216694,
+    "n_leaf_annotations": 30642,
+    "n_ppi_proteins": 5943,
+    "n_proteins": 6030,
+    "n_raw_annotations": 32114,
+    "n_single_leaf_proteins": 402,
+    "n_test_annotations": 3025,
+    "n_train_annotations": 24594,
+    "n_train_concept_names": 67474,
+    "n_valid_annotations": 3023
+  },
+  "dataset": "yeast-function",
+  "input": {
+    "path": "/home/leechuck/tmp/gfe-data/yeast/ppi_yeast/ontology.owl",
+    "sha256": "a7d6d713bd025672123f9c848014b86ef2fb9ecfcdbe3f7ecc3c722092343083",
+    "size_bytes": 197869355
+  },
+  "outputs": {
+    "candidates.txt": {
+      "sha256": "34a961fc763185755bd08c63d302dcce5cf62029a48414ef8b3fe90052d90a3f",
+      "size_bytes": 249032
+    },
+    "labels_test.parquet": {
+      "sha256": "8721eb108a07d5a2e4284ca7e3045bd2177831190e7fe921fd8b71d4244dac87",
+      "size_bytes": 16568626
+    },
+    "labels_valid.parquet": {
+      "sha256": "ad24b275d0165c41cfd21682270e00b89e4ac2e7ce93d247eb7730bf5e5ba6b7",
+      "size_bytes": 16237051
+    },
+    "ontology.owl": {
+      "sha256": "94b3a8e6fbff6d0b311c9b811de6a9d6da92cfe79d10fab78af165461e36e130",
+      "size_bytes": 51209015
+    },
+    "test.owl": {
+      "sha256": "9bf97f17b8bc38a164970c114e553b0c525af2f0d86de51f230522373a189002",
+      "size_bytes": 777591
+    },
+    "test_annotations.tsv": {
+      "sha256": "a703b6239e57eb8d715a1c5217c269de252fb2f5a2f8d2eeec5d898cddf73acc",
+      "size_bytes": 187636
+    },
+    "train_annotations.tsv": {
+      "sha256": "564d9e7d8e01ad2b6752c53623ae3424cddd46b1e2e98945b39696b356e20bbc",
+      "size_bytes": 1525606
+    },
+    "valid.owl": {
+      "sha256": "4459c269313f09258c5353e5bddbd827ff4acf3aaf9491116444e2ba51a47b88",
+      "size_bytes": 770912
+    },
+    "valid_annotations.tsv": {
+      "sha256": "619ed44a46f2810c27a09670ff1964996946ae9b01ead971416f90b16d97cf9e",
+      "size_bytes": 187506
+    }
+  },
+  "seed": 0,
+  "test_labels": {
+    "n_candidates": 4447,
+    "n_contradicted": 0,
+    "n_entailed": 32862,
+    "n_individuals": 2217,
+    "n_rows": 9858999,
+    "n_unknown": 9826137
+  },
+  "timings_sec": {
+    "elk_closure": 4.8293,
+    "go_normalise": 9.0006,
+    "labels_parquet": 1.7366,
+    "load": 14.2022,
+    "owl_write": 8.6294,
+    "split_and_filter": 0.0911,
+    "total": 40.4719
+  },
+  "valid_labels": {
+    "n_candidates": 4447,
+    "n_contradicted": 0,
+    "n_entailed": 31952,
+    "n_individuals": 2172,
+    "n_rows": 9658884,
+    "n_unknown": 9626932
+  }
+}
