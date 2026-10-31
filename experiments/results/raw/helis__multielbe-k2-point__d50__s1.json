@@ -1,0 +1,325 @@
+{
+  "config": {
+    "anchor_weight": 0.0,
+    "batch_size": 32768,
+    "checkpoint_path": "/home/leechuck/tmp/gfe-runs/helis__multielbe-k2-point__d50__s1.pt",
+    "component_aggregation": "hard",
+    "dataset": "helis",
+    "delta": 2.5,
+    "device": "cuda",
+    "dim": 50,
+    "diversity_reg": 0.0,
+    "effective_batch_size": 32768,
+    "effective_dim": 50,
+    "epochs": 2000,
+    "eval_gci_name": "class_assertion",
+    "init": null,
+    "init_report": null,
+    "learning_rate": 0.001,
+    "lr": 0.001,
+    "margin": 0.02,
+    "margin_semantics": "tightening",
+    "method": "multielbe-k2-point",
+    "model": "MultiELBE",
+    "n_components": 2,
+    "num_negs": 4,
+    "objective": "point",
+    "objective_variant": "point",
+    "oom_retries": 0,
+    "reg_factor": 0.2,
+    "seed": 1,
+    "task": "abox",
+    "tau_anneal": false,
+    "tau_end": 0.05,
+    "tau_schedule": {
+      "tau_anneal": false,
+      "tau_end": 0.05,
+      "tau_start": 1.0
+    },
+    "tau_start": 1.0,
+    "validate_every": 50
+  },
+  "env": {
+    "cuda_available": true,
+    "cuda_version": "12.8",
+    "device": "cuda",
+    "git_dirty_experiments": true,
+    "git_dirty_mowl": false,
+    "git_hash_experiments": "385523ac2ca4d7107481d048bdbd79a500cb4d40",
+    "git_hash_mowl": "f61dc5a834b11891eed6aa0d4757ab249e4bf324",
+    "gpu_name": "NVIDIA RTX PRO 2000 Blackwell Generation Laptop GPU",
+    "torch_version": "2.11.0+cu128"
+  },
+  "metrics": {
+    "abox_modelness": 0.0,
+    "auc_pos_neg": null,
+    "auc_pos_neg_gold": 0.9754079,
+    "auc_pos_und": 0.999812853470437,
+    "auc_pos_und_gold": 0.90969498,
+    "best_val_epoch": 2000,
+    "best_val_mrr": 0.15608736718566893,
+    "degeneracy_rate": null,
+    "faithfulness_gold": {
+      "auc_pos_neg": 0.9754079,
+      "auc_pos_und": 0.90969498,
+      "fvr": 0.58127,
+      "n_neg": 20169,
+      "n_pos": 12497,
+      "n_und": 1093339,
+      "pair_fvr": 0.49465
+    },
+    "faithfulness_kb": {
+      "auc_pos_neg": null,
+      "auc_pos_und": 0.999812853470437,
+      "fvr": null,
+      "n_neg": 0,
+      "n_pos": 3890,
+      "n_und": 1122115,
+      "pair_fvr": null
+    },
+    "fmax": null,
+    "fvr": null,
+    "fvr_gold": 0.58127,
+    "helly_violation_rate": null,
+    "hierarchy_violation_rate": 0.0327,
+    "mean_effective_components": 1.5555555820465088,
+    "mean_epoch_time_s": 0.8890430773129919,
+    "modelness_all": 8.751816001820377e-06,
+    "modelness_class_assertion": 0.0,
+    "modelness_gci0": 0.0038314176245210726,
+    "modelness_gci1_bot": 0.0,
+    "modelness_gci2": 0.0,
+    "modelness_gci3": 0.0,
+    "modelness_object_property_assertion": 0.0,
+    "modelness_train_margin": 0.0,
+    "modelness_train_margin_class_assertion": 0.0,
+    "modelness_train_margin_gci0": 0.0,
+    "modelness_train_margin_gci1_bot": 0.0,
+    "modelness_train_margin_gci2": 0.0,
+    "modelness_train_margin_gci3": 0.0,
+    "modelness_train_margin_object_property_assertion": 0.0,
+    "n_certificates": 0,
+    "n_certificates_unmapped": 0,
+    "n_components": 2,
+    "n_missing_candidates": 0,
+    "n_missing_individuals": 0,
+    "n_neg": 0,
+    "n_pos": 3890,
+    "n_positives_rankable": 4065,
+    "n_positives_total": 4065,
+    "n_positives_unrankable": 0,
+    "n_und": 1122115,
+    "pair_fvr": null,
+    "pair_fvr_gold": 0.49465,
+    "param_count": 3118100,
+    "peak_gpu_memory_bytes": 266702336,
+    "peak_gpu_memory_mb": 254.34716796875,
+    "point_modelness": {
+      "hardneg_frac": 1.0,
+      "pos_frac": 0.9906429516157688
+    },
+    "rank_all_auc": 0.8318448401875324,
+    "rank_all_hits@1": 0.12349323493234933,
+    "rank_all_hits@10": 0.2,
+    "rank_all_hits@5": 0.15227552275522754,
+    "rank_all_mrr": 0.16071148998739812,
+    "rank_auc": 0.8318448401875324,
+    "rank_coverage": 1.0,
+    "rank_hits@1": 0.12349323493234933,
+    "rank_hits@10": 0.2,
+    "rank_hits@5": 0.15227552275522754,
+    "rank_mrr": 0.16071148998739812,
+    "ranking_all": {
+      "auc": 0.8318448401875324,
+      "hits@1": 0.12349323493234933,
+      "hits@10": 0.2,
+      "hits@5": 0.15227552275522754,
+      "mrr": 0.16071148998739812
+    },
+    "ranking_rankable": {
+      "auc": 0.8318448401875324,
+      "hits@1": 0.12349323493234933,
+      "hits@10": 0.2,
+      "hits@5": 0.15227552275522754,
+      "mrr": 0.16071148998739812
+    },
+    "total_train_time_s": 1785.0799431640044,
+    "val_mrr_curve": [
+      {
+        "epoch": 50,
+        "val_mrr": 0.08724396136229004
+      },
+      {
+        "epoch": 100,
+        "val_mrr": 0.11656434117615691
+      },
+      {
+        "epoch": 150,
+        "val_mrr": 0.1202655291886086
+      },
+      {
+        "epoch": 200,
+        "val_mrr": 0.12027323534407224
+      },
+      {
+        "epoch": 250,
+        "val_mrr": 0.12130551982070825
+      },
+      {
+        "epoch": 300,
+        "val_mrr": 0.12432001197701176
+      },
+      {
+        "epoch": 350,
+        "val_mrr": 0.1276090786595942
+      },
+      {
+        "epoch": 400,
+        "val_mrr": 0.13117245802263774
+      },
+      {
+        "epoch": 450,
+        "val_mrr": 0.13694400929057007
+      },
+      {
+        "epoch": 500,
+        "val_mrr": 0.13935386035623065
+      },
+      {
+        "epoch": 550,
+        "val_mrr": 0.14143780734032016
+      },
+      {
+        "epoch": 600,
+        "val_mrr": 0.14346490560838876
+      },
+      {
+        "epoch": 650,
+        "val_mrr": 0.14557447538620288
+      },
+      {
+        "epoch": 700,
+        "val_mrr": 0.14643384190583542
+      },
+      {
+        "epoch": 750,
+        "val_mrr": 0.1465299331864519
+      },
+      {
+        "epoch": 800,
+        "val_mrr": 0.14868478931923818
+      },
+      {
+        "epoch": 850,
+        "val_mrr": 0.14879791916659332
+      },
+      {
+        "epoch": 900,
+        "val_mrr": 0.15033769949279185
+      },
+      {
+        "epoch": 950,
+        "val_mrr": 0.15017446151267613
+      },
+      {
+        "epoch": 1000,
+        "val_mrr": 0.15054719101540562
+      },
+      {
+        "epoch": 1050,
+        "val_mrr": 0.15152857211758067
+      },
+      {
+        "epoch": 1100,
+        "val_mrr": 0.15273821052070793
+      },
+      {
+        "epoch": 1150,
+        "val_mrr": 0.15251053827178546
+      },
+      {
+        "epoch": 1200,
+        "val_mrr": 0.15238439446250038
+      },
+      {
+        "epoch": 1250,
+        "val_mrr": 0.15265439418802135
+      },
+      {
+        "epoch": 1300,
+        "val_mrr": 0.15366507350222966
+      },
+      {
+        "epoch": 1350,
+        "val_mrr": 0.15338004806524208
+      },
+      {
+        "epoch": 1400,
+        "val_mrr": 0.1542047029751938
+      },
+      {
+        "epoch": 1450,
+        "val_mrr": 0.15371169731796389
+      },
+      {
+        "epoch": 1500,
+        "val_mrr": 0.15341805150392862
+      },
+      {
+        "epoch": 1550,
+        "val_mrr": 0.1546233478286811
+      },
+      {
+        "epoch": 1600,
+        "val_mrr": 0.15452363865305174
+      },
+      {
+        "epoch": 1650,
+        "val_mrr": 0.15452871161704387
+      },
+      {
+        "epoch": 1700,
+        "val_mrr": 0.15443527705870613
+      },
+      {
+        "epoch": 1750,
+        "val_mrr": 0.15478825110757763
+      },
+      {
+        "epoch": 1800,
+        "val_mrr": 0.15482902654273795
+      },
+      {
+        "epoch": 1850,
+        "val_mrr": 0.1551898702369586
+      },
+      {
+        "epoch": 1900,
+        "val_mrr": 0.15569608016721548
+      },
+      {
+        "epoch": 1950,
+        "val_mrr": 0.15572700787666274
+      },
+      {
+        "epoch": 2000,
+        "val_mrr": 0.15608736718566893
+      }
+    ]
+  },
+  "timings": {
+    "cm_load_time_s": 5.320034688338637e-07,
+    "dataset_load_time_s": 0.0,
+    "epochs": 2000,
+    "eval_time_s": 0.2663560060027521,
+    "faithfulness_time_s": 0.24482289599836804,
+    "helly_time_s": 6.264002877287567e-06,
+    "mean_epoch_time_s": 0.8890430773129919,
+    "model_init_time_s": 0.5680865319882287,
+    "modelness_time_s": 0.021525828007725067,
+    "peak_gpu_memory_bytes": 266702336,
+    "ranking_time_s": 0.24482289599836804,
+    "total_train_time_s": 1785.0799431640044,
+    "wall_clock_s": 1785.931189400988
+  }
+}

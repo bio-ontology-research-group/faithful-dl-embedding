@@ -1,0 +1,319 @@
+{
+  "config": {
+    "anchor_weight": 0.0,
+    "batch_size": 32768,
+    "checkpoint_path": "/home/leechuck/tmp/gfe-runs/yeast-function__multibox-k2-point__d50__s2.pt",
+    "component_aggregation": "hard",
+    "dataset": "yeast-function",
+    "delta": 2.5,
+    "device": "cuda",
+    "dim": 50,
+    "diversity_reg": 0.0,
+    "effective_batch_size": 32768,
+    "effective_dim": 50,
+    "epochs": 2000,
+    "eval_gci_name": "class_assertion",
+    "init": null,
+    "init_report": null,
+    "learning_rate": 0.001,
+    "lr": 0.001,
+    "margin": 0.02,
+    "margin_semantics": "relaxing",
+    "method": "multibox-k2-point",
+    "model": "MultiBoxEL",
+    "n_components": 2,
+    "num_negs": 4,
+    "objective": "point",
+    "objective_variant": "point",
+    "oom_retries": 0,
+    "reg_factor": 0.2,
+    "seed": 2,
+    "task": "abox",
+    "tau_anneal": false,
+    "tau_end": 0.05,
+    "tau_schedule": {
+      "tau_anneal": false,
+      "tau_end": 0.05,
+      "tau_start": 1.0
+    },
+    "tau_start": 1.0,
+    "validate_every": 50
+  },
+  "env": {
+    "cuda_available": true,
+    "cuda_version": "12.8",
+    "device": "cuda",
+    "git_dirty_experiments": true,
+    "git_dirty_mowl": false,
+    "git_hash_experiments": "385523ac2ca4d7107481d048bdbd79a500cb4d40",
+    "git_hash_mowl": "f61dc5a834b11891eed6aa0d4757ab249e4bf324",
+    "gpu_name": "NVIDIA RTX PRO 2000 Blackwell Generation Laptop GPU",
+    "torch_version": "2.11.0+cu128"
+  },
+  "metrics": {
+    "abox_modelness": 0.0,
+    "auc_pos_neg": null,
+    "auc_pos_neg_gold": null,
+    "auc_pos_und": 0.93890254,
+    "auc_pos_und_gold": null,
+    "best_val_epoch": 250,
+    "best_val_mrr": 0.057756755452858376,
+    "degeneracy_rate": null,
+    "faithfulness_gold": null,
+    "faithfulness_kb": {
+      "auc_pos_neg": null,
+      "auc_pos_und": 0.93890254,
+      "fvr": null,
+      "n_neg": 0,
+      "n_pos": 32862,
+      "n_und": 9826137,
+      "pair_fvr": null
+    },
+    "fmax": 0.03818908787716523,
+    "fvr": null,
+    "fvr_gold": null,
+    "helly_violation_rate": null,
+    "hierarchy_violation_rate": 0.0986,
+    "mean_effective_components": 0.663633406162262,
+    "mean_epoch_time_s": 1.1102809172860288,
+    "modelness_all": 0.0,
+    "modelness_class_assertion": 0.0,
+    "modelness_gci0": 0.0,
+    "modelness_gci1": 0.0,
+    "modelness_gci1_bot": 0.0,
+    "modelness_gci2": 0.0,
+    "modelness_gci3": 0.0,
+    "modelness_object_property_assertion": 0.0,
+    "modelness_train_margin": 0.0,
+    "modelness_train_margin_class_assertion": 0.0,
+    "modelness_train_margin_gci0": 0.0,
+    "modelness_train_margin_gci1": 0.0,
+    "modelness_train_margin_gci1_bot": 0.0,
+    "modelness_train_margin_gci2": 0.0,
+    "modelness_train_margin_gci3": 0.0,
+    "modelness_train_margin_object_property_assertion": 0.0,
+    "n_certificates": 0,
+    "n_certificates_unmapped": 0,
+    "n_components": 2,
+    "n_missing_candidates": 0,
+    "n_missing_individuals": 0,
+    "n_neg": 0,
+    "n_pos": 32862,
+    "n_positives_rankable": 2809,
+    "n_positives_total": 3025,
+    "n_positives_unrankable": 216,
+    "n_und": 9826137,
+    "pair_fvr": null,
+    "pair_fvr_gold": null,
+    "param_count": 20853900,
+    "peak_gpu_memory_bytes": 680069632,
+    "peak_gpu_memory_mb": 648.56494140625,
+    "point_modelness": {
+      "hardneg_frac": 0.995255,
+      "pos_frac": 0.6776297349478335
+    },
+    "rank_all_auc": 0.7881987113608023,
+    "rank_all_hits@1": 0.02181818181818182,
+    "rank_all_hits@10": 0.11008264462809918,
+    "rank_all_hits@5": 0.07471074380165289,
+    "rank_all_mrr": 0.05522799527369204,
+    "rank_auc": 0.8487737906898125,
+    "rank_coverage": 0.9285950413223141,
+    "rank_hits@1": 0.023495906016375936,
+    "rank_hits@10": 0.11854752580989676,
+    "rank_hits@5": 0.08045567817728728,
+    "rank_mrr": 0.05945750251044475,
+    "ranking_all": {
+      "auc": 0.7881987113608023,
+      "hits@1": 0.02181818181818182,
+      "hits@10": 0.11008264462809918,
+      "hits@5": 0.07471074380165289,
+      "mrr": 0.05522799527369204
+    },
+    "ranking_rankable": {
+      "auc": 0.8487737906898125,
+      "hits@1": 0.023495906016375936,
+      "hits@10": 0.11854752580989676,
+      "hits@5": 0.08045567817728728,
+      "mrr": 0.05945750251044475
+    },
+    "total_train_time_s": 2313.460608858004,
+    "val_mrr_curve": [
+      {
+        "epoch": 50,
+        "val_mrr": 0.027105839313617642
+      },
+      {
+        "epoch": 100,
+        "val_mrr": 0.0435645295118833
+      },
+      {
+        "epoch": 150,
+        "val_mrr": 0.052721040784067294
+      },
+      {
+        "epoch": 200,
+        "val_mrr": 0.05744255655943246
+      },
+      {
+        "epoch": 250,
+        "val_mrr": 0.057756755452858376
+      },
+      {
+        "epoch": 300,
+        "val_mrr": 0.056910475594092055
+      },
+      {
+        "epoch": 350,
+        "val_mrr": 0.054824494158261614
+      },
+      {
+        "epoch": 400,
+        "val_mrr": 0.05231662976182822
+      },
+      {
+        "epoch": 450,
+        "val_mrr": 0.048620670139416775
+      },
+      {
+        "epoch": 500,
+        "val_mrr": 0.04550878087527267
+      },
+      {
+        "epoch": 550,
+        "val_mrr": 0.043778896513219465
+      },
+      {
+        "epoch": 600,
+        "val_mrr": 0.04129741418292591
+      },
+      {
+        "epoch": 650,
+        "val_mrr": 0.039716623503778685
+      },
+      {
+        "epoch": 700,
+        "val_mrr": 0.038615129650045266
+      },
+      {
+        "epoch": 750,
+        "val_mrr": 0.037365362617972485
+      },
+      {
+        "epoch": 800,
+        "val_mrr": 0.036621349352889666
+      },
+      {
+        "epoch": 850,
+        "val_mrr": 0.03591311002204317
+      },
+      {
+        "epoch": 900,
+        "val_mrr": 0.035676173782366184
+      },
+      {
+        "epoch": 950,
+        "val_mrr": 0.03568114536389569
+      },
+      {
+        "epoch": 1000,
+        "val_mrr": 0.03554434440413591
+      },
+      {
+        "epoch": 1050,
+        "val_mrr": 0.035537689832833036
+      },
+      {
+        "epoch": 1100,
+        "val_mrr": 0.0353942621880524
+      },
+      {
+        "epoch": 1150,
+        "val_mrr": 0.03524517590455051
+      },
+      {
+        "epoch": 1200,
+        "val_mrr": 0.03518943071198507
+      },
+      {
+        "epoch": 1250,
+        "val_mrr": 0.03524671026537391
+      },
+      {
+        "epoch": 1300,
+        "val_mrr": 0.035465195455596635
+      },
+      {
+        "epoch": 1350,
+        "val_mrr": 0.03603615194742741
+      },
+      {
+        "epoch": 1400,
+        "val_mrr": 0.03612002155192151
+      },
+      {
+        "epoch": 1450,
+        "val_mrr": 0.03661644064098814
+      },
+      {
+        "epoch": 1500,
+        "val_mrr": 0.036561502557684235
+      },
+      {
+        "epoch": 1550,
+        "val_mrr": 0.03690069402087451
+      },
+      {
+        "epoch": 1600,
+        "val_mrr": 0.03719614198412422
+      },
+      {
+        "epoch": 1650,
+        "val_mrr": 0.03777146558863155
+      },
+      {
+        "epoch": 1700,
+        "val_mrr": 0.03837939686840899
+      },
+      {
+        "epoch": 1750,
+        "val_mrr": 0.03884789738113497
+      },
+      {
+        "epoch": 1800,
+        "val_mrr": 0.038818600310083134
+      },
+      {
+        "epoch": 1850,
+        "val_mrr": 0.039386842213092854
+      },
+      {
+        "epoch": 1900,
+        "val_mrr": 0.03953448433402144
+      },
+      {
+        "epoch": 1950,
+        "val_mrr": 0.03967245179270364
+      },
+      {
+        "epoch": 2000,
+        "val_mrr": 0.039987090396917224
+      }
+    ]
+  },
+  "timings": {
+    "cm_load_time_s": 3.720051608979702e-07,
+    "dataset_load_time_s": 0.0,
+    "epochs": 2000,
+    "eval_time_s": 5.1110091709997505,
+    "faithfulness_time_s": 4.558491915013292,
+    "helly_time_s": 1.6699006664566696e-05,
+    "mean_epoch_time_s": 1.1102809172860288,
+    "model_init_time_s": 2.1330290579935536,
+    "modelness_time_s": 0.5524983940122183,
+    "peak_gpu_memory_bytes": 680069632,
+    "ranking_time_s": 4.558491915013292,
+    "total_train_time_s": 2313.460608858004,
+    "wall_clock_s": 2320.7680418210075
+  }
+}
