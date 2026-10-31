@@ -342,6 +342,151 @@ def test_ranking_and_cost_metrics() -> None:
     assert cost["total_train_time_s"] == pytest.approx(0.4)
 
 
+def test_mean_effective_components_materialised_and_existence_violation_rate() -> None:
+    """Verify cost_metrics computes mean_effective_components_materialised over named classes and existence_violation_rate computes strict target violation fraction."""
+    from mowl.nn.el.structural import ExistenceTargets, Regions
+    from mowl.nn.el.prism.losses import PrismRegions
+    from experiments.metrics import existence_violation_rate
+
+    class _FakeStructBoxModule(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.n_components = 2
+            self.embed_dim = 2
+            self.class_center = torch.nn.Embedding(5, 4)
+            self.class_offset = torch.nn.Embedding(5, 4)
+            # 5 classes: 0="http://mowl.borg/geo#A", 1="http://mowl.borg/geo#B", 2="http://mowl.borg/geo#C",
+            # 3=TOP (excluded from named), 4="http://mowl.borg/aux/1" (excluded from named)
+            self.existence_targets = ExistenceTargets(
+                classes=torch.tensor([0, 1, 2], dtype=torch.long),
+                pairs=torch.tensor([[0, 1], [1, 2]], dtype=torch.long),
+            )
+
+        def effective_components(self) -> torch.Tensor:
+            # Raw table says 2 components for every class
+            return torch.full((5,), 2, dtype=torch.long)
+
+        def all_class_regions(self) -> Regions:
+            # K=4 slots, d=2
+            # Class 0 (A): 3 active slots: slot 0 is [0, 2]^2 (cen=1, w=1), slot 1 is nested [0.5, 1.5]^2 (cen=1, w=0.5),
+            #   slot 2 is separate [4, 6]^2 (cen=5, w=1). Effective materialised = 2 (slots 0 and 2).
+            # Class 1 (B): 2 active slots: slot 0 is [1, 3]^2 (cen=2, w=1 -> overlaps A slot 0 on [1, 2]^2, sov=1 > 0),
+            #   slot 1 is active but degenerate/empty in coord 1 (cen=8, w=[1.0, -0.2]). Effective materialised = 1.
+            # Class 2 (C): 1 active slot, empty in coord 0 (cen=10, w=[-0.5, 1.0]). Effective materialised = 0.
+            # Class 3 (TOP): 3 active disjoint non-empty slots (would be 3 if not excluded).
+            # Class 4 (aux): 2 active disjoint non-empty slots (would be 2 if not excluded).
+            cen = torch.zeros((5, 4, 2), dtype=torch.float32)
+            w = -torch.ones((5, 4, 2), dtype=torch.float32)
+            act = torch.zeros((5, 4), dtype=torch.bool)
+
+            # Class 0 (A)
+            cen[0, 0] = torch.tensor([1.0, 1.0])
+            w[0, 0] = torch.tensor([1.0, 1.0])
+            act[0, 0] = True
+            cen[0, 1] = torch.tensor([1.0, 1.0])
+            w[0, 1] = torch.tensor([0.5, 0.5])
+            act[0, 1] = True
+            cen[0, 2] = torch.tensor([5.0, 5.0])
+            w[0, 2] = torch.tensor([1.0, 1.0])
+            act[0, 2] = True
+
+            # Class 1 (B)
+            cen[1, 0] = torch.tensor([2.0, 2.0])
+            w[1, 0] = torch.tensor([1.0, 1.0])
+            act[1, 0] = True
+            cen[1, 1] = torch.tensor([8.0, 8.0])
+            w[1, 1] = torch.tensor([1.0, -0.2])
+            act[1, 1] = True
+
+            # Class 2 (C) - violated class target (ne = -1.0 <= 0)
+            cen[2, 0] = torch.tensor([10.0, 10.0])
+            w[2, 0] = torch.tensor([-0.5, 1.0])
+            act[2, 0] = True
+
+            # Class 3 (TOP) & Class 4 (aux)
+            for idx in (3, 4):
+                for s in range(3):
+                    cen[idx, s] = torch.tensor([float(20 * (s + 1)), float(20 * (s + 1))])
+                    w[idx, s] = torch.tensor([1.0, 1.0])
+                    act[idx, s] = True
+
+            return Regions(cen=cen, w=w, active=act)
+
+    class _FakeStructBoxModel:
+        def __init__(self) -> None:
+            self.module = _FakeStructBoxModule()
+            self.class_index_dict = {
+                f"{NS}A": 0,
+                f"{NS}B": 1,
+                f"{NS}C": 2,
+                TOP: 3,
+                "http://mowl.borg/aux/Aux1": 4,
+            }
+            self.named_class_index_dict = {
+                f"{NS}A": 0,
+                f"{NS}B": 1,
+                f"{NS}C": 2,
+                TOP: 3,
+            }
+
+    fb = _FakeStructBoxModel()
+    c_fb = cost_metrics(fb)
+    # Raw key preserved
+    assert c_fb["mean_effective_components"] == pytest.approx(2.0)
+    # Materialised over named classes {A: 2, B: 1, C: 0} -> mean = (2 + 1 + 0) / 3 = 1.0
+    assert c_fb["mean_effective_components_materialised"] == pytest.approx(1.0)
+
+    # Existence targets:
+    # Classes: A (ne = 2.0 > 0, ok), B (ne = 2.0 > 0, ok), C (ne = -1.0 <= 0, violated) -> 1/3 violated
+    # Pairs: (A, B) has overlap [1, 2]^2 -> sov = 1.0 > 0 (ok); (B, C) -> violated -> 1/2 violated
+    # Total: 2 / 5 = 0.4
+    evr_fb = existence_violation_rate(fb)
+    assert evr_fb == pytest.approx(2.0 / 5.0)
+
+    # Prism model with existence_targets and all_class_regions
+    class _FakeStructPrismModule(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.tri_center = torch.nn.Embedding(3, 2)
+            self.tri_inradius = torch.nn.Embedding(3, 1)
+            self.box_center = torch.nn.Embedding(3, 2)
+            self.box_offset = torch.nn.Embedding(3, 2)
+            self.existence_targets = ExistenceTargets(
+                classes=torch.tensor([0, 1], dtype=torch.long),
+                pairs=torch.tensor([[0, 1]], dtype=torch.long),
+            )
+
+        def all_class_regions(self) -> PrismRegions:
+            # Class 0: h=[1,1,1] (sum=3>0), w=[0.5, 0.5] (2w=1>0) -> non-empty, non-deg (eff=1)
+            # Class 1: h=[1,1,1] (sum=3>0), w=[0.5, 0.5], cen shifted by 10 -> class 1 non-empty (eff=1),
+            #   but pair (0, 1) has disjoint box (w_inter < 0 -> ne <= 0, violated!)
+            # Class 2 (TOP): non-empty
+            h = torch.tensor([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]], dtype=torch.float32)
+            cen = torch.tensor([[0.0, 0.0], [10.0, 10.0], [0.0, 0.0]], dtype=torch.float32)
+            w = torch.tensor([[0.5, 0.5], [0.5, 0.5], [5.0, 5.0]], dtype=torch.float32)
+            return PrismRegions(h=h, cen=cen, w=w)
+
+    class _FakeStructPrismModel:
+        def __init__(self) -> None:
+            self.module = _FakeStructPrismModule()
+            self.class_index_dict = {f"{NS}A": 0, f"{NS}B": 1, TOP: 2}
+
+    fp = _FakeStructPrismModel()
+    c_fp = cost_metrics(fp)
+    assert c_fp["mean_effective_components_materialised"] == pytest.approx(1.0)
+    # 2 classes ok, 1 pair violated -> 1 / 3
+    assert existence_violation_rate(fp) == pytest.approx(1.0 / 3.0)
+
+    # Model without existence_targets -> existence_violation_rate is None
+    class _PlainModule(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.p = torch.nn.Parameter(torch.zeros(1))
+
+    assert existence_violation_rate(_PlainModule()) is None
+
+
+
 def test_cm_cache_roundtrip_and_cli(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify get_canonical_model writes a protocol-5 pickle with code-tag key, checks memory first, and reloads."""
     import shutil

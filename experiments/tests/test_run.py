@@ -553,6 +553,20 @@ def test_run_rejects_point_objective_for_plain_backbone(
                 objective="point",
             )
 
+    for bad_obj in ("point", "mixed", "hybrid"):
+        with pytest.raises(ValueError, match="objective"):
+            run.execute_run(
+                dataset="tk3",
+                method="prism",
+                dim=2,
+                seed=0,
+                epochs=1,
+                device="cpu",
+                out_dir=scratch_dir / "out",
+                runs_dir=scratch_dir / "ckpts",
+                objective=bad_obj,
+            )
+
     # Also verify ELEm rejects *-init / *-anchor variants
     for bad_spec in (
         {"model": "ELEm", "n_components": 1, "init": "projected", "anchor_weight": 0.0},
@@ -909,6 +923,34 @@ def test_run_passes_canonical_model_for_synthetic(
     assert len(captured_mb_kwargs) == 1
     assert captured_mb_kwargs[0]["objective"] == "structural"
     assert captured_mb_kwargs[0]["canonical_model"] is None
+
+
+def test_run_reseed_moves_observed_positive(scratch_dir: Path) -> None:
+    """Verify multibox-k2-struct-reseed on tk3 for 120 epochs (reseed_every=50) observes reseed_moves_total > 0 and records new structural metrics."""
+    from experiments.datasets import load_dataset
+
+    b_tk3 = load_dataset("tk3")
+    payload = run.execute_run(
+        dataset="tk3",
+        method="multibox-k2-struct-reseed",
+        dim=2,
+        seed=2,
+        lr=0.01,
+        epochs=120,
+        device="cpu",
+        out_dir=scratch_dir / "out_reseed",
+        runs_dir=scratch_dir / "ckpts_reseed",
+        bundle=b_tk3,
+    )
+    m = payload["metrics"]
+    assert m["reseed_moves_total"] > 0
+    assert "mean_effective_components_materialised" in m
+    assert m["mean_effective_components_materialised"] is not None
+    assert "existence_violation_rate" in m
+    assert m["existence_violation_rate"] is not None
+    assert 0.0 <= m["existence_violation_rate"] <= 1.0
+    assert not hasattr(run, "build_model")
+
 
 
 

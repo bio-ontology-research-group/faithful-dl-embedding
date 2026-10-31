@@ -40,9 +40,10 @@ from experiments.config import (
     RAW_RESULTS_DIR,
     REPO_ROOT,
     RUNS_DIR,
+    STRUCTURAL_METHODS,
 )
 from experiments.datasets import DatasetBundle, load_dataset
-from experiments.metrics import modelness
+from experiments.metrics import cost_metrics, existence_violation_rate, modelness
 from experiments.run import _build_model, _git_rev_parse
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -271,10 +272,177 @@ def process_raw_directory(
     }
 
 
+def _is_structural_payload(payload: Dict[str, Any]) -> bool:
+    """Return ``True`` iff ``payload`` belongs to a structural-objective cell."""
+    cfg = payload.get("config", {})
+    m_id = str(cfg.get("method", ""))
+    obj = str(cfg.get("objective", ""))
+    return m_id in set(STRUCTURAL_METHODS) or obj == "structural"
+
+
+def _has_structural_metrics(payload: Dict[str, Any]) -> bool:
+    """Return ``True`` iff ``payload['metrics']`` already has non-null ``mean_effective_components_materialised`` and ``existence_violation_rate``."""
+    m = payload.get("metrics", {})
+    return (
+        m.get("mean_effective_components_materialised") is not None
+        and m.get("existence_violation_rate") is not None
+    )
+
+
+def recompute_structural_metrics(
+    raw_dir: Path = RAW_RESULTS_DIR,
+    ckpt_dir: Path = RUNS_DIR,
+    *,
+    force: bool = False,
+    min_age_seconds: float = 0.0,
+) -> Dict[str, int]:
+    """Recompute ``mean_effective_components_materialised`` and ``existence_violation_rate`` for structural JSONs in ``raw_dir`` from checkpoints in ``ckpt_dir``.
+
+    Rebuilds each model via :func:`experiments.run._build_model`, loads the saved
+    ``state_dict``, installs the structural tables via ``model.train(epochs=0)``,
+    evaluates the two metrics, and writes them into ``metrics`` atomically in place.
+    Skips JSONs that already have both keys unless ``force=True``.
+    """
+    raw_dir = Path(raw_dir).expanduser().resolve()
+    ckpt_dir = Path(ckpt_dir).expanduser().resolve()
+
+    if not raw_dir.exists():
+        return {
+            "updated": 0,
+            "skipped_non_structural": 0,
+            "skipped_missing_ckpt": 0,
+            "skipped_existing": 0,
+            "skipped_young": 0,
+            "total_json": 0,
+        }
+
+    json_paths = [
+        p
+        for p in sorted(raw_dir.glob("*.json"))
+        if not p.name.endswith(".failed.json")
+    ]
+    now = time.time()
+
+    by_dataset: Dict[str, List[Tuple[Path, Path, Dict[str, Any]]]] = defaultdict(list)
+    skipped_non_structural = 0
+    skipped_missing_ckpt = 0
+    skipped_existing = 0
+    skipped_young = 0
+
+    for jp in json_paths:
+        if min_age_seconds > 0.0:
+            age_s = now - jp.stat().st_mtime
+            if age_s < min_age_seconds:
+                skipped_young += 1
+                continue
+
+        payload = json.loads(jp.read_text(encoding="utf-8"))
+        if not _is_structural_payload(payload):
+            skipped_non_structural += 1
+            continue
+
+        if not force and _has_structural_metrics(payload):
+            skipped_existing += 1
+            continue
+
+        ckpt_path = ckpt_dir / f"{jp.stem}.pt"
+        if not ckpt_path.exists():
+            cfg_ckpt = payload.get("config", {}).get("checkpoint_path")
+            if cfg_ckpt and Path(cfg_ckpt).expanduser().exists():
+                ckpt_path = Path(cfg_ckpt).expanduser().resolve()
+            else:
+                skipped_missing_ckpt += 1
+                continue
+
+        ds_name = str(payload["config"]["dataset"])
+        by_dataset[ds_name].append((jp, ckpt_path, payload))
+
+    updated = 0
+    for ds_name, items in by_dataset.items():
+        bundle: DatasetBundle = load_dataset(ds_name)
+        cm: "CanonicalModel" = get_canonical_model(bundle)
+
+        for jp, ckpt_path, payload in items:
+            cfg = payload["config"]
+            method_id = str(cfg["method"])
+            dim = int(cfg["dim"])
+            seed = int(cfg["seed"])
+            eff_bs = int(
+                cfg.get(
+                    "effective_batch_size",
+                    cfg.get("batch_size", DEFAULT_HYPERPARAMS["batch_size"]),
+                )
+            )
+            lr = float(
+                cfg.get(
+                    "lr",
+                    cfg.get("learning_rate", DEFAULT_HYPERPARAMS["learning_rate"]),
+                )
+            )
+            train_margin = float(
+                cfg.get("margin", DEFAULT_HYPERPARAMS["margin"])
+            )
+            delta = float(cfg.get("delta", DEFAULT_HYPERPARAMS["delta"]))
+            reg_factor = float(
+                cfg.get("reg_factor", DEFAULT_HYPERPARAMS["reg_factor"])
+            )
+            num_negs = int(
+                cfg.get("num_negs", DEFAULT_HYPERPARAMS["num_negs"])
+            )
+            obj_val = cfg.get("objective")
+
+            model, _ = _build_model(
+                bundle=bundle,
+                cm=cm,
+                method_id=method_id,
+                dim=dim,
+                seed=seed,
+                batch_size=eff_bs,
+                learning_rate=lr,
+                margin=train_margin,
+                delta=delta,
+                reg_factor=reg_factor,
+                num_negs=num_negs,
+                device="cpu",
+                checkpoint_path=ckpt_path,
+                objective=str(obj_val) if obj_val is not None else None,
+            )
+
+            state_dict = torch.load(
+                ckpt_path, map_location="cpu", weights_only=True
+            )
+            model.module.load_state_dict(state_dict)
+            model.module.to("cpu")
+            model.train(epochs=0, validate_every=1)
+            model.module.eval()
+
+            m_cost = cost_metrics(model)
+            m_evr = existence_violation_rate(model)
+            del model
+
+            metrics_dict = payload.setdefault("metrics", {})
+            metrics_dict["mean_effective_components_materialised"] = m_cost[
+                "mean_effective_components_materialised"
+            ]
+            metrics_dict["existence_violation_rate"] = m_evr
+
+            _atomic_write_json(jp, payload)
+            updated += 1
+
+    return {
+        "updated": updated,
+        "skipped_non_structural": skipped_non_structural,
+        "skipped_missing_ckpt": skipped_missing_ckpt,
+        "skipped_existing": skipped_existing,
+        "skipped_young": skipped_young,
+        "total_json": len(json_paths),
+    }
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     """Create the CLI argument parser for ``experiments/posthoc.py``."""
     parser = argparse.ArgumentParser(
-        description="Compute post-hoc modelness_train_margin and margin_semantics on raw JSON results."
+        description="Compute post-hoc modelness_train_margin or structural metrics on raw JSON results."
     )
     parser.add_argument(
         "--raw",
@@ -294,6 +462,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Skip JSON files that already contain post-hoc modelness_train_margin fields.",
     )
     parser.add_argument(
+        "--structural-metrics",
+        action="store_true",
+        help="Recompute mean_effective_components_materialised and existence_violation_rate on structural JSONs.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Recompute structural metrics even when both keys are already present.",
+    )
+    parser.add_argument(
         "--min-age-seconds",
         type=float,
         default=0.0,
@@ -306,6 +484,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     """CLI entry point for ``experiments/posthoc.py``."""
     parser = build_arg_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
+
+    if args.structural_metrics:
+        summary = recompute_structural_metrics(
+            raw_dir=args.raw,
+            ckpt_dir=args.ckpt,
+            force=bool(args.force),
+            min_age_seconds=float(args.min_age_seconds),
+        )
+        print(
+            f"[posthoc-structural] updated={summary['updated']} "
+            f"skipped_existing={summary['skipped_existing']} "
+            f"skipped_missing_ckpt={summary['skipped_missing_ckpt']} "
+            f"skipped_non_structural={summary['skipped_non_structural']} "
+            f"skipped_young={summary['skipped_young']} "
+            f"total_json={summary['total_json']}"
+        )
+        return 0
 
     summary = process_raw_directory(
         raw_dir=args.raw,

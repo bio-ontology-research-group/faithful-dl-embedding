@@ -102,6 +102,7 @@ def load_raw_runs(raw_dir: Path) -> List[Dict[str, Any]]:
             continue
         payload = json.loads(p.read_text(encoding="utf-8"))
         payload["_source_file"] = p.name
+        payload["_source_mtime"] = float(p.stat().st_mtime)
         records.append(payload)
     return records
 
@@ -112,6 +113,7 @@ _STRUCTURAL_KEYS = frozenset(
         "param_count",
         "n_components",
         "mean_effective_components",
+        "mean_effective_components_materialised",
         "mean_epoch_time_s",
         "total_train_time_s",
         "peak_gpu_memory_mb",
@@ -182,7 +184,11 @@ def _decimals_for_key(metric_key: str) -> int:
         return 0
     if metric_key in ("peak_gpu_memory_mb", "n_defined", "reseed_moves_total"):
         return 1
-    if metric_key in ("mean_effective_components", "total_train_time_s"):
+    if metric_key in (
+        "mean_effective_components",
+        "mean_effective_components_materialised",
+        "total_train_time_s",
+    ):
         return 2
     return 4
 
@@ -490,13 +496,45 @@ def render_objectives_markdown(
 
 
 def _is_structural_seed_pass(run_rec: Dict[str, Any]) -> bool:
-    """Return ``True`` iff a single run satisfies ``HVR == 0`` and ``modelness_all >= 0.99``."""
+    """Return ``True`` iff a single run satisfies ``HVR == 0``, ``Deg == 0``, ``existence_violation_rate == 0``, and ``modelness_all >= 0.99``."""
     m = run_rec.get("metrics", {})
     hvr = m.get("helly_violation_rate")
+    deg = m.get("degeneracy_rate")
     mod = m.get("modelness_all")
-    if not _is_valid_number(hvr) or not _is_valid_number(mod):
+    evr = m.get("existence_violation_rate")
+    if (
+        not _is_valid_number(hvr)
+        or not _is_valid_number(deg)
+        or not _is_valid_number(mod)
+    ):
         return False
-    return float(hvr) <= 1e-12 and float(mod) >= 0.99 - 1e-12
+    if "existence_violation_rate" in m and evr is not None:
+        if not _is_valid_number(evr) or float(evr) > 1e-12:
+            return False
+    return (
+        float(hvr) <= 1e-12
+        and float(deg) <= 1e-12
+        and float(mod) >= 0.99 - 1e-12
+    )
+
+
+def _dedupe_by_seed_lr(runs: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Deduplicate runs within a ``(dataset, dim, method)`` cell by ``(seed, lr)``, keeping the newest."""
+    by_key: Dict[Tuple[int, float], Dict[str, Any]] = {}
+    for idx, r in enumerate(runs):
+        cfg = r.get("config", {})
+        seed = int(cfg.get("seed", idx))
+        lr = float(cfg.get("lr", cfg.get("learning_rate", 0.001)))
+        key = (seed, lr)
+        if key not in by_key:
+            by_key[key] = r
+        else:
+            prev = by_key[key]
+            cur_mtime = float(r.get("_source_mtime", 0.0))
+            prev_mtime = float(prev.get("_source_mtime", 0.0))
+            if cur_mtime >= prev_mtime:
+                by_key[key] = r
+    return [by_key[k] for k in sorted(by_key.keys())]
 
 
 def structural_table(
@@ -508,14 +546,15 @@ def structural_table(
     """Render and write ``STRUCTURAL.md`` from raw JSON runs of structural methods.
 
     Per ``(dataset, d, method)`` for synthetic datasets:
-    - ``Pass``: ``PASS`` iff 3/3 seeds achieve ``HVR = 0`` and strict ``Mod >= 0.99``
-      at the best ``lr``, else ``FAIL``.
-    - ``Success (all lr)``: per-seed success fraction over all ``(seed, lr)`` cells.
+    - ``Pass``: ``PASS`` iff 3/3 seeds achieve ``HVR = 0``, ``Deg = 0``,
+      ``existence_violation_rate = 0``, and strict ``Mod >= 0.99`` at the best ``lr``,
+      else ``FAIL``.
+    - ``Success (all lr)``: per-seed success fraction over all deduplicated ``(seed, lr)`` cells.
     - ``Best lr``: learning rate maximizing passing seeds (ties broken by lowest
       mean HVR, highest mean strict Mod, then smaller lr).
     - At ``best_lr``: mean strict ``Mod``, mean ``HVR``, mean ``Deg``, mean
-      effective ``k``, mean epoch time, mean ``n_defined``, and mean
-      ``reseed_moves_total``.
+      ``ExistViol``, mean materialised effective ``k`` (``Eff-k (mat.)``), mean
+      epoch time, mean ``n_defined``, and mean ``reseed_moves_total``.
     Plus a Pizza sanity section when Pizza JSONs exist for structural methods.
     """
     if raw_dir is not None:
@@ -526,6 +565,7 @@ def structural_table(
         runs = list(runs_or_raw)
 
     struct_set = set(STRUCTURAL_METHODS)
+    syn_set = set(SYNTHETIC_DATASETS)
     struct_runs = [
         r
         for r in runs
@@ -545,11 +585,11 @@ def structural_table(
         eff_d = _infer_effective_dim(cfg)
         lr = float(cfg.get("lr", cfg.get("learning_rate", 0.001)))
         model_name = str(cfg.get("model") or METHODS.get(m_id, {}).get("model", ""))
-        if model_name == "PrismEL" and nom_d < 3 and eff_d == 3:
-            has_nominal_d2_prism = True
         if ds == "pizza":
             pizza_grouped[(m_id, nom_d, lr)].append(r)
-        else:
+        elif ds in syn_set:
+            if model_name == "PrismEL" and nom_d < 3 and eff_d == 3:
+                has_nominal_d2_prism = True
             syn_grouped[(ds, nom_d, m_id)].append(r)
 
     method_order = list(STRUCTURAL_METHODS)
@@ -569,8 +609,8 @@ def structural_table(
     lines: List[str] = [
         "# Structural Losses Results (`objective = 'structural'`)",
         "",
-        "- Pass criterion: 3/3 seeds with `HVR = 0` and strict `Mod ≥ 0.99` at the best `lr`.",
-        "- `Success (all lr)` reports the fraction of `(seed, lr)` cells satisfying `HVR = 0 ∧ Mod ≥ 0.99`.",
+        "- Pass criterion: 3/3 seeds with `HVR = 0`, `Deg = 0`, `ExistViol = 0`, and strict `Mod ≥ 0.99` at the best `lr`.",
+        "- `Success (all lr)` reports the fraction of `(seed, lr)` cells satisfying `HVR = 0 ∧ Deg = 0 ∧ ExistViol = 0 ∧ Mod ≥ 0.99`.",
     ]
     if has_nominal_d2_prism:
         lines.append(
@@ -581,16 +621,17 @@ def structural_table(
             "",
             "## Synthetic Benchmarks (`tk3`–`tk6`)",
             "",
-            "| Dataset | d | Method | Pass | Success (all lr) | Best lr | Mod strict | HVR | Deg | Eff-k | Epoch(s) | n_defined | reseed_moves_total |",
-            "|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+            "| Dataset | d | Method | Pass | Success (all lr) | Best lr | Mod strict | HVR | Deg | ExistViol | Eff-k (mat.) | Epoch(s) | n_defined | reseed_moves_total |",
+            "|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
 
     for ds, dim in ds_dim_pairs:
         for m_id in method_order:
-            cell_runs = syn_grouped.get((ds, dim, m_id), [])
-            if not cell_runs:
+            raw_cell_runs = syn_grouped.get((ds, dim, m_id), [])
+            if not raw_cell_runs:
                 continue
+            cell_runs = _dedupe_by_seed_lr(raw_cell_runs)
             n_tot = len(cell_runs)
             n_succ = sum(1 for r in cell_runs if _is_structural_seed_pass(r))
             succ_str = f"{n_succ}/{n_tot} ({n_succ / n_tot:.2f})" if n_tot > 0 else "0/0"
@@ -644,10 +685,18 @@ def structural_table(
                 [rr.get("metrics", {}).get("degeneracy_rate") for rr in best_runs],
                 decimals=4,
             )
-            eff_k_str = _format_mean_sd(
-                [rr.get("metrics", {}).get("mean_effective_components") for rr in best_runs],
-                decimals=2,
+            exist_str = _format_mean_sd(
+                [rr.get("metrics", {}).get("existence_violation_rate") for rr in best_runs],
+                decimals=4,
             )
+            eff_k_vals = [
+                rr.get("metrics", {}).get(
+                    "mean_effective_components_materialised",
+                    rr.get("metrics", {}).get("mean_effective_components"),
+                )
+                for rr in best_runs
+            ]
+            eff_k_str = _format_mean_sd(eff_k_vals, decimals=2)
             ep_vals = [
                 rr.get("metrics", {}).get(
                     "mean_epoch_time_s",
@@ -675,6 +724,7 @@ def structural_table(
                 mod_str,
                 hvr_str,
                 deg_str,
+                exist_str,
                 eff_k_str,
                 ep_str,
                 ndef_str,

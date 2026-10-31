@@ -1137,6 +1137,179 @@ def helly_metrics(
     }
 
 
+def _named_class_indices(model: Any, n_classes: int) -> List[int]:
+    """Return sorted indices of named ontology classes (excluding ``TOP``, ``BOTTOM``, and auxiliary IRIs)."""
+    c2i = getattr(model, "named_class_index_dict", None) or getattr(
+        model, "class_index_dict", None
+    )
+    if isinstance(c2i, Mapping):
+        return sorted(
+            int(idx)
+            for iri, idx in c2i.items()
+            if _is_named_class(str(iri)) and 0 <= int(idx) < n_classes
+        )
+    return list(range(n_classes))
+
+
+def _materialised_effective_components(
+    model: Any,
+    deg_eps: float = 1e-3,
+) -> Optional[float]:
+    """Compute per-class non-degenerate, non-nested active component count on ``module.all_class_regions()``, averaged over named classes."""
+    module = getattr(model, "module", model)
+    if not (hasattr(module, "all_class_regions") and callable(module.all_class_regions)):
+        return None
+
+    reg = module.all_class_regions()
+    if hasattr(reg, "h"):
+        h_np = reg.h.detach().cpu().numpy()
+        w_np = reg.w.detach().cpu().numpy()
+        n = int(h_np.shape[0])
+        named_idx = _named_class_indices(model, n)
+        if not named_idx:
+            return 0.0
+        tri_ok = np.sum(h_np[named_idx], axis=-1) > deg_eps
+        box_ok = np.all((2.0 * w_np[named_idx]) > deg_eps, axis=-1)
+        return float(np.mean((tri_ok & box_ok).astype(np.float64)))
+
+    cen_np = reg.cen.detach().cpu().numpy()
+    w_np = reg.w.detach().cpu().numpy()
+    act_np = reg.active.detach().cpu().numpy().astype(bool, copy=False)
+    n, k, _ = cen_np.shape
+    named_idx = _named_class_indices(model, n)
+    if not named_idx:
+        return 0.0
+
+    lo_np = cen_np - w_np
+    hi_np = cen_np + w_np
+    valid_np = act_np & np.all(w_np > deg_eps, axis=-1)
+
+    counts: List[int] = []
+    for c in named_idx:
+        v = valid_np[c]
+        if not np.any(v):
+            counts.append(0)
+            continue
+        lo_c = lo_np[c]
+        hi_c = hi_np[c]
+        eff = 0
+        for i in range(k):
+            if not v[i]:
+                continue
+            contained = False
+            for j in range(k):
+                if i == j or not v[j]:
+                    continue
+                if np.all(lo_c[j] <= lo_c[i]) and np.all(hi_c[i] <= hi_c[j]):
+                    equal_boxes = np.all(lo_c[i] <= lo_c[j]) and np.all(
+                        hi_c[j] <= hi_c[i]
+                    )
+                    if not equal_boxes or j < i:
+                        contained = True
+                        break
+            if not contained:
+                eff += 1
+        counts.append(eff)
+
+    return float(np.mean(counts)) if counts else 0.0
+
+
+def existence_violation_rate(model: Any) -> Optional[float]:
+    """Return the fraction of ``module.existence_targets`` (classes ∪ pairs) whose strict non-emptiness measure is ``<= 0``."""
+    module = getattr(model, "module", model)
+    targets = getattr(module, "existence_targets", None)
+    if targets is None or not (
+        hasattr(module, "all_class_regions") and callable(module.all_class_regions)
+    ):
+        return None
+
+    reg = module.all_class_regions()
+    cls_idx = targets.classes.detach().cpu().to(dtype=torch.long)
+    pairs_idx = targets.pairs.detach().cpu().to(dtype=torch.long)
+    n_cls = int(cls_idx.numel())
+    n_pairs = int(pairs_idx.shape[0]) if pairs_idx.ndim == 2 else 0
+    total = n_cls + n_pairs
+    if total == 0:
+        return 0.0
+
+    violated = 0
+    if hasattr(reg, "h"):
+        from mowl.nn.el.prism.losses import (
+            PrismRegions,
+            prism_nonempty_measure,
+            prism_regions_intersection,
+        )
+
+        if n_cls > 0:
+            r_cls = PrismRegions(
+                h=reg.h[cls_idx],
+                cen=reg.cen[cls_idx],
+                w=reg.w[cls_idx],
+            )
+            ne_cls = prism_nonempty_measure(r_cls)
+            violated += int((ne_cls <= 0.0).sum().item())
+        if n_pairs > 0:
+            p0 = pairs_idx[:, 0]
+            p1 = pairs_idx[:, 1]
+            r_c = PrismRegions(h=reg.h[p0], cen=reg.cen[p0], w=reg.w[p0])
+            r_d = PrismRegions(h=reg.h[p1], cen=reg.cen[p1], w=reg.w[p1])
+            inter = prism_regions_intersection(r_c, r_d)
+            ne_pairs = prism_nonempty_measure(inter)
+            violated += int((ne_pairs <= 0.0).sum().item())
+    else:
+        from mowl.nn.el.structural import Regions, pair_size, region_size
+
+        if n_cls > 0:
+            r_cls_box = Regions(
+                cen=reg.cen[cls_idx],
+                w=reg.w[cls_idx],
+                active=reg.active[cls_idx],
+            )
+            has_active_cls = r_cls_box.active.any(dim=1)
+            if bool(has_active_cls.all().item()):
+                ne_cls = region_size(r_cls_box)
+            else:
+                from mowl.nn.el.structural import nonempty_measure
+
+                ne_raw = nonempty_measure(r_cls_box.w).masked_fill(
+                    ~r_cls_box.active, float("-inf")
+                )
+                ne_cls = torch.amax(ne_raw, dim=1)
+            violated += int((ne_cls <= 0.0).sum().item())
+        if n_pairs > 0:
+            p0 = pairs_idx[:, 0]
+            p1 = pairs_idx[:, 1]
+            r_a = Regions(
+                cen=reg.cen[p0],
+                w=reg.w[p0],
+                active=reg.active[p0],
+            )
+            r_b = Regions(
+                cen=reg.cen[p1],
+                w=reg.w[p1],
+                active=reg.active[p1],
+            )
+            has_active_pair = (
+                r_a.active.unsqueeze(2) & r_b.active.unsqueeze(1)
+            ).reshape(n_pairs, -1).any(dim=1)
+            if bool(has_active_pair.all().item()):
+                ne_pairs = pair_size(r_a, r_b)
+            else:
+                from mowl.nn.el.structural import signed_overlap
+
+                sov = signed_overlap(r_a.cen, r_a.w, r_b.cen, r_b.w)
+                act_ij = (r_a.active.unsqueeze(2) & r_b.active.unsqueeze(1)).reshape(
+                    n_pairs, -1
+                )
+                ne_ij = torch.amin(sov, dim=-1).reshape(n_pairs, -1).masked_fill(
+                    ~act_ij, float("-inf")
+                )
+                ne_pairs = torch.amax(ne_ij, dim=1)
+            violated += int((ne_pairs <= 0.0).sum().item())
+
+    return float(violated / total)
+
+
 def cost_metrics(
     model: Any,
     timings: Optional[Mapping[str, Any]] = None,
@@ -1159,8 +1332,8 @@ def cost_metrics(
     Dict[str, Any]
         Dictionary with keys ``param_count``, ``mean_epoch_time_s``,
         ``total_train_time_s``, ``n_components``, ``mean_effective_components``,
-        ``peak_gpu_memory_bytes``, ``peak_gpu_memory_mb``, ``n_defined``, and
-        ``reseed_moves_total``.
+        ``mean_effective_components_materialised``, ``peak_gpu_memory_bytes``,
+        ``peak_gpu_memory_mb``, ``n_defined``, and ``reseed_moves_total``.
     """
     module = getattr(model, "module", model)
     timings_dict = dict(timings) if timings is not None else {}
@@ -1184,6 +1357,8 @@ def cost_metrics(
                 mean_eff = float(np.mean(np.all(offsets[:, 0, :] > 1e-3, axis=-1)))
         except TypeError:
             mean_eff = float(n_components)
+
+    mean_eff_mat = _materialised_effective_components(model, deg_eps=1e-3)
 
     epoch_times = timings_dict.get("epoch_times")
     total_train_time_s: Optional[float] = None
@@ -1253,6 +1428,7 @@ def cost_metrics(
         "total_train_time_s": total_train_time_s,
         "n_components": n_components,
         "mean_effective_components": mean_eff,
+        "mean_effective_components_materialised": mean_eff_mat,
         "peak_gpu_memory_bytes": peak_bytes,
         "peak_gpu_memory_mb": float(peak_bytes / (1024.0 * 1024.0)),
         "n_defined": n_defined,

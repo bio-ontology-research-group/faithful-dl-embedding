@@ -144,6 +144,7 @@ from experiments.datasets import DatasetBundle, load_dataset
 from experiments.metrics import (
     abox_metrics,
     cost_metrics,
+    existence_violation_rate,
     faithfulness_metrics,
     helly_metrics,
     modelness,
@@ -582,9 +583,6 @@ def _build_model(
     return model, init_report
 
 
-build_model = _build_model
-
-
 @contextmanager
 def _chunked_module_forward(
     module: torch.nn.Module,
@@ -645,24 +643,13 @@ def _train_model_with_chunking(
     if has_reseed_attr:
         mod_ref.last_reseed_count = 0
     reseed_moves_total = [0]
-    last_reseed_val = [0]
-    reseed_every_val = int(
-        getattr(model, "reseed_every", getattr(mod_ref, "reseed_every", 0)) or 0
-    )
 
     def _on_epoch(epoch_idx: int, _m: Any) -> None:
         now = time.monotonic()
         epoch_times.append(now - t_last[0])
         m_mod = getattr(_m, "module", _m)
         if hasattr(m_mod, "last_reseed_count"):
-            cnt = int(getattr(m_mod, "last_reseed_count") or 0)
-            reseed_moves_total[0] += cnt
-            if cnt != 0 or (
-                reseed_every_val > 0
-                and int(epoch_idx) > 0
-                and int(epoch_idx) % reseed_every_val == 0
-            ):
-                last_reseed_val[0] = cnt
+            reseed_moves_total[0] += int(getattr(m_mod, "last_reseed_count") or 0)
             m_mod.last_reseed_count = 0
         if extra_cb is not None:
             extra_cb(epoch_idx, _m)
@@ -676,8 +663,6 @@ def _train_model_with_chunking(
             validate_every=validate_every,
             epoch_callback=_on_epoch,
         )
-    if has_reseed_attr:
-        mod_ref.last_reseed_count = int(last_reseed_val[0])
     setattr(model, "_reseed_moves_total", int(reseed_moves_total[0]))
     setattr(mod_ref, "_reseed_moves_total", int(reseed_moves_total[0]))
 
@@ -1016,6 +1001,7 @@ def execute_run(
         model, "_recorded_objective_kwargs", None
     )
     m_cost = cost_metrics(model, timings=timings)
+    m_exist_viol = existence_violation_rate(model)
     del model
     if resolved_device.startswith("cuda") and torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -1027,6 +1013,7 @@ def execute_run(
     all_metrics.update(m_train_margin_dict)
     all_metrics["point_modelness"] = m_point_mod
     all_metrics.update(m_helly)
+    all_metrics["existence_violation_rate"] = m_exist_viol
     all_metrics.update(m_cost)
     if bundle.task == "abox":
         all_metrics.update(m_abox)

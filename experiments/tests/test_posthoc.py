@@ -153,3 +153,76 @@ def test_posthoc_tk3_elbe_tightening_margin(scratch_dir: Path) -> None:
     payload = json.loads((raw_dir / "tk3__elbe__d2__s0.json").read_text(encoding="utf-8"))
     assert payload["config"]["margin_semantics"] == "tightening"
     assert payload["metrics"]["modelness_train_margin"] <= payload["metrics"]["modelness_all"]
+
+
+def test_posthoc_structural_metrics_recomputation(scratch_dir: Path) -> None:
+    """Verify posthoc recomputes mean_effective_components_materialised and existence_violation_rate on structural JSONs, is idempotent, and supports --force."""
+    raw_dir = scratch_dir / "raw"
+    ckpt_dir = scratch_dir / "ckpt"
+
+    for method in ("multibox-k2-struct", "prism-struct"):
+        rc = run.main(
+            [
+                "--dataset",
+                "tk3",
+                "--method",
+                method,
+                "--dim",
+                "2",
+                "--seed",
+                "0",
+                "--epochs",
+                "3",
+                "--device",
+                "cpu",
+                "--out",
+                str(raw_dir),
+                "--runs-dir",
+                str(ckpt_dir),
+            ]
+        )
+        assert rc in (0, None)
+
+    mb_json = raw_dir / "tk3__multibox-k2-struct__d2__s0.json"
+    pr_json = raw_dir / "tk3__prism-struct__d2__s0.json"
+    assert mb_json.exists() and pr_json.exists()
+
+    # Strip the two new keys from the JSONs to simulate pre-fix cells
+    orig_vals = {}
+    for jp in (mb_json, pr_json):
+        data = json.loads(jp.read_text(encoding="utf-8"))
+        orig_vals[jp.name] = (
+            data["metrics"].pop("mean_effective_components_materialised", None),
+            data["metrics"].pop("existence_violation_rate", None),
+        )
+        jp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    # Run structural post-hoc pass
+    rc1 = posthoc.main(["--structural-metrics", "--raw", str(raw_dir), "--ckpt", str(ckpt_dir)])
+    assert rc1 in (0, None)
+
+    for jp in (mb_json, pr_json):
+        after = json.loads(jp.read_text(encoding="utf-8"))
+        m = after["metrics"]
+        assert "mean_effective_components_materialised" in m
+        assert "existence_violation_rate" in m
+        assert m["mean_effective_components_materialised"] is not None
+        assert m["existence_violation_rate"] is not None
+        if orig_vals[jp.name][0] is not None:
+            assert m["mean_effective_components_materialised"] == pytest.approx(orig_vals[jp.name][0])
+        if orig_vals[jp.name][1] is not None:
+            assert m["existence_violation_rate"] == pytest.approx(orig_vals[jp.name][1])
+
+    # Second pass without --force skips both files (idempotent)
+    summary_skip = posthoc.recompute_structural_metrics(
+        raw_dir=raw_dir, ckpt_dir=ckpt_dir, force=False
+    )
+    assert summary_skip["updated"] == 0
+    assert summary_skip["skipped_existing"] == 2
+
+    # With --force, recomputes both
+    summary_force = posthoc.recompute_structural_metrics(
+        raw_dir=raw_dir, ckpt_dir=ckpt_dir, force=True
+    )
+    assert summary_force["updated"] == 2
+

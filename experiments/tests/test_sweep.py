@@ -412,13 +412,18 @@ def test_sweep_structural_suite_cells() -> None:
 
 
 def test_aggregate_structural_table(tmp_path: Path) -> None:
-    """Verify aggregate.structural_table writes STRUCTURAL.md with pass flags, success fraction, best lr, cost stats, and Pizza section."""
+    """Verify aggregate.structural_table writes STRUCTURAL.md with Deg+ExistViol in pass criterion, Eff-k (mat.), ExistViol, Best lr parsing, synthetic filtering, and deduplication."""
     raw_dir = tmp_path / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
     out_md = tmp_path / "STRUCTURAL.md"
 
     # Synthetic runs for multibox-k4-struct on tk3 at d=2:
-    # lr=0.001: 1/3 seeds pass; lr=0.01: 3/3 seeds pass (HVR=0, Mod=1.0) -> PASS, success fraction 4/6, best_lr=0.01
+    # lr=0.001: 1/3 seeds pass; lr=0.01: 3/3 seeds pass (HVR=0, Deg=0, ExistViol=0, Mod=1.0) -> PASS,
+    # success fraction 4/6, best_lr=0.01.
+    # Also write an older duplicate JSON for (seed=1, lr=0.01) that failed, and a newer one that passed,
+    # to test deduplication by (seed, lr) keeping the newest.
+    import os
+
     for lr, pass_seeds in ((0.001, {0}), (0.01, {0, 1, 2})):
         for s in (0, 1, 2):
             passed = s in pass_seeds
@@ -440,7 +445,9 @@ def test_aggregate_structural_table(tmp_path: Path) -> None:
                     "modelness_all": 1.0 if passed else 0.85,
                     "helly_violation_rate": 0.0 if passed else 1.0,
                     "degeneracy_rate": 0.0,
+                    "existence_violation_rate": 0.0 if passed else 0.25,
                     "mean_effective_components": 4.0,
+                    "mean_effective_components_materialised": 2.5,
                     "mean_epoch_time_s": 0.012,
                     "n_defined": 3,
                     "reseed_moves_total": 6,
@@ -450,11 +457,21 @@ def test_aggregate_structural_table(tmp_path: Path) -> None:
                 },
             }
             fname = f"tk3__multibox-k4-struct__d2__s{s}__lr{lr:g}.json"
-            (raw_dir / fname).write_text(json.dumps(rec), encoding="utf-8")
+            fpath = raw_dir / fname
+            fpath.write_text(json.dumps(rec), encoding="utf-8")
+            os.utime(fpath, (2000.0, 2000.0))
 
-    # Synthetic runs for prism-struct on tk3 at d=2: only 2/3 seeds pass at lr=0.01 -> FAIL
+    # Write a stale duplicate for seed=1, lr=0.01 with older mtime that had modelness_all=0.10 (should be ignored by dedupe)
+    stale_rec = json.loads((raw_dir / "tk3__multibox-k4-struct__d2__s1__lr0.01.json").read_text(encoding="utf-8"))
+    stale_rec["metrics"]["modelness_all"] = 0.10
+    stale_rec["metrics"]["helly_violation_rate"] = 1.0
+    stale_path = raw_dir / "tk3__multibox-k4-struct__d2__s1__lr0.01__old.json"
+    stale_path.write_text(json.dumps(stale_rec), encoding="utf-8")
+    os.utime(stale_path, (1000.0, 1000.0))
+
+    # Synthetic runs for prism-struct on tk3 at d=2:
+    # All 3 seeds have Mod=1.0, HVR=0.0, BUT Deg=1.0 and ExistViol=1.0 (degenerate solution) -> must FAIL!
     for s in (0, 1, 2):
-        passed = s in {0, 1}
         rec = {
             "config": {
                 "dataset": "tk3",
@@ -470,10 +487,12 @@ def test_aggregate_structural_table(tmp_path: Path) -> None:
                 "objective": "structural",
             },
             "metrics": {
-                "modelness_all": 1.0 if passed else 0.70,
-                "helly_violation_rate": 0.0 if passed else 1.0,
-                "degeneracy_rate": 0.0,
+                "modelness_all": 1.0,
+                "helly_violation_rate": 0.0,
+                "degeneracy_rate": 1.0,
+                "existence_violation_rate": 1.0,
                 "mean_effective_components": 1.0,
+                "mean_effective_components_materialised": 0.0,
                 "mean_epoch_time_s": 0.008,
                 "n_defined": 3,
                 "reseed_moves_total": 0,
@@ -484,6 +503,32 @@ def test_aggregate_structural_table(tmp_path: Path) -> None:
         }
         fname = f"tk3__prism-struct__d2__s{s}__lr0.01.json"
         (raw_dir / fname).write_text(json.dumps(rec), encoding="utf-8")
+
+    # Non-synthetic dataset (e.g. 'go') with structural objective must be filtered out of Synthetic Benchmarks
+    go_rec = {
+        "config": {
+            "dataset": "go",
+            "task": "subsumption",
+            "method": "multibox-k4-struct",
+            "model": "MultiBoxEL",
+            "n_components": 4,
+            "dim": 50,
+            "effective_dim": 50,
+            "seed": 0,
+            "lr": 0.001,
+            "learning_rate": 0.001,
+            "objective": "structural",
+        },
+        "metrics": {
+            "modelness_all": 1.0,
+            "helly_violation_rate": 0.0,
+            "degeneracy_rate": 0.0,
+            "existence_violation_rate": 0.0,
+        },
+    }
+    (raw_dir / "go__multibox-k4-struct__d50__s0.json").write_text(
+        json.dumps(go_rec), encoding="utf-8"
+    )
 
     # Pizza sanity run for multibox-k4-struct
     pizza_rec = {
@@ -521,19 +566,38 @@ def test_aggregate_structural_table(tmp_path: Path) -> None:
     assert out_md.exists()
     assert out_md.read_text(encoding="utf-8") == md
 
+    assert "`go`" not in md
+    assert "Eff-k (mat.)" in md
+    assert "ExistViol" in md
+
+    header_line = next(
+        line for line in md.splitlines() if line.startswith("| Dataset |")
+    )
+    headers = [c.strip() for c in header_line.strip("|").split("|")]
+    best_lr_idx = headers.index("Best lr")
+    pass_idx = headers.index("Pass")
+    succ_idx = headers.index("Success (all lr)")
+    eff_k_idx = headers.index("Eff-k (mat.)")
+    exist_idx = headers.index("ExistViol")
+
     mb_lines = [line for line in md.splitlines() if "`multibox-k4-struct`" in line and "`tk3`" in line]
     assert len(mb_lines) == 1
-    assert "PASS" in mb_lines[0]
-    assert "4/6" in mb_lines[0]
-    assert "0.01" in mb_lines[0]
+    mb_cells = [c.strip() for c in mb_lines[0].strip("|").split("|")]
+    assert mb_cells[pass_idx] == "PASS"
+    assert mb_cells[succ_idx].startswith("4/6")
+    assert float(mb_cells[best_lr_idx]) == pytest.approx(0.01)
+    assert mb_cells[eff_k_idx].startswith("2.50")
+    assert mb_cells[exist_idx].startswith("0.0000")
 
     pr_lines = [line for line in md.splitlines() if "`prism-struct`" in line and "`tk3`" in line]
     assert len(pr_lines) == 1
-    assert "FAIL" in pr_lines[0]
-    assert "2/3" in pr_lines[0]
+    pr_cells = [c.strip() for c in pr_lines[0].strip("|").split("|")]
+    assert pr_cells[pass_idx] == "FAIL"
+    assert pr_cells[succ_idx].startswith("0/3")
 
     assert "Pizza" in md
     assert "0.4200" in md
     assert "0.9100" in md
     assert "0.0700" in md
+
 
