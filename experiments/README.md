@@ -16,7 +16,7 @@ Configured in `config.DATASETS` and loaded via `datasets.load_dataset(name) -> D
   - `yeast-function` (B1): Yeast protein function prediction (`Aux_G(p)` with `Aux_G ≡ ∃has_function.G`) over the normalised GO EL++ TBox and training protein-protein interactions `interacts_with(p, q)`, built from mOWL's `PPIYeastDataset`.
   - `helis` (B3): HeLiS food/nutrient class membership benchmark following the OWL2Vec\* case-study protocol (`KRR-Oxford/OWL2Vec-Star`), with sound `ObjectPropertyRange` materialisation and both KB-entailed (`label`) and gold-conditional (`label_gold`) three-way evaluation labels.
 
-## Suites (7)
+## Suites (8)
 
 Configured in `sweep.SUITE_DATASETS`:
 
@@ -24,11 +24,12 @@ Configured in `sweep.SUITE_DATASETS`:
 - `pizza`: `["pizza"]` (baseline methods including `box2el-milp`).
 - `real`: `["go", "foodon"]` (baseline methods).
 - `objectives`: `["tk3", "tk4", "tk5", "tk6"]` across `lr ∈ {0.001, 0.01}` for the 36 multi-component objective methods plus `prism` and `prism-init`.
-- `structural`: `["tk3", "tk4", "tk5", "tk6"]` across `lr ∈ {0.001, 0.01}` for the 8 structural objective methods (`STRUCTURAL_METHODS`).
+- `structural`: `["tk3", "tk4", "tk5", "tk6"]` across `lr ∈ {0.001, 0.01}` for the 8 base structural objective methods (`STRUCTURAL_BASE_METHODS`).
+- `structural-extra`: `["tk3", "tk4", "tk5", "tk6"]` at `lr = 0.01` for the 6 follow-up structural objective methods (`STRUCTURAL_EXTRA_METHODS`).
 - `abox`: `["yeast-function", "helis"]` (baseline + selected objective/prism methods evaluated on ABox prediction).
 - `all`: all 9 datasets in `DATASETS`.
 
-## Method Families (60 Method IDs)
+## Method Families (66 Method IDs)
 
 Configured in `config.METHODS`:
 
@@ -44,14 +45,15 @@ Configured in `config.METHODS`:
   `{multibox,multielbe}-k{1,2,3}-{axiom,soft,softdiv,point,mixed,hybrid}`, combining backbone (`multibox` vs `multielbe`), component count `k ∈ {1, 2, 3}`, and training objective (`axiom` hard-min region loss, `soft` temperature-annealed softmin aggregation, `softdiv` softmin + diversity regularisation, `point` canonical-element point membership loss, `mixed` point + region loss, `hybrid` region + point loss).
 - **Triangular-prism embeddings (`PrismEL`):**
   `prism` (random init) and `prism-init` (`projected` init; requires `d ≥ 3`, so nominal `d = 2` cells run at effective `d = 3`).
-- **Structural objective methods (`MultiBoxEL` and `PrismEL`, 8 method IDs in `STRUCTURAL_METHODS`):**
-  `multibox-k2-struct` (`K=16`), `multibox-k4-struct` (`K=16`), `multibox-k8-struct` (`K=64`), `multibox-k2-struct-reseed` (`reseed_every=50`), `multibox-k4-struct-reseed` (`reseed_every=50`), `multibox-k4-struct-nodef` (`structural_definitions=False`), `multibox-k4-struct-sr0` (`size_reg=0.0`), and `prism-struct` (`objective="structural"`).
+- **Structural objective methods (`MultiBoxEL` and `PrismEL`, 14 method IDs in `STRUCTURAL_METHODS` = `STRUCTURAL_BASE_METHODS` + `STRUCTURAL_EXTRA_METHODS`):**
+  - Base (`STRUCTURAL_BASE_METHODS`, 8 IDs): `multibox-k2-struct` (`K=16`), `multibox-k4-struct` (`K=16`), `multibox-k8-struct` (`K=64`), `multibox-k2-struct-reseed` (`reseed_every=50`), `multibox-k4-struct-reseed` (`reseed_every=50`), `multibox-k4-struct-nodef` (`structural_definitions=False`), `multibox-k4-struct-sr0` (`size_reg=0.0`), and `prism-struct` (`objective="structural"`).
+  - Extra (`STRUCTURAL_EXTRA_METHODS`, 6 IDs): `multibox-k3-struct-K27-reseed` (`k=3, K=27, reseed_every=50`), `multibox-k4-struct-K64` (`k=4, K=64`), `multibox-k4-struct-K64-reseed` (`k=4, K=64, reseed_every=50`), `multibox-k4-struct-ew10` (`k=4, K=16, existence_weight=10.0`), `prism-struct-ew10` (`existence_weight=10.0`), and `prism-struct-sr1e-2` (`size_reg=0.01`).
 
 ## Layout
 
-- `config.py`: Shared dataset identifiers (`DATASETS`), suite lists, filesystem paths (`<data-dir>/gfe-data/`, `<data-dir>/gfe-runs/`, defaulting to `~/tmp/gfe-data/` and `~/tmp/gfe-runs/`), and method/hyperparameter configurations (`METHODS`, `OBJECTIVE_METHODS`, `PRISM_METHODS`, `STRUCTURAL_METHODS`).
+- `config.py`: Shared dataset identifiers (`DATASETS`), suite lists, filesystem paths (`<data-dir>/gfe-data/`, `<data-dir>/gfe-runs/`, defaulting to `~/tmp/gfe-data/` and `~/tmp/gfe-runs/`), and method/hyperparameter configurations (`METHODS`, `OBJECTIVE_METHODS`, `PRISM_METHODS`, `STRUCTURAL_BASE_METHODS`, `STRUCTURAL_EXTRA_METHODS`, `STRUCTURAL_METHODS`).
 - `datasets.py`: Unified dataset loader `load_dataset(name) -> DatasetBundle` supporting all 9 datasets (`tk3`–`tk6`, `pizza`, `go`, `foodon`, `yeast-function`, `helis`).
-- `run.py` & `sweep.py`: Single-cell runner and sequential sweep orchestrator (`--suite {synthetic,objectives,structural,pizza,real,abox,all}`).
+- `run.py` & `sweep.py`: Single-cell runner and sequential sweep orchestrator (`--suite {synthetic,objectives,structural,structural-extra,pizza,real,abox,all}`).
 - `metrics.py`, `abox_eval.py`, & `posthoc.py`: TBox/ABox model-ness, point model-ness, Helly violation/degeneracy diagnostics, filtered subsumption and ABox candidate ranking, protein-centric $F_{\max}$, hierarchy violation rate, and three-way faithfulness (`KB` and `gold`).
 - `aggregate.py`: Aggregates raw JSON outputs in `results/raw/` into Markdown tables in `results/tables/`, `results/STRUCTURAL.md`, and `results/all_runs.csv`.
 - `data/`:

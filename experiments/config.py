@@ -272,7 +272,7 @@ METHODS["prism-init"] = {
 
 _STRUCTURAL_ALLOWED_DATASETS: List[str] = list(SYNTHETIC_DATASETS) + ["pizza"]
 
-STRUCTURAL_METHODS: List[str] = [
+STRUCTURAL_BASE_METHODS: List[str] = [
     "multibox-k2-struct",
     "multibox-k4-struct",
     "multibox-k8-struct",
@@ -282,6 +282,19 @@ STRUCTURAL_METHODS: List[str] = [
     "multibox-k4-struct-sr0",
     "prism-struct",
 ]
+
+STRUCTURAL_EXTRA_METHODS: List[str] = [
+    "multibox-k3-struct-K27-reseed",
+    "multibox-k4-struct-K64",
+    "multibox-k4-struct-K64-reseed",
+    "multibox-k4-struct-ew10",
+    "prism-struct-ew10",
+    "prism-struct-sr1e-2",
+]
+
+STRUCTURAL_METHODS: List[str] = list(STRUCTURAL_BASE_METHODS) + list(
+    STRUCTURAL_EXTRA_METHODS
+)
 
 _STRUCTURAL_SPECS: Dict[str, Dict[str, Any]] = {
     "multibox-k2-struct": {
@@ -347,6 +360,63 @@ _STRUCTURAL_SPECS: Dict[str, Dict[str, Any]] = {
         "backbone": "prism",
         "n_components": 1,
         "objective_kwargs": {"objective": "structural"},
+    },
+    "multibox-k3-struct-K27-reseed": {
+        "model": "MultiBoxEL",
+        "backbone": "multibox",
+        "n_components": 3,
+        "objective_kwargs": {
+            "objective": "structural",
+            "max_components": 27,
+            "reseed_every": 50,
+        },
+    },
+    "multibox-k4-struct-K64": {
+        "model": "MultiBoxEL",
+        "backbone": "multibox",
+        "n_components": 4,
+        "objective_kwargs": {
+            "objective": "structural",
+            "max_components": 64,
+        },
+    },
+    "multibox-k4-struct-K64-reseed": {
+        "model": "MultiBoxEL",
+        "backbone": "multibox",
+        "n_components": 4,
+        "objective_kwargs": {
+            "objective": "structural",
+            "max_components": 64,
+            "reseed_every": 50,
+        },
+    },
+    "multibox-k4-struct-ew10": {
+        "model": "MultiBoxEL",
+        "backbone": "multibox",
+        "n_components": 4,
+        "objective_kwargs": {
+            "objective": "structural",
+            "max_components": 16,
+            "existence_weight": 10.0,
+        },
+    },
+    "prism-struct-ew10": {
+        "model": "PrismEL",
+        "backbone": "prism",
+        "n_components": 1,
+        "objective_kwargs": {
+            "objective": "structural",
+            "existence_weight": 10.0,
+        },
+    },
+    "prism-struct-sr1e-2": {
+        "model": "PrismEL",
+        "backbone": "prism",
+        "n_components": 1,
+        "objective_kwargs": {
+            "objective": "structural",
+            "size_reg": 0.01,
+        },
     },
 }
 

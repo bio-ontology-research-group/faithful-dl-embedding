@@ -51,6 +51,8 @@ from experiments.config import (
     RAW_RESULTS_DIR,
     RUNS_DIR,
     SMOKE_RESULTS_DIR,
+    STRUCTURAL_BASE_METHODS,
+    STRUCTURAL_EXTRA_METHODS,
     STRUCTURAL_METHODS,
     SYNTHETIC_DATASETS,
     methods_for_dataset,
@@ -62,6 +64,7 @@ SUITE_DATASETS: Dict[str, List[str]] = {
     "synthetic": list(SYNTHETIC_DATASETS),
     "objectives": list(OBJECTIVE_DATASETS),
     "structural": list(SYNTHETIC_DATASETS),
+    "structural-extra": list(SYNTHETIC_DATASETS),
     "pizza": ["pizza"],
     "real": ["go", "foodon"],
     "abox": list(ABOX_DATASETS),
@@ -103,7 +106,7 @@ def enumerate_cells(
             raise ValueError(
                 f"Unknown suite {suite!r}; expected one of {list(SUITE_DATASETS)}"
             )
-        if suite == "structural" and smoke:
+        if suite in ("structural", "structural-extra") and smoke:
             ds_list = [SUITE_DATASETS[suite][0]]
         else:
             ds_list = list(SUITE_DATASETS[suite])
@@ -114,6 +117,8 @@ def enumerate_cells(
         lr_list = [float(x) for x in lrs]
     elif suite in ("objectives", "structural"):
         lr_list = [float(DEFAULT_HYPERPARAMS["learning_rate"])] if smoke else [float(x) for x in LR_GRID]
+    elif suite == "structural-extra":
+        lr_list = [0.01]
     else:
         lr_list = [float(DEFAULT_HYPERPARAMS["learning_rate"])]
 
@@ -121,7 +126,7 @@ def enumerate_cells(
     for ds_name in ds_list:
         if dims is not None:
             ds_dims = [int(d) for d in dims]
-        elif suite == "structural" and smoke:
+        elif suite in ("structural", "structural-extra") and smoke:
             ds_dims = [int(DATASET_DIMS[ds_name][0])]
         else:
             ds_dims = DATASET_DIMS[ds_name]
@@ -133,7 +138,7 @@ def enumerate_cells(
         epochs = (
             int(epochs_override)
             if epochs_override is not None
-            else ((5 if suite == "structural" else 3) if smoke else int(DATASET_EPOCHS[ds_name]))
+            else ((5 if suite in ("structural", "structural-extra") else 3) if smoke else int(DATASET_EPOCHS[ds_name]))
         )
         if methods is not None:
             allowed_for_ds = set(methods_for_dataset(ds_name))
@@ -155,7 +160,11 @@ def enumerate_cells(
             ]
         elif suite == "structural":
             ds_methods = [
-                m for m in STRUCTURAL_METHODS if m in methods_for_dataset(ds_name)
+                m for m in STRUCTURAL_BASE_METHODS if m in methods_for_dataset(ds_name)
+            ]
+        elif suite == "structural-extra":
+            ds_methods = [
+                m for m in STRUCTURAL_EXTRA_METHODS if m in methods_for_dataset(ds_name)
             ]
         else:
             excluded_set = (

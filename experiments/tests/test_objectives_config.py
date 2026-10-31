@@ -157,10 +157,14 @@ def test_suites_exclude_new_objective_and_prism_ids_except_objectives_suite() ->
 
 
 def test_structural_methods_config() -> None:
-    """Verify STRUCTURAL_METHODS ids, kwargs, K values, dataset restrictions, and suite disjointness."""
-    from experiments.config import STRUCTURAL_METHODS
+    """Verify STRUCTURAL_BASE_METHODS, STRUCTURAL_EXTRA_METHODS, and STRUCTURAL_METHODS ids, kwargs, K values, dataset restrictions, and suite disjointness."""
+    from experiments.config import (
+        STRUCTURAL_BASE_METHODS,
+        STRUCTURAL_EXTRA_METHODS,
+        STRUCTURAL_METHODS,
+    )
 
-    expected_order = [
+    expected_base_order = [
         "multibox-k2-struct",
         "multibox-k4-struct",
         "multibox-k8-struct",
@@ -170,7 +174,17 @@ def test_structural_methods_config() -> None:
         "multibox-k4-struct-sr0",
         "prism-struct",
     ]
-    assert STRUCTURAL_METHODS == expected_order
+    expected_extra_order = [
+        "multibox-k3-struct-K27-reseed",
+        "multibox-k4-struct-K64",
+        "multibox-k4-struct-K64-reseed",
+        "multibox-k4-struct-ew10",
+        "prism-struct-ew10",
+        "prism-struct-sr1e-2",
+    ]
+    assert STRUCTURAL_BASE_METHODS == expected_base_order
+    assert STRUCTURAL_EXTRA_METHODS == expected_extra_order
+    assert STRUCTURAL_METHODS == expected_base_order + expected_extra_order
 
     expected_specs = {
         "multibox-k2-struct": (
@@ -217,6 +231,36 @@ def test_structural_methods_config() -> None:
             1,
             {"objective": "structural"},
         ),
+        "multibox-k3-struct-K27-reseed": (
+            "MultiBoxEL",
+            3,
+            {"objective": "structural", "max_components": 27, "reseed_every": 50},
+        ),
+        "multibox-k4-struct-K64": (
+            "MultiBoxEL",
+            4,
+            {"objective": "structural", "max_components": 64},
+        ),
+        "multibox-k4-struct-K64-reseed": (
+            "MultiBoxEL",
+            4,
+            {"objective": "structural", "max_components": 64, "reseed_every": 50},
+        ),
+        "multibox-k4-struct-ew10": (
+            "MultiBoxEL",
+            4,
+            {"objective": "structural", "max_components": 16, "existence_weight": 10.0},
+        ),
+        "prism-struct-ew10": (
+            "PrismEL",
+            1,
+            {"objective": "structural", "existence_weight": 10.0},
+        ),
+        "prism-struct-sr1e-2": (
+            "PrismEL",
+            1,
+            {"objective": "structural", "size_reg": 0.01},
+        ),
     }
 
     expected_ds = list(SYNTHETIC_DATASETS) + ["pizza"]
@@ -227,6 +271,7 @@ def test_structural_methods_config() -> None:
         assert spec["n_components"] == k_val
         assert spec["init"] is None
         assert spec["anchor_weight"] == 0.0
+        assert spec["objective"] == "structural"
         assert spec["objective_kwargs"] == obj_kw
         assert spec["datasets"] == expected_ds
 
@@ -235,14 +280,24 @@ def test_structural_methods_config() -> None:
     for ds in ("go", "foodon", "yeast-function", "helis"):
         assert set(STRUCTURAL_METHODS).isdisjoint(set(methods_for_dataset(ds)))
 
-    struct_set = set(STRUCTURAL_METHODS)
+    struct_base_set = set(STRUCTURAL_BASE_METHODS)
+    struct_extra_set = set(STRUCTURAL_EXTRA_METHODS)
+    struct_all_set = set(STRUCTURAL_METHODS)
+    assert struct_base_set.isdisjoint(struct_extra_set)
+
     for other_suite in ("synthetic", "objectives", "pizza", "real", "abox", "all"):
         cells = sweep.enumerate_cells(other_suite, smoke=True)
         suite_methods = {c.method for c in cells}
-        assert suite_methods.isdisjoint(struct_set), (
+        assert suite_methods.isdisjoint(struct_all_set), (
             f"Suite {other_suite!r} must not include structural methods"
         )
 
     struct_cells = sweep.enumerate_cells("structural", smoke=False)
-    assert {c.method for c in struct_cells} == struct_set
+    assert {c.method for c in struct_cells} == struct_base_set
+    assert {c.method for c in struct_cells}.isdisjoint(struct_extra_set)
+
+    struct_extra_cells = sweep.enumerate_cells("structural-extra", smoke=False)
+    assert {c.method for c in struct_extra_cells} == struct_extra_set
+    assert {c.method for c in struct_extra_cells}.isdisjoint(struct_base_set)
+
 

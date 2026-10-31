@@ -172,9 +172,9 @@ def test_sweep_dry_run_lists_all_cells(scratch_dir: Path) -> None:
     """Verify sweep dry-run enumerates methods_for_dataset(d) x datasets x dims x seeds for every suite."""
     from experiments.config import STRUCTURAL_METHODS
 
-    assert len(METHODS) >= 60
-    assert len(methods_for_dataset("tk3")) == 57
-    assert len(methods_for_dataset("pizza")) == 59
+    assert len(METHODS) >= 66
+    assert len(methods_for_dataset("tk3")) == 63
+    assert len(methods_for_dataset("pizza")) == 65
     assert len(methods_for_dataset("go")) == 12
     assert "box2el-milp" in methods_for_dataset("pizza")
     assert "box2el-milp" not in methods_for_dataset("tk3")

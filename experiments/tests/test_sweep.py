@@ -393,22 +393,56 @@ def test_sweep_returns_nonzero_when_all_pending_cells_fail(
 
 def test_sweep_structural_suite_cells() -> None:
     """Verify structural suite enumerates 384 cells at default grid and 8 cells (one per method at 5 epochs) under --smoke."""
-    from experiments.config import LR_GRID, STRUCTURAL_METHODS, SYNTHETIC_DATASETS
+    from experiments.config import LR_GRID, STRUCTURAL_BASE_METHODS, SYNTHETIC_DATASETS
 
     cells_full = sweep.enumerate_cells("structural", smoke=False)
     assert len(cells_full) == 384
     assert {c.dataset for c in cells_full} == set(SYNTHETIC_DATASETS)
-    assert {c.method for c in cells_full} == set(STRUCTURAL_METHODS)
+    assert {c.method for c in cells_full} == set(STRUCTURAL_BASE_METHODS)
     assert {c.dim for c in cells_full} == {2, 10}
     assert {c.seed for c in cells_full} == {0, 1, 2}
     assert {c.lr for c in cells_full} == set(LR_GRID)
     assert all(c.epochs == 2000 for c in cells_full)
 
     cells_smoke = sweep.enumerate_cells("structural", smoke=True)
-    assert len(cells_smoke) == len(STRUCTURAL_METHODS) == 8
-    assert [c.method for c in cells_smoke] == list(STRUCTURAL_METHODS)
+    assert len(cells_smoke) == len(STRUCTURAL_BASE_METHODS) == 8
+    assert [c.method for c in cells_smoke] == list(STRUCTURAL_BASE_METHODS)
     assert all(c.epochs == 5 for c in cells_smoke)
     assert all(c.seed == 0 for c in cells_smoke)
+
+
+def test_sweep_structural_extra_suite_cells() -> None:
+    """Verify structural-extra suite enumerates 144 cells at default lr=[0.01], supports --lr override, and enumerates 6 cells under --smoke."""
+    from experiments.config import (
+        STRUCTURAL_BASE_METHODS,
+        STRUCTURAL_EXTRA_METHODS,
+        SYNTHETIC_DATASETS,
+    )
+
+    cells_full = sweep.enumerate_cells("structural-extra", smoke=False)
+    assert len(cells_full) == 144
+    assert {c.dataset for c in cells_full} == set(SYNTHETIC_DATASETS)
+    assert {c.method for c in cells_full} == set(STRUCTURAL_EXTRA_METHODS)
+    assert {c.method for c in cells_full}.isdisjoint(set(STRUCTURAL_BASE_METHODS))
+    assert {c.dim for c in cells_full} == {2, 10}
+    assert {c.seed for c in cells_full} == {0, 1, 2}
+    assert {c.lr for c in cells_full} == {0.01}
+    assert all(c.epochs == 2000 for c in cells_full)
+
+    cells_override_lr = sweep.enumerate_cells(
+        "structural-extra", smoke=False, lrs=[0.001, 0.01]
+    )
+    assert len(cells_override_lr) == 288
+    assert {c.lr for c in cells_override_lr} == {0.001, 0.01}
+
+    cells_smoke = sweep.enumerate_cells("structural-extra", smoke=True)
+    assert len(cells_smoke) == len(STRUCTURAL_EXTRA_METHODS) == 6
+    assert [c.method for c in cells_smoke] == list(STRUCTURAL_EXTRA_METHODS)
+    assert all(c.epochs == 5 for c in cells_smoke)
+    assert all(c.seed == 0 for c in cells_smoke)
+    assert all(c.dim == 2 for c in cells_smoke)
+    assert all(c.dataset == "tk3" for c in cells_smoke)
+    assert all(c.lr == 0.01 for c in cells_smoke)
 
 
 def test_aggregate_structural_table(tmp_path: Path) -> None:
