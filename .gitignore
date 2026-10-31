@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 *_mowl_el_normalized_v2.owl
 
+experiments/results/all_runs.csv
