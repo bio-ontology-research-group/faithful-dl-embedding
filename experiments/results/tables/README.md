@@ -4,23 +4,27 @@ This directory contains aggregated Markdown tables produced by `python -m experi
 
 ## Generated Files
 
-- `{dataset}.md` (`tk3.md`, `tk4.md`, `tk5.md`, `tk6.md`, `pizza.md`, `go.md`, `foodon.md`):
-  Per-dataset summary tables comparing all configured methods in `config.METHODS` (`11` methods on `tk3..tk6`, `go`, `foodon`; `12` methods including `box2el-milp` on `pizza`) across embedding dimensions `d` (`d ∈ {2, 10}` for `tk3..tk6`; `d = 50` for `pizza`, `go`, `foodon`), reporting `mean ± sd` across seeds and the seed count `n` as `k/n` (non-null over total). Both satisfaction and subsumption tables include the `Certs` (`n_certificates`) column.
+- `{dataset}.md` (`tk3.md`, `tk4.md`, `tk5.md`, `tk6.md`, `pizza.md`, `go.md`, `foodon.md`, `yeast-function.md`, `helis.md`):
+  Per-dataset summary tables across all 9 datasets for the methods present in `experiments/results/raw/` (`52` configured method IDs in `config.METHODS`: `49` methods evaluated on `tk3..tk6` across `d ∈ {2, 10}` with `prism`/`prism-init` at effective `d = 3` for nominal `d = 2`; `20` methods on `pizza` at `d = 50` including `box2el-milp` and `8` objective sanity-check methods; `11` baseline methods on `go` and `foodon` at `d = 50`; `16` methods on the ABox benchmarks `yeast-function` and `helis` at `d = 50` including `canonical-mixture`, `elem`, `prism`/`prism-init`, and `k = 2` objective variants), reporting `mean ± sd` across runs and the run count `n` as `k/n` (non-null over total).
+- `objectives_{dataset}.md` (`objectives_tk3.md`, `objectives_tk4.md`, `objectives_tk5.md`, `objectives_tk6.md`, `objectives_pizza.md`, `objectives_yeast-function.md`, `objectives_helis.md`):
+  Per-dataset objective and prism comparison tables stratified by dimension `d` and learning rate `lr`, reporting `Mod strict`, `Mod@γ`, `point-Mod (pos/hardneg)`, `HVR`, `Deg`, `eff-k`, and `seeds n/k` across baseline and `objectives`-suite methods (`36` `{multibox,multielbe}-k{1,2,3}-{axiom,soft,softdiv,point,mixed,hybrid}` methods plus `prism` and `prism-init`).
 - `multibox_curve.md`:
   Relaxation curve comparing `multibox-k1`, `multibox-k2`, `multibox-k3`, `multibox-k4`, and `multibox-k2-init` across datasets and dimensions.
-- `../all_runs.csv` (or `../smoke/all_runs.csv` for the smoke sweep):
+- `../OBJECTIVES.md` and `../ABOX.md`:
+  Companion narrative reports and curated summary tables for the synthetic/Pizza objective sweep (`experiments/results/OBJECTIVES.md`) and the B1 `yeast-function` / B3 `helis` ABox benchmarks (`experiments/results/ABOX.md`).
+- `../all_runs.csv.gz` (and `../all_runs.csv` when regenerated locally, or `../smoke/all_runs.csv` for the smoke sweep):
   Flat CSV table with one row per run JSON.
 
 ## Reproducing the Tables
 
 ```bash
 # Aggregate smoke-sweep results (epochs = 3, seed = 0)
-~/.venvs/mowl-gpu/bin/python -m experiments.aggregate \
+python -m experiments.aggregate \
     --raw experiments/results/smoke \
     --out experiments/results/smoke/tables
 
 # Aggregate full-sweep results
-~/.venvs/mowl-gpu/bin/python -m experiments.aggregate \
+python -m experiments.aggregate \
     --raw experiments/results/raw \
     --out experiments/results/tables
 ```
@@ -55,7 +59,7 @@ Upstream mOWL embedding models use opposite sign conventions for the positive tr
 
 For ABox benchmarks (`yeast-function` and `helis`), `experiments/run.py` executes the `task == "abox"` branch:
 
-- **Validation-MRR checkpointing:** Disables mOWL's loss-based validation (`validate_every = epochs + 1`) and evaluates validation rankable-only MRR every `50` epochs (plus the final epoch) via `compute_validation_mrr`, saving the best state dict to `~/tmp/gfe-runs/{dataset}__{method}__d{dim}__s{seed}.pt` without early stopping and reloading it via `load_state_dict` before test evaluation.
+- **Validation-MRR checkpointing:** Disables mOWL's loss-based validation (`validate_every = epochs + 1`) and evaluates validation rankable-only MRR every `50` epochs (plus the final epoch) via `compute_validation_mrr`, saving the best state dict to `<data-dir>/gfe-runs/{dataset}__{method}__d{dim}__s{seed}.pt` without early stopping and reloading it via `load_state_dict` before test evaluation.
 - **Top-level JSON structure (`config`, `metrics`, `timings`, `env`):**
   - `config`:
     - `dataset` (`"yeast-function"` or `"helis"`), `task` (`"abox"`), `method`, `model`, `n_components`, `init`, `anchor_weight`, `dim`, `seed`, `epochs`, `validate_every` (`50`), `eval_gci_name` (`"class_assertion"`), `margin`, `delta`, `reg_factor`, `num_negs`, `learning_rate`, `batch_size`, `effective_batch_size`, `oom_retries`, `device`, `checkpoint_path`, `init_report`.

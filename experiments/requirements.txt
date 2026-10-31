@@ -1,5 +1,5 @@
 # Runtime dependencies for experiments/
-# Note: mowl is imported from this worktree (install editable with `pip install -e .` or set PYTHONPATH to the repo root).
+# Note: mOWL must be installed from the bio-ontology-research-group/mowl branch abox-geometric (PR #172, e.g. commit f61dc5a).
 torch>=2.0
 numpy>=1.24
 pandas>=2.0

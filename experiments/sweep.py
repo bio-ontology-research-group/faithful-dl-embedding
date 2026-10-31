@@ -4,21 +4,22 @@ CLI usage
 ---------
 ::
 
-    python -m experiments.sweep --suite {synthetic,pizza,real,all} [--smoke] [--dry-run] [--out ...]
+    python -m experiments.sweep --suite {synthetic,objectives,pizza,real,abox,all} [--smoke] [--dry-run] [--out ...]
 
 Guarantees
 ----------
-- ``enumerate_cells(suite, smoke=False)`` enumerates ``(dataset, method, dim, seed)``
-  tuples in deterministic order across ``methods_for_dataset(dataset)`` (11 methods
-  for ``tk3..tk6``, ``go``, ``foodon``; 12 methods including ``box2el-milp`` for
-  ``pizza``), suite datasets, ``DATASET_DIMS[dataset]``, and
-  ``DATASET_SEEDS[dataset]`` (or ``[0]`` when ``smoke=True``).
-- Skips any cell whose output JSON ``{dataset}__{method}__d{dim}__s{seed}.json``
+- ``enumerate_cells(suite, smoke=False)`` enumerates ``(dataset, method, dim, seed, epochs, lr)``
+  tuples in deterministic order across ``SUITE_DATASETS[suite]`` (``synthetic``,
+  ``objectives``, ``pizza``, ``real``, ``abox``, ``all``), applicable methods in
+  ``methods_for_dataset(dataset)``, ``DATASET_DIMS[dataset]``,
+  ``DATASET_SEEDS[dataset]`` (or ``[0]`` when ``smoke=True``), and ``LR_GRID`` (for
+  ``suite="objectives"``).
+- Skips any cell whose output JSON ``{dataset}__{method}__d{dim}__s{seed}[__lr{lr}].json``
   already exists in ``--out`` (unless ``--force`` is passed).
 - Reuses the loaded :class:`~experiments.datasets.DatasetBundle` and cached
   :class:`~mowl.geometric.CanonicalModel` across all methods/dims/seeds of the
-  same dataset so large ontologies (GO, FoodOn) are loaded and saturated/reloaded
-  only once per sweep.
+  same dataset so large ontologies (GO, FoodOn, yeast-function, HeLiS) are loaded
+  and saturated/reloaded only once per sweep.
 - Logs progress to stdout and to ``experiments/logs/sweep_<suite>[_smoke].log``.
 """
 from __future__ import annotations
