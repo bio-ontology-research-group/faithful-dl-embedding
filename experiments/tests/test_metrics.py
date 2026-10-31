@@ -276,14 +276,14 @@ def test_faithfulness_sets_are_disjoint_and_sized() -> None:
 
 
 def test_class_regions_shapes(t3_bundle: DatasetBundle) -> None:
-    """Verify class_regions returns (n, k, d) numpy arrays with non-negative offsets for all 3 models."""
+    """Verify class_regions returns (n, k, d) numpy arrays with expected active/inactive slots for all 3 models."""
     ds = t3_bundle.dataset
     d = 6
 
-    for model, expected_k in (
-        (ELBE(ds, embed_dim=d), 1),
-        (BoxSquaredEL(ds, embed_dim=d), 1),
-        (MultiBoxEL(ds, embed_dim=d, n_components=3), 3),
+    for model, expected_k, active_k in (
+        (ELBE(ds, embed_dim=d), 1, 1),
+        (BoxSquaredEL(ds, embed_dim=d), 1, 1),
+        (MultiBoxEL(ds, embed_dim=d, n_components=3), 9, 3),
     ):
         n = len(model.class_index_dict)
         centers, offsets = class_regions(model)
@@ -291,7 +291,10 @@ def test_class_regions_shapes(t3_bundle: DatasetBundle) -> None:
         assert isinstance(offsets, np.ndarray)
         assert centers.shape == (n, expected_k, d)
         assert offsets.shape == (n, expected_k, d)
-        assert np.all(offsets >= 0.0)
+        assert np.all(offsets[:, :active_k, :] >= 0.0)
+        if expected_k > active_k:
+            assert np.all(centers[:, active_k:, :] == 0.0)
+            assert np.all(offsets[:, active_k:, :] == -1.0)
 
 
 def test_ranking_and_cost_metrics() -> None:
@@ -596,4 +599,181 @@ def test_point_modelness_metric(t3_bundle: DatasetBundle) -> None:
         assert set(pm.keys()) == {"pos_frac", "hardneg_frac"}
         assert 0.0 <= pm["pos_frac"] <= 1.0
         assert 0.0 <= pm["hardneg_frac"] <= 1.0
+
+
+def test_class_regions_uses_materialised_regions() -> None:
+    """Verify class_regions uses module.all_class_regions() when present, maps inactive slots to -1, and preserves signed w."""
+    from mowl.nn.el.structural import Regions
+    from mowl.nn.el.prism.losses import PrismRegions
+    from experiments.metrics import PrismRegion
+
+    class _FakeBoxModule(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.n_components = 2
+            self.embed_dim = 2
+            # Raw class_center / class_offset deliberately differ from materialised all_class_regions()
+            self.class_center = torch.nn.Embedding(3, 4)
+            self.class_offset = torch.nn.Embedding(3, 4)
+            with torch.no_grad():
+                self.class_center.weight.fill_(99.0)
+                self.class_offset.weight.fill_(77.0)
+
+        def all_class_regions(self) -> Regions:
+            # 3 classes, K=3 slots, d=2
+            cen = torch.tensor(
+                [
+                    [[1.0, 2.0], [3.0, 4.0], [8.0, 9.0]],
+                    [[0.5, -0.5], [2.0, 2.0], [5.0, 5.0]],
+                    [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]],
+                ],
+                dtype=torch.float32,
+            )
+            # Slot 1 of class 0 is active but empty in coord 1 (signed w = -0.25)
+            # Slot 2 of class 0 and slots 1, 2 of class 2 are inactive (even if raw cen/w in tensor are non-zero)
+            w = torch.tensor(
+                [
+                    [[0.5, 0.5], [0.5, -0.25], [10.0, 10.0]],
+                    [[0.2, 0.3], [0.4, 0.5], [0.6, 0.7]],
+                    [[-0.1, 0.2], [5.0, 5.0], [5.0, 5.0]],
+                ],
+                dtype=torch.float32,
+            )
+            active = torch.tensor(
+                [
+                    [True, True, False],
+                    [True, True, True],
+                    [False, False, False],
+                ],
+                dtype=torch.bool,
+            )
+            return Regions(cen=cen, w=w, active=active)
+
+    class _FakeBoxModel:
+        def __init__(self) -> None:
+            self.module = _FakeBoxModule()
+            self.class_index_dict = {"C0": 0, "C1": 1, "C2": 2}
+
+    fake_box = _FakeBoxModel()
+    centers, offsets = class_regions(fake_box)
+    assert centers.shape == (3, 3, 2)
+    assert offsets.shape == (3, 3, 2)
+    assert centers.dtype == np.float32
+    assert offsets.dtype == np.float32
+
+    # Materialised regions used (not 99.0 / 77.0 from raw class_center/class_offset)
+    assert np.allclose(centers[0, 0], [1.0, 2.0])
+    assert np.allclose(offsets[0, 0], [0.5, 0.5])
+    # Active slot with negative signed w preserves signed w
+    assert np.allclose(centers[0, 1], [3.0, 4.0])
+    assert np.allclose(offsets[0, 1], [0.5, -0.25])
+    # Inactive slot forced to centers=0, offsets=-1
+    assert np.allclose(centers[0, 2], [0.0, 0.0])
+    assert np.allclose(offsets[0, 2], [-1.0, -1.0])
+    assert np.allclose(centers[2], 0.0)
+    assert np.allclose(offsets[2], -1.0)
+
+    class _FakePrismModule(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.tri_center = torch.nn.Embedding(2, 2)
+            self.tri_inradius = torch.nn.Embedding(2, 1)
+            self.box_center = torch.nn.Embedding(2, 2)
+            self.box_offset = torch.nn.Embedding(2, 2)
+            with torch.no_grad():
+                self.tri_center.weight.fill_(50.0)
+                self.tri_inradius.weight.fill_(50.0)
+                self.box_center.weight.fill_(50.0)
+                self.box_offset.weight.fill_(50.0)
+
+        def all_class_regions(self) -> PrismRegions:
+            h = torch.tensor([[1.0, 2.0, 3.0], [-1.0, -1.0, -1.0]], dtype=torch.float32)
+            cen = torch.tensor([[2.0, 4.0], [0.0, 0.0]], dtype=torch.float32)
+            # Signed w on second class
+            w = torch.tensor([[0.5, 1.0], [-0.5, 0.25]], dtype=torch.float32)
+            return PrismRegions(h=h, cen=cen, w=w)
+
+    prism_reg = class_regions(_FakePrismModule())
+    assert isinstance(prism_reg, PrismRegion)
+    assert np.allclose(prism_reg.supports, [[1.0, 2.0, 3.0], [-1.0, -1.0, -1.0]])
+    assert np.allclose(prism_reg.lower, [[1.5, 3.0], [0.5, -0.25]])
+    assert np.allclose(prism_reg.upper, [[2.5, 5.0], [-0.5, 0.25]])
+    assert not prism_reg[0].is_empty()
+    assert prism_reg[1].is_empty()
+
+
+def test_helly_metrics_absent_slots() -> None:
+    """Verify helly_metrics treats absent/empty slots as degenerate and never allows them to make a triple non-empty."""
+    from mowl.nn.el.structural import Regions
+
+    cert = HellyCertificate(
+        c1=("X1",),
+        c2=("X2",),
+        c3=("X3",),
+        pairwise_names=("A", "B", "C"),
+    )
+    c2i = {"X1": 0, "X2": 1, "X3": 2, "A": 3, "B": 4, "C": 5}
+
+    class _ConfigurableRegionsModel:
+        def __init__(self, cen: torch.Tensor, w: torch.Tensor, active: torch.Tensor) -> None:
+            self.class_index_dict = c2i
+            self.module = self
+            self._reg = Regions(cen=cen, w=w, active=active)
+
+        def all_class_regions(self) -> Regions:
+            return self._reg
+
+    # Case 1: X1, X2, X3 have a valid 1-D T3 configuration on slots 0..1, and slots 2..3 are absent
+    # even though raw cen=0 in slots 2..3. Also A has ONLY absent slots -> degenerate = True, HVR = 0.0.
+    cen1 = torch.zeros((6, 4, 2), dtype=torch.float32)
+    w1 = -torch.ones((6, 4, 2), dtype=torch.float32)
+    act1 = torch.zeros((6, 4), dtype=torch.bool)
+
+    # X1: [0, 1]^2 u [2, 3]^2; X2: [0, 1]^2 u [4, 5]^2; X3: [2, 3]^2 u [4, 5]^2
+    for idx, intervals in (
+        (0, [(0.5, 0.5), (2.5, 0.5)]),
+        (1, [(0.5, 0.5), (4.5, 0.5)]),
+        (2, [(2.5, 0.5), (4.5, 0.5)]),
+    ):
+        for slot, (c_val, w_val) in enumerate(intervals):
+            cen1[idx, slot] = c_val
+            w1[idx, slot] = w_val
+            act1[idx, slot] = True
+
+    # B and C have 1 active full-dimensional slot; A (idx 3) has ONLY absent slots
+    for idx, c_val in ((4, 4.5), (5, 2.5)):
+        cen1[idx, 0] = c_val
+        w1[idx, 0] = 0.5
+        act1[idx, 0] = True
+
+    res_all_absent_a = helly_metrics(_ConfigurableRegionsModel(cen1, w1, act1), certificates=[cert])
+    assert res_all_absent_a["helly_violation_rate"] == pytest.approx(0.0)
+    assert res_all_absent_a["degeneracy_rate"] == pytest.approx(1.0)
+
+    # Case 2: Give A (idx 3) one active full-dimensional slot (and 3 absent slots) -> degeneracy_rate = 0.0
+    cen2 = cen1.clone()
+    w2 = w1.clone()
+    act2 = act1.clone()
+    cen2[3, 0] = 0.5
+    w2[3, 0] = 0.5
+    act2[3, 0] = True
+
+    res_one_active_a = helly_metrics(_ConfigurableRegionsModel(cen2, w2, act2), certificates=[cert])
+    assert res_one_active_a["helly_violation_rate"] == pytest.approx(0.0)
+    assert res_one_active_a["degeneracy_rate"] == pytest.approx(0.0)
+
+    # Case 3: Active slot on X1, X2, X3 at identical center (0, 0) but with a negative signed half-width
+    # in one coordinate (geometrically empty computed slot) must NEVER make triple_nonempty True!
+    cen3 = cen2.clone()
+    w3 = w2.clone()
+    act3 = act2.clone()
+    for idx in (0, 1, 2):
+        cen3[idx, 2] = torch.tensor([0.0, 0.0])
+        w3[idx, 2] = torch.tensor([1.0, -0.1])  # empty in coord 1
+        act3[idx, 2] = True
+
+    res_empty_active_slot = helly_metrics(_ConfigurableRegionsModel(cen3, w3, act3), certificates=[cert])
+    assert res_empty_active_slot["helly_violation_rate"] == pytest.approx(0.0)
+    assert res_empty_active_slot["degeneracy_rate"] == pytest.approx(0.0)
+
 

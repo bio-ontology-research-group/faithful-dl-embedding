@@ -26,7 +26,7 @@ from collections import defaultdict
 import csv
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -39,8 +39,12 @@ from experiments.config import (
     PRISM_METHODS,
     RAW_RESULTS_DIR,
     RESULTS_DIR,
+    STRUCTURAL_METHODS,
+    SYNTHETIC_DATASETS,
     TABLES_DIR,
 )
+
+STRUCTURAL_MD_PATH: Path = RESULTS_DIR / "STRUCTURAL.md"
 
 SUBSUMPTION_COLUMNS: List[Tuple[str, str]] = [
     ("rank_f_mrr", "F-MRR"),
@@ -112,6 +116,8 @@ _STRUCTURAL_KEYS = frozenset(
         "total_train_time_s",
         "peak_gpu_memory_mb",
         "peak_gpu_memory_bytes",
+        "n_defined",
+        "reseed_moves_total",
     }
 )
 
@@ -174,7 +180,7 @@ def _decimals_for_key(metric_key: str) -> int:
     """Choose formatting precision for ``metric_key``."""
     if metric_key in ("n_certificates", "param_count"):
         return 0
-    if metric_key in ("peak_gpu_memory_mb",):
+    if metric_key in ("peak_gpu_memory_mb", "n_defined", "reseed_moves_total"):
         return 1
     if metric_key in ("mean_effective_components", "total_train_time_s"):
         return 2
@@ -194,7 +200,9 @@ def _infer_effective_dim(cfg: Dict[str, Any]) -> int:
 
 
 def _method_suite_label(m_id: str) -> str:
-    """Return ``'objectives'`` for the 30 objective and 2 prism methods, else ``'baseline'``."""
+    """Return ``'structural'``, ``'objectives'``, or ``'baseline'`` for ``m_id``."""
+    if m_id in STRUCTURAL_METHODS:
+        return "structural"
     if m_id in OBJECTIVE_METHODS or m_id in PRISM_METHODS:
         return "objectives"
     return "baseline"
@@ -481,6 +489,281 @@ def render_objectives_markdown(
     return "\n".join(lines)
 
 
+def _is_structural_seed_pass(run_rec: Dict[str, Any]) -> bool:
+    """Return ``True`` iff a single run satisfies ``HVR == 0`` and ``modelness_all >= 0.99``."""
+    m = run_rec.get("metrics", {})
+    hvr = m.get("helly_violation_rate")
+    mod = m.get("modelness_all")
+    if not _is_valid_number(hvr) or not _is_valid_number(mod):
+        return False
+    return float(hvr) <= 1e-12 and float(mod) >= 0.99 - 1e-12
+
+
+def structural_table(
+    runs_or_raw: Union[Sequence[Dict[str, Any]], Path, str] = RAW_RESULTS_DIR,
+    out_path: Optional[Union[Path, str]] = None,
+    *,
+    raw_dir: Optional[Union[Path, str]] = None,
+) -> str:
+    """Render and write ``STRUCTURAL.md`` from raw JSON runs of structural methods.
+
+    Per ``(dataset, d, method)`` for synthetic datasets:
+    - ``Pass``: ``PASS`` iff 3/3 seeds achieve ``HVR = 0`` and strict ``Mod >= 0.99``
+      at the best ``lr``, else ``FAIL``.
+    - ``Success (all lr)``: per-seed success fraction over all ``(seed, lr)`` cells.
+    - ``Best lr``: learning rate maximizing passing seeds (ties broken by lowest
+      mean HVR, highest mean strict Mod, then smaller lr).
+    - At ``best_lr``: mean strict ``Mod``, mean ``HVR``, mean ``Deg``, mean
+      effective ``k``, mean epoch time, mean ``n_defined``, and mean
+      ``reseed_moves_total``.
+    Plus a Pizza sanity section when Pizza JSONs exist for structural methods.
+    """
+    if raw_dir is not None:
+        runs = load_raw_runs(Path(raw_dir).expanduser().resolve())
+    elif isinstance(runs_or_raw, (Path, str)):
+        runs = load_raw_runs(Path(runs_or_raw).expanduser().resolve())
+    else:
+        runs = list(runs_or_raw)
+
+    struct_set = set(STRUCTURAL_METHODS)
+    struct_runs = [
+        r
+        for r in runs
+        if str(r.get("config", {}).get("method", "")) in struct_set
+        or str(r.get("config", {}).get("objective", "")) == "structural"
+    ]
+
+    syn_grouped: Dict[Tuple[str, int, str], List[Dict[str, Any]]] = defaultdict(list)
+    pizza_grouped: Dict[Tuple[str, int, float], List[Dict[str, Any]]] = defaultdict(list)
+    has_nominal_d2_prism = False
+
+    for r in struct_runs:
+        cfg = r.get("config", {})
+        ds = str(cfg.get("dataset", ""))
+        m_id = str(cfg.get("method", ""))
+        nom_d = int(cfg.get("dim", 0))
+        eff_d = _infer_effective_dim(cfg)
+        lr = float(cfg.get("lr", cfg.get("learning_rate", 0.001)))
+        model_name = str(cfg.get("model") or METHODS.get(m_id, {}).get("model", ""))
+        if model_name == "PrismEL" and nom_d < 3 and eff_d == 3:
+            has_nominal_d2_prism = True
+        if ds == "pizza":
+            pizza_grouped[(m_id, nom_d, lr)].append(r)
+        else:
+            syn_grouped[(ds, nom_d, m_id)].append(r)
+
+    method_order = list(STRUCTURAL_METHODS)
+    for _, _, m_id in sorted(syn_grouped.keys()):
+        if m_id not in method_order:
+            method_order.append(m_id)
+    for m_id, _, _ in sorted(pizza_grouped.keys()):
+        if m_id not in method_order:
+            method_order.append(m_id)
+
+    dataset_order = {d: i for i, d in enumerate(DATASETS)}
+    ds_dim_pairs = sorted(
+        {(ds, d) for ds, d, _ in syn_grouped.keys()},
+        key=lambda pair: (dataset_order.get(pair[0], 999), pair[0], pair[1]),
+    )
+
+    lines: List[str] = [
+        "# Structural Losses Results (`objective = 'structural'`)",
+        "",
+        "- Pass criterion: 3/3 seeds with `HVR = 0` and strict `Mod ≥ 0.99` at the best `lr`.",
+        "- `Success (all lr)` reports the fraction of `(seed, lr)` cells satisfying `HVR = 0 ∧ Mod ≥ 0.99`.",
+    ]
+    if has_nominal_d2_prism:
+        lines.append(
+            "- Note: `prism-struct` needs ≥ 3 dims; nominal `d = 2` cells are trained at `effective_dim = 3`."
+        )
+    lines.extend(
+        [
+            "",
+            "## Synthetic Benchmarks (`tk3`–`tk6`)",
+            "",
+            "| Dataset | d | Method | Pass | Success (all lr) | Best lr | Mod strict | HVR | Deg | Eff-k | Epoch(s) | n_defined | reseed_moves_total |",
+            "|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+
+    for ds, dim in ds_dim_pairs:
+        for m_id in method_order:
+            cell_runs = syn_grouped.get((ds, dim, m_id), [])
+            if not cell_runs:
+                continue
+            n_tot = len(cell_runs)
+            n_succ = sum(1 for r in cell_runs if _is_structural_seed_pass(r))
+            succ_str = f"{n_succ}/{n_tot} ({n_succ / n_tot:.2f})" if n_tot > 0 else "0/0"
+
+            by_lr: Dict[float, List[Dict[str, Any]]] = defaultdict(list)
+            for r in cell_runs:
+                cfg_r = r.get("config", {})
+                lr_r = float(cfg_r.get("lr", cfg_r.get("learning_rate", 0.001)))
+                by_lr[lr_r].append(r)
+
+            def _lr_rank_key(lr_val: float) -> Tuple[int, float, float, float]:
+                lr_runs = by_lr[lr_val]
+                pass_seeds = {
+                    int(rr.get("config", {}).get("seed", idx))
+                    for idx, rr in enumerate(lr_runs)
+                    if _is_structural_seed_pass(rr)
+                }
+                hvrs = [
+                    float(rr["metrics"]["helly_violation_rate"])
+                    for rr in lr_runs
+                    if _is_valid_number(rr.get("metrics", {}).get("helly_violation_rate"))
+                ]
+                mods = [
+                    float(rr["metrics"]["modelness_all"])
+                    for rr in lr_runs
+                    if _is_valid_number(rr.get("metrics", {}).get("modelness_all"))
+                ]
+                mean_hvr = float(np.mean(hvrs)) if hvrs else float("inf")
+                mean_mod = float(np.mean(mods)) if mods else float("-inf")
+                return (len(pass_seeds), -mean_hvr, mean_mod, -lr_val)
+
+            best_lr = max(by_lr.keys(), key=_lr_rank_key)
+            best_runs = by_lr[best_lr]
+            pass_seeds_best = {
+                int(rr.get("config", {}).get("seed", idx))
+                for idx, rr in enumerate(best_runs)
+                if _is_structural_seed_pass(rr)
+            }
+            passed = len(pass_seeds_best) >= 3 and len(pass_seeds_best) == len(best_runs)
+            pass_flag = "PASS" if passed else "FAIL"
+
+            mod_str = _format_mean_sd(
+                [rr.get("metrics", {}).get("modelness_all") for rr in best_runs],
+                decimals=4,
+            )
+            hvr_str = _format_mean_sd(
+                [rr.get("metrics", {}).get("helly_violation_rate") for rr in best_runs],
+                decimals=4,
+            )
+            deg_str = _format_mean_sd(
+                [rr.get("metrics", {}).get("degeneracy_rate") for rr in best_runs],
+                decimals=4,
+            )
+            eff_k_str = _format_mean_sd(
+                [rr.get("metrics", {}).get("mean_effective_components") for rr in best_runs],
+                decimals=2,
+            )
+            ep_vals = [
+                rr.get("metrics", {}).get(
+                    "mean_epoch_time_s",
+                    rr.get("timings", {}).get("mean_epoch_time_s"),
+                )
+                for rr in best_runs
+            ]
+            ep_str = _format_mean_sd(ep_vals, decimals=4)
+            ndef_str = _format_mean_sd(
+                [rr.get("metrics", {}).get("n_defined") for rr in best_runs],
+                decimals=1,
+            )
+            reseed_str = _format_mean_sd(
+                [rr.get("metrics", {}).get("reseed_moves_total") for rr in best_runs],
+                decimals=1,
+            )
+
+            row = [
+                f"`{ds}`",
+                str(dim),
+                f"`{m_id}`",
+                pass_flag,
+                succ_str,
+                f"{best_lr:g}",
+                mod_str,
+                hvr_str,
+                deg_str,
+                eff_k_str,
+                ep_str,
+                ndef_str,
+                reseed_str,
+            ]
+            lines.append("| " + " | ".join(row) + " |")
+
+    if pizza_grouped:
+        lines.extend(
+            [
+                "",
+                "## Pizza Sanity (`pizza`)",
+                "",
+                "| Method | d | lr | n | F-MRR | AUC(+/-) | FVR | Mod strict | Epoch(s) | n_defined | reseed_moves_total |",
+                "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+            ]
+        )
+        pizza_keys = sorted(
+            pizza_grouped.keys(),
+            key=lambda item: (
+                method_order.index(item[0]) if item[0] in method_order else 999,
+                item[0],
+                item[1],
+                item[2],
+            ),
+        )
+        for m_id, dim, lr in pizza_keys:
+            p_runs = pizza_grouped[(m_id, dim, lr)]
+            n_seeds = _format_row_n(
+                p_runs, ["rank_f_mrr", "auc_pos_neg", "fvr", "modelness_all"]
+            )
+            fmrr_str = _format_mean_sd(
+                [rr.get("metrics", {}).get("rank_f_mrr") for rr in p_runs], decimals=4
+            )
+            auc_str = _format_mean_sd(
+                [rr.get("metrics", {}).get("auc_pos_neg") for rr in p_runs], decimals=4
+            )
+            fvr_str = _format_mean_sd(
+                [rr.get("metrics", {}).get("fvr") for rr in p_runs], decimals=4
+            )
+            mod_str = _format_mean_sd(
+                [rr.get("metrics", {}).get("modelness_all") for rr in p_runs], decimals=4
+            )
+            ep_vals = [
+                rr.get("metrics", {}).get(
+                    "mean_epoch_time_s",
+                    rr.get("timings", {}).get("mean_epoch_time_s"),
+                )
+                for rr in p_runs
+            ]
+            ep_str = _format_mean_sd(ep_vals, decimals=4)
+            ndef_str = _format_mean_sd(
+                [rr.get("metrics", {}).get("n_defined") for rr in p_runs], decimals=1
+            )
+            reseed_str = _format_mean_sd(
+                [rr.get("metrics", {}).get("reseed_moves_total") for rr in p_runs],
+                decimals=1,
+            )
+            p_row = [
+                f"`{m_id}`",
+                str(dim),
+                f"{lr:g}",
+                n_seeds,
+                fmrr_str,
+                auc_str,
+                fvr_str,
+                mod_str,
+                ep_str,
+                ndef_str,
+                reseed_str,
+            ]
+            lines.append("| " + " | ".join(p_row) + " |")
+
+    lines.append("")
+    md_text = "\n".join(lines)
+
+    resolved_out: Optional[Path] = None
+    if out_path is not None:
+        resolved_out = Path(out_path).expanduser().resolve()
+    elif isinstance(runs_or_raw, (Path, str)) and Path(runs_or_raw).expanduser().resolve() == RAW_RESULTS_DIR.resolve():
+        resolved_out = STRUCTURAL_MD_PATH.resolve()
+
+    if resolved_out is not None:
+        resolved_out.parent.mkdir(parents=True, exist_ok=True)
+        resolved_out.write_text(md_text, encoding="utf-8")
+
+    return md_text
+
+
 def write_all_runs_csv(runs: Sequence[Dict[str, Any]], csv_path: Path) -> None:
     """Write a flat CSV table containing one row per run JSON."""
     config_fields = [
@@ -648,6 +931,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         encoding="utf-8",
     )
     written_tables.append(curve_path)
+
+    struct_set = set(STRUCTURAL_METHODS)
+    if any(
+        str(r.get("config", {}).get("method", "")) in struct_set
+        or str(r.get("config", {}).get("objective", "")) == "structural"
+        for r in runs
+    ):
+        struct_path = (
+            STRUCTURAL_MD_PATH.resolve()
+            if out_dir == TABLES_DIR.resolve()
+            else (out_dir.parent / "STRUCTURAL.md").resolve()
+        )
+        structural_table(runs, struct_path)
+        written_tables.append(struct_path)
 
     write_all_runs_csv(runs, csv_path)
     print(

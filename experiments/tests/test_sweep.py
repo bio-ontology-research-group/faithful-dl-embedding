@@ -389,3 +389,151 @@ def test_sweep_returns_nonzero_when_all_pending_cells_fail(
     assert (out_dir / "tk3__elbe__d2__s0.json.failed.json").exists()
     log_text = (log_dir / "sweep_synthetic.log").read_text(encoding="utf-8")
     assert "ran=0 skipped=0 failed=1 total=1" in log_text
+
+
+def test_sweep_structural_suite_cells() -> None:
+    """Verify structural suite enumerates 384 cells at default grid and 8 cells (one per method at 5 epochs) under --smoke."""
+    from experiments.config import LR_GRID, STRUCTURAL_METHODS, SYNTHETIC_DATASETS
+
+    cells_full = sweep.enumerate_cells("structural", smoke=False)
+    assert len(cells_full) == 384
+    assert {c.dataset for c in cells_full} == set(SYNTHETIC_DATASETS)
+    assert {c.method for c in cells_full} == set(STRUCTURAL_METHODS)
+    assert {c.dim for c in cells_full} == {2, 10}
+    assert {c.seed for c in cells_full} == {0, 1, 2}
+    assert {c.lr for c in cells_full} == set(LR_GRID)
+    assert all(c.epochs == 2000 for c in cells_full)
+
+    cells_smoke = sweep.enumerate_cells("structural", smoke=True)
+    assert len(cells_smoke) == len(STRUCTURAL_METHODS) == 8
+    assert [c.method for c in cells_smoke] == list(STRUCTURAL_METHODS)
+    assert all(c.epochs == 5 for c in cells_smoke)
+    assert all(c.seed == 0 for c in cells_smoke)
+
+
+def test_aggregate_structural_table(tmp_path: Path) -> None:
+    """Verify aggregate.structural_table writes STRUCTURAL.md with pass flags, success fraction, best lr, cost stats, and Pizza section."""
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    out_md = tmp_path / "STRUCTURAL.md"
+
+    # Synthetic runs for multibox-k4-struct on tk3 at d=2:
+    # lr=0.001: 1/3 seeds pass; lr=0.01: 3/3 seeds pass (HVR=0, Mod=1.0) -> PASS, success fraction 4/6, best_lr=0.01
+    for lr, pass_seeds in ((0.001, {0}), (0.01, {0, 1, 2})):
+        for s in (0, 1, 2):
+            passed = s in pass_seeds
+            rec = {
+                "config": {
+                    "dataset": "tk3",
+                    "task": "satisfaction",
+                    "method": "multibox-k4-struct",
+                    "model": "MultiBoxEL",
+                    "n_components": 4,
+                    "dim": 2,
+                    "effective_dim": 2,
+                    "seed": s,
+                    "lr": lr,
+                    "learning_rate": lr,
+                    "objective": "structural",
+                },
+                "metrics": {
+                    "modelness_all": 1.0 if passed else 0.85,
+                    "helly_violation_rate": 0.0 if passed else 1.0,
+                    "degeneracy_rate": 0.0,
+                    "mean_effective_components": 4.0,
+                    "mean_epoch_time_s": 0.012,
+                    "n_defined": 3,
+                    "reseed_moves_total": 6,
+                },
+                "timings": {
+                    "mean_epoch_time_s": 0.012,
+                },
+            }
+            fname = f"tk3__multibox-k4-struct__d2__s{s}__lr{lr:g}.json"
+            (raw_dir / fname).write_text(json.dumps(rec), encoding="utf-8")
+
+    # Synthetic runs for prism-struct on tk3 at d=2: only 2/3 seeds pass at lr=0.01 -> FAIL
+    for s in (0, 1, 2):
+        passed = s in {0, 1}
+        rec = {
+            "config": {
+                "dataset": "tk3",
+                "task": "satisfaction",
+                "method": "prism-struct",
+                "model": "PrismEL",
+                "n_components": 1,
+                "dim": 2,
+                "effective_dim": 3,
+                "seed": s,
+                "lr": 0.01,
+                "learning_rate": 0.01,
+                "objective": "structural",
+            },
+            "metrics": {
+                "modelness_all": 1.0 if passed else 0.70,
+                "helly_violation_rate": 0.0 if passed else 1.0,
+                "degeneracy_rate": 0.0,
+                "mean_effective_components": 1.0,
+                "mean_epoch_time_s": 0.008,
+                "n_defined": 3,
+                "reseed_moves_total": 0,
+            },
+            "timings": {
+                "mean_epoch_time_s": 0.008,
+            },
+        }
+        fname = f"tk3__prism-struct__d2__s{s}__lr0.01.json"
+        (raw_dir / fname).write_text(json.dumps(rec), encoding="utf-8")
+
+    # Pizza sanity run for multibox-k4-struct
+    pizza_rec = {
+        "config": {
+            "dataset": "pizza",
+            "task": "subsumption",
+            "method": "multibox-k4-struct",
+            "model": "MultiBoxEL",
+            "n_components": 4,
+            "dim": 50,
+            "effective_dim": 50,
+            "seed": 0,
+            "lr": 0.001,
+            "learning_rate": 0.001,
+            "objective": "structural",
+        },
+        "metrics": {
+            "rank_f_mrr": 0.42,
+            "auc_pos_neg": 0.91,
+            "fvr": 0.07,
+            "modelness_all": 0.995,
+            "mean_epoch_time_s": 0.055,
+            "n_defined": 12,
+            "reseed_moves_total": 0,
+        },
+        "timings": {
+            "mean_epoch_time_s": 0.055,
+        },
+    }
+    (raw_dir / "pizza__multibox-k4-struct__d50__s0.json").write_text(
+        json.dumps(pizza_rec), encoding="utf-8"
+    )
+
+    md = aggregate.structural_table(raw_dir, out_md)
+    assert out_md.exists()
+    assert out_md.read_text(encoding="utf-8") == md
+
+    mb_lines = [line for line in md.splitlines() if "`multibox-k4-struct`" in line and "`tk3`" in line]
+    assert len(mb_lines) == 1
+    assert "PASS" in mb_lines[0]
+    assert "4/6" in mb_lines[0]
+    assert "0.01" in mb_lines[0]
+
+    pr_lines = [line for line in md.splitlines() if "`prism-struct`" in line and "`tk3`" in line]
+    assert len(pr_lines) == 1
+    assert "FAIL" in pr_lines[0]
+    assert "2/3" in pr_lines[0]
+
+    assert "Pizza" in md
+    assert "0.4200" in md
+    assert "0.9100" in md
+    assert "0.0700" in md
+

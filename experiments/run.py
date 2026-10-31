@@ -137,6 +137,8 @@ from experiments.config import (
     REPO_ROOT,
     RUNS_DIR,
     SMOKE_RESULTS_DIR,
+    STRUCTURAL_METHODS,
+    SYNTHETIC_DATASETS,
 )
 from experiments.datasets import DatasetBundle, load_dataset
 from experiments.metrics import (
@@ -290,7 +292,7 @@ def _validate_method_objective(
     spec: Dict[str, Any],
     objective_override: Optional[str] = None,
 ) -> str:
-    """Validate that plain backbones are not run with non-axiom objectives (and ELEm has no init/anchor); return effective objective."""
+    """Validate that plain backbones are not run with unsupported objectives (and ELEm has no init/anchor); return effective objective."""
     model_cls_name = str(spec["model"])
     if model_cls_name == "ELEm" and (
         spec.get("init") is not None or float(spec.get("anchor_weight", 0.0)) != 0.0
@@ -305,7 +307,13 @@ def _validate_method_objective(
         if objective_override is not None
         else spec.get("objective", obj_kw.get("objective", "axiom"))
     )
-    if model_cls_name in PLAIN_BACKBONES and effective_objective != "axiom":
+    if model_cls_name == "PrismEL":
+        if effective_objective not in ("axiom", "structural"):
+            raise ValueError(
+                f"Plain backbone {model_cls_name!r} (method {method_id!r}) does not support "
+                f"objective={effective_objective!r}; only 'axiom' and 'structural' are supported."
+            )
+    elif model_cls_name in PLAIN_BACKBONES and effective_objective != "axiom":
         raise ValueError(
             f"Plain backbone {model_cls_name!r} (method {method_id!r}) does not support "
             f"objective={effective_objective!r}; only 'axiom' is supported."
@@ -354,6 +362,18 @@ def _build_model(
     obj_kw: Dict[str, Any] = dict(spec.get("objective_kwargs", {}))
     if objective is not None:
         obj_kw["objective"] = effective_objective
+
+    if effective_objective == "structural":
+        if bundle.name in (set(SYNTHETIC_DATASETS) | {"pizza"}):
+            cm_for_struct = cm if cm is not None else get_canonical_model(bundle)
+            obj_kw["canonical_model"] = cm_for_struct
+        else:
+            obj_kw["canonical_model"] = None
+
+    recorded_obj_kw: Dict[str, Any] = dict(obj_kw)
+    if "canonical_model" in recorded_obj_kw:
+        cm_val = recorded_obj_kw.pop("canonical_model")
+        recorded_obj_kw["canonical_model_used"] = bool(cm_val is not None)
 
     effective_dim = max(int(dim), 3) if model_cls_name == "PrismEL" else int(dim)
 
@@ -472,6 +492,7 @@ def _build_model(
                 device=device,
                 init_boxes=None,
                 anchor_weight=anchor_weight,
+                **obj_kw,
             )
         elif model_cls_name == "CanonicalMixture":
             model = CanonicalMixture(
@@ -486,6 +507,8 @@ def _build_model(
             raise ValueError(f"Unsupported model class {model_cls_name!r}")
     finally:
         ELNormalizer.normalize = orig_normalize  # type: ignore[method-assign]
+
+    setattr(model, "_recorded_objective_kwargs", recorded_obj_kw)
 
     # Wrap _load_datasets so validation/testing ELNormalizer calls reuse the cache.
     orig_load_ds = model._load_datasets
@@ -559,6 +582,9 @@ def _build_model(
     return model, init_report
 
 
+build_model = _build_model
+
+
 @contextmanager
 def _chunked_module_forward(
     module: torch.nn.Module,
@@ -609,15 +635,35 @@ def _train_model_with_chunking(
     effective_batch_size: int,
     epoch_times: List[float],
 ) -> None:
-    """Run ``model.train(epochs, validate_every)`` recording per-epoch wall-clock times."""
+    """Run ``model.train(epochs, validate_every)`` recording per-epoch wall-clock times and summing ``module.last_reseed_count``."""
     epoch_times.clear()
     _ = model.training_datasets
     t_last = [time.monotonic()]
     extra_cb = getattr(model, "_abox_epoch_callback", None)
+    mod_ref = getattr(model, "module", model)
+    has_reseed_attr = hasattr(mod_ref, "last_reseed_count")
+    if has_reseed_attr:
+        mod_ref.last_reseed_count = 0
+    reseed_moves_total = [0]
+    last_reseed_val = [0]
+    reseed_every_val = int(
+        getattr(model, "reseed_every", getattr(mod_ref, "reseed_every", 0)) or 0
+    )
 
     def _on_epoch(epoch_idx: int, _m: Any) -> None:
         now = time.monotonic()
         epoch_times.append(now - t_last[0])
+        m_mod = getattr(_m, "module", _m)
+        if hasattr(m_mod, "last_reseed_count"):
+            cnt = int(getattr(m_mod, "last_reseed_count") or 0)
+            reseed_moves_total[0] += cnt
+            if cnt != 0 or (
+                reseed_every_val > 0
+                and int(epoch_idx) > 0
+                and int(epoch_idx) % reseed_every_val == 0
+            ):
+                last_reseed_val[0] = cnt
+            m_mod.last_reseed_count = 0
         if extra_cb is not None:
             extra_cb(epoch_idx, _m)
         t_last[0] = time.monotonic()
@@ -630,6 +676,10 @@ def _train_model_with_chunking(
             validate_every=validate_every,
             epoch_callback=_on_epoch,
         )
+    if has_reseed_attr:
+        mod_ref.last_reseed_count = int(last_reseed_val[0])
+    setattr(model, "_reseed_moves_total", int(reseed_moves_total[0]))
+    setattr(mod_ref, "_reseed_moves_total", int(reseed_moves_total[0]))
 
 
 def execute_run(
@@ -823,7 +873,11 @@ def execute_run(
     m_modelness = modelness(model, batch_size=effective_batch_size)
     m_point_mod = point_modelness(model)
     m_train_margin_dict: Dict[str, float] = {}
-    if method in OBJECTIVE_METHODS or method in PRISM_METHODS:
+    if (
+        method in OBJECTIVE_METHODS
+        or method in PRISM_METHODS
+        or method in STRUCTURAL_METHODS
+    ):
         raw_tm = modelness(model, batch_size=effective_batch_size, margin=margin)
         m_train_margin_dict["modelness_train_margin"] = float(raw_tm["modelness_all"])
         for k_tm, v_tm in raw_tm.items():
@@ -958,6 +1012,9 @@ def execute_run(
         )
     )
 
+    recorded_obj_kw: Optional[Dict[str, Any]] = getattr(
+        model, "_recorded_objective_kwargs", None
+    )
     m_cost = cost_metrics(model, timings=timings)
     del model
     if resolved_device.startswith("cuda") and torch.cuda.is_available():
@@ -978,6 +1035,15 @@ def execute_run(
         all_metrics["best_val_epoch"] = best_val_epoch
 
     method_spec = METHODS[method]
+    if recorded_obj_kw is None:
+        recorded_obj_kw = dict(method_spec.get("objective_kwargs", {}))
+        if objective is not None:
+            recorded_obj_kw["objective"] = effective_objective
+        if effective_objective == "structural" and "canonical_model_used" not in recorded_obj_kw:
+            cm_val = recorded_obj_kw.pop("canonical_model", None)
+            recorded_obj_kw["canonical_model_used"] = bool(
+                cm_val is not None or (cm is not None and dataset in (set(SYNTHETIC_DATASETS) | {"pizza"}))
+            )
     config_dict: Dict[str, Any] = {
         "dataset": dataset,
         "task": bundle.task,
@@ -992,6 +1058,7 @@ def execute_run(
             if objective is not None
             else method_spec.get("objective_variant", effective_objective)
         ),
+        "objective_kwargs": dict(recorded_obj_kw),
         "component_aggregation": comp_agg_val,
         "tau_start": tau_start_val,
         "tau_end": tau_end_val,
@@ -1021,10 +1088,17 @@ def execute_run(
         "checkpoint_path": str(ckpt_path),
         "init_report": init_report,
     }
-    if method in OBJECTIVE_METHODS or method in PRISM_METHODS:
+    if (
+        method in OBJECTIVE_METHODS
+        or method in PRISM_METHODS
+        or method in STRUCTURAL_METHODS
+    ):
         config_dict["margin_semantics"] = (
             "relaxing"
-            if method_spec["model"] in ("BoxSquaredEL", "MultiBoxEL")
+            if (
+                method_spec["model"] in ("BoxSquaredEL", "MultiBoxEL")
+                and effective_objective != "structural"
+            )
             else "tightening"
         )
 

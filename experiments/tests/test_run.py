@@ -170,9 +170,11 @@ def test_run_smoke_tk3_multibox_k2_cpu(scratch_dir: Path) -> None:
 
 def test_sweep_dry_run_lists_all_cells(scratch_dir: Path) -> None:
     """Verify sweep dry-run enumerates methods_for_dataset(d) x datasets x dims x seeds for every suite."""
-    assert len(METHODS) >= 52
-    assert len(methods_for_dataset("tk3")) == 49
-    assert len(methods_for_dataset("pizza")) == 51
+    from experiments.config import STRUCTURAL_METHODS
+
+    assert len(METHODS) >= 60
+    assert len(methods_for_dataset("tk3")) == 57
+    assert len(methods_for_dataset("pizza")) == 59
     assert len(methods_for_dataset("go")) == 12
     assert "box2el-milp" in methods_for_dataset("pizza")
     assert "box2el-milp" not in methods_for_dataset("tk3")
@@ -189,11 +191,12 @@ def test_sweep_dry_run_lists_all_cells(scratch_dir: Path) -> None:
     assert "elem" not in methods_for_dataset("tk3")
 
     obj_prism_set = set(OBJECTIVE_METHODS) | set(PRISM_METHODS)
+    excluded_from_baseline = obj_prism_set | set(STRUCTURAL_METHODS)
 
     def _expected_count(ds_list: List[str], smoke: bool = False) -> int:
         total = 0
         for d in ds_list:
-            n_m = len([m for m in methods_for_dataset(d) if m not in obj_prism_set])
+            n_m = len([m for m in methods_for_dataset(d) if m not in excluded_from_baseline])
             n_dims = len(DATASET_DIMS[d])
             n_seeds = 1 if smoke else len(DATASET_SEEDS[d])
             total += n_m * n_dims * n_seeds
@@ -201,18 +204,18 @@ def test_sweep_dry_run_lists_all_cells(scratch_dir: Path) -> None:
 
     cells_syn = sweep.enumerate_cells("synthetic", smoke=False)
     assert len(cells_syn) == _expected_count(SYNTHETIC_DATASETS, smoke=False) == 11 * 4 * 2 * 3
-    assert all(c.method not in obj_prism_set for c in cells_syn)
+    assert all(c.method not in excluded_from_baseline for c in cells_syn)
 
     cells_pizza = sweep.enumerate_cells("pizza", smoke=False)
     assert len(cells_pizza) == _expected_count(["pizza"], smoke=False) == 13 * 1 * 1 * 3
-    assert all(c.method not in obj_prism_set for c in cells_pizza)
+    assert all(c.method not in excluded_from_baseline for c in cells_pizza)
 
     cells_real = sweep.enumerate_cells("real", smoke=False)
     assert len(cells_real) == _expected_count(["go", "foodon"], smoke=False) == 12 * 2 * 1 * 3
 
     cells_all = sweep.enumerate_cells("all", smoke=False)
     assert len(cells_all) == _expected_count(DATASETS, smoke=False)
-    assert all(c.method not in obj_prism_set for c in cells_all)
+    assert all(c.method not in excluded_from_baseline for c in cells_all)
 
     cells_smoke = sweep.enumerate_cells("all", smoke=True)
     assert len(cells_smoke) == _expected_count(DATASETS, smoke=True)
@@ -801,6 +804,112 @@ def test_run_smoke_tk3_elem_cpu(scratch_dir: Path) -> None:
     assert payload["metrics"]["point_modelness"] is None
     assert payload["metrics"]["helly_violation_rate"] is None
     assert 0.0 <= payload["metrics"]["modelness_all"] <= 1.0
+
+
+def test_run_passes_canonical_model_for_synthetic(
+    monkeypatch: pytest.MonkeyPatch,
+    scratch_dir: Path,
+) -> None:
+    """Verify _build_model passes canonical_model for tk3/pizza and None for go, allows PrismEL structural, and records objective_kwargs & cost keys."""
+    import mowl.models as mowl_models
+    from experiments.datasets import DatasetBundle, load_dataset
+
+    captured_mb_kwargs: List[dict] = []
+    captured_prism_kwargs: List[dict] = []
+    orig_mb = mowl_models.MultiBoxEL
+    orig_prism = mowl_models.PrismEL
+
+    def _spy_mb(*args, **kwargs):
+        captured_mb_kwargs.append(dict(kwargs))
+        return orig_mb(*args, **kwargs)
+
+    def _spy_prism(*args, **kwargs):
+        captured_prism_kwargs.append(dict(kwargs))
+        return orig_prism(*args, **kwargs)
+
+    monkeypatch.setattr(mowl_models, "MultiBoxEL", _spy_mb)
+    monkeypatch.setattr(mowl_models, "PrismEL", _spy_prism)
+
+    b_tk3 = load_dataset("tk3")
+
+    # 1. Synthetic dataset (tk3) with multibox-k4-struct-reseed passes canonical_model != None
+    payload_mb = run.execute_run(
+        dataset="tk3",
+        method="multibox-k4-struct-reseed",
+        dim=2,
+        seed=0,
+        epochs=55,
+        device="cpu",
+        out_dir=scratch_dir / "out_mb",
+        runs_dir=scratch_dir / "ckpts_mb",
+        bundle=b_tk3,
+    )
+    assert len(captured_mb_kwargs) == 1
+    assert captured_mb_kwargs[0]["objective"] == "structural"
+    assert captured_mb_kwargs[0]["max_components"] == 16
+    assert captured_mb_kwargs[0]["reseed_every"] == 50
+    assert captured_mb_kwargs[0]["canonical_model"] is not None
+
+    cfg_mb = payload_mb["config"]
+    assert cfg_mb["objective"] == "structural"
+    assert "objective_kwargs" in cfg_mb
+    assert "canonical_model" not in cfg_mb["objective_kwargs"]
+    assert cfg_mb["objective_kwargs"]["canonical_model_used"] is True
+    assert cfg_mb["objective_kwargs"]["max_components"] == 16
+    assert cfg_mb["objective_kwargs"]["reseed_every"] == 50
+    assert "n_defined" in payload_mb["metrics"]
+    assert payload_mb["metrics"]["n_defined"] > 0
+    assert "reseed_moves_total" in payload_mb["metrics"]
+    assert isinstance(payload_mb["metrics"]["reseed_moves_total"], int)
+
+    # 2. PrismEL accepts objective="structural" and receives **obj_kw including canonical_model
+    payload_pr = run.execute_run(
+        dataset="tk3",
+        method="prism-struct",
+        dim=2,
+        seed=0,
+        epochs=3,
+        device="cpu",
+        out_dir=scratch_dir / "out_pr",
+        runs_dir=scratch_dir / "ckpts_pr",
+        bundle=b_tk3,
+    )
+    assert len(captured_prism_kwargs) == 1
+    assert captured_prism_kwargs[0]["objective"] == "structural"
+    assert captured_prism_kwargs[0]["canonical_model"] is not None
+    assert payload_pr["config"]["objective_kwargs"]["canonical_model_used"] is True
+    assert payload_pr["metrics"]["n_defined"] > 0
+    assert payload_pr["metrics"]["reseed_moves_total"] == 0
+
+    # 3. Non-synthetic/non-pizza dataset (e.g. 'go') with structural objective gets canonical_model=None
+    fake_go_bundle = DatasetBundle(
+        name="go",
+        dataset=b_tk3.dataset,
+        deductive_closure_ontology=None,
+        task="subsumption",
+        paths=dict(b_tk3.paths),
+    )
+    captured_mb_kwargs.clear()
+    _m_go, _ = run._build_model(
+        bundle=fake_go_bundle,
+        cm=None,
+        method_id="multibox-k2",
+        dim=2,
+        seed=0,
+        batch_size=1024,
+        learning_rate=0.001,
+        margin=0.02,
+        delta=2.5,
+        reg_factor=0.2,
+        num_negs=4,
+        device="cpu",
+        checkpoint_path=scratch_dir / "go_ckpt.pt",
+        objective="structural",
+    )
+    assert len(captured_mb_kwargs) == 1
+    assert captured_mb_kwargs[0]["objective"] == "structural"
+    assert captured_mb_kwargs[0]["canonical_model"] is None
+
 
 
 

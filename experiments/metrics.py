@@ -137,6 +137,16 @@ def _module_device(module: torch.nn.Module) -> torch.device:
 def class_regions(model: Any) -> Union[Tuple[np.ndarray, np.ndarray], PrismRegion]:
     """Extract class regions from ``model``.
 
+    When ``module`` exposes ``all_class_regions()``, materialised regions are used:
+    - For box modules returning ``Regions(cen, w, active)`` of shape ``(n, K, d)``,
+      inactive slots (``~active``) are exported with ``centers = 0.0`` and
+      ``offsets = -1.0`` in every coordinate, while active slots keep the signed
+      half-widths ``w`` as ``offsets`` (a negative coordinate indicates an empty
+      computed slot, so corner arithmetic ``lo = c - o``, ``hi = c + o`` yields
+      ``lo > hi`` and treats the slot as empty automatically).
+    - For prism modules returning ``PrismRegions(h, cen, w)``, returns
+      ``PrismRegion(supports=h, lower=cen - w, upper=cen + w)``.
+
     Parameters
     ----------
     model : mOWL model or torch.nn.Module
@@ -147,12 +157,32 @@ def class_regions(model: Any) -> Union[Tuple[np.ndarray, np.ndarray], PrismRegio
     -------
     Union[Tuple[np.ndarray, np.ndarray], PrismRegion]
         - For box/multi-box models: ``(centers, offsets)`` float32 arrays of shape
-          ``(n_classes, k, d)`` with ``offsets >= 0``.
+          ``(n_classes, K, d)`` using the signed/absent-slot convention above.
         - For ``PrismEL`` / ``PrismModule``: a :class:`PrismRegion` with ``supports``
           of shape ``(n_classes, 3)`` and ``lower``, ``upper`` of shape
           ``(n_classes, d - 2)``.
     """
     module = getattr(model, "module", model)
+
+    if hasattr(module, "all_class_regions") and callable(module.all_class_regions):
+        reg = module.all_class_regions()
+        if hasattr(reg, "h"):
+            h_np = reg.h.detach().cpu().numpy().astype(np.float32, copy=False)
+            cen_np = reg.cen.detach().cpu().numpy().astype(np.float32, copy=False)
+            w_np = reg.w.detach().cpu().numpy().astype(np.float32, copy=False)
+            return PrismRegion(
+                supports=h_np,
+                lower=(cen_np - w_np).astype(np.float32, copy=False),
+                upper=(cen_np + w_np).astype(np.float32, copy=False),
+            )
+        cen_np = reg.cen.detach().cpu().numpy().astype(np.float32, copy=True)
+        w_np = reg.w.detach().cpu().numpy().astype(np.float32, copy=True)
+        act_np = reg.active.detach().cpu().numpy().astype(bool, copy=False)
+        inactive = ~act_np
+        if np.any(inactive):
+            cen_np[inactive] = 0.0
+            w_np[inactive] = -1.0
+        return cen_np, w_np
 
     if (
         hasattr(module, "tri_center")
@@ -1060,13 +1090,18 @@ def helly_metrics(
 
             first_idx = c2i[all_names[0]]
             active: List[Tuple[np.ndarray, np.ndarray]] = [
-                (lo_all[first_idx, m], hi_all[first_idx, m]) for m in range(k)
+                (lo_all[first_idx, m], hi_all[first_idx, m])
+                for m in range(k)
+                if bool(np.all(offsets[first_idx, m] >= 0.0))
+                and bool(np.all(lo_all[first_idx, m] <= hi_all[first_idx, m] + tol))
             ]
             for name in all_names[1:]:
                 idx_u = c2i[name]
                 next_active: List[Tuple[np.ndarray, np.ndarray]] = []
                 for cur_lo, cur_hi in active:
                     for m in range(k):
+                        if not bool(np.all(offsets[idx_u, m] >= 0.0)):
+                            continue
                         new_lo = np.maximum(cur_lo, lo_all[idx_u, m])
                         new_hi = np.minimum(cur_hi, hi_all[idx_u, m])
                         if bool(np.all(new_lo <= new_hi + tol)):
@@ -1124,7 +1159,8 @@ def cost_metrics(
     Dict[str, Any]
         Dictionary with keys ``param_count``, ``mean_epoch_time_s``,
         ``total_train_time_s``, ``n_components``, ``mean_effective_components``,
-        ``peak_gpu_memory_bytes``, and ``peak_gpu_memory_mb``.
+        ``peak_gpu_memory_bytes``, ``peak_gpu_memory_mb``, ``n_defined``, and
+        ``reseed_moves_total``.
     """
     module = getattr(model, "module", model)
     timings_dict = dict(timings) if timings is not None else {}
@@ -1192,6 +1228,25 @@ def cost_metrics(
         else:
             peak_bytes = 0
 
+    def_table = getattr(module, "definition_table", None)
+    if def_table is not None and hasattr(def_table, "n_defined"):
+        n_defined = int(def_table.n_defined)
+    elif timings_dict.get("n_defined") is not None:
+        n_defined = int(timings_dict["n_defined"])
+    else:
+        n_defined = 0
+
+    if timings_dict.get("reseed_moves_total") is not None:
+        reseed_moves_total = int(timings_dict["reseed_moves_total"])
+    elif hasattr(model, "_reseed_moves_total"):
+        reseed_moves_total = int(getattr(model, "_reseed_moves_total"))
+    elif hasattr(module, "_reseed_moves_total"):
+        reseed_moves_total = int(getattr(module, "_reseed_moves_total"))
+    elif hasattr(module, "last_reseed_count"):
+        reseed_moves_total = int(getattr(module, "last_reseed_count") or 0)
+    else:
+        reseed_moves_total = 0
+
     return {
         "param_count": param_count,
         "mean_epoch_time_s": mean_epoch_time_s,
@@ -1200,6 +1255,8 @@ def cost_metrics(
         "mean_effective_components": mean_eff,
         "peak_gpu_memory_bytes": peak_bytes,
         "peak_gpu_memory_mb": float(peak_bytes / (1024.0 * 1024.0)),
+        "n_defined": n_defined,
+        "reseed_moves_total": reseed_moves_total,
     }
 
 

@@ -154,3 +154,95 @@ def test_suites_exclude_new_objective_and_prism_ids_except_objectives_suite() ->
     obj_cells = sweep.enumerate_cells("objectives", smoke=True)
     obj_methods = {c.method for c in obj_cells}
     assert obj_methods == new_ids
+
+
+def test_structural_methods_config() -> None:
+    """Verify STRUCTURAL_METHODS ids, kwargs, K values, dataset restrictions, and suite disjointness."""
+    from experiments.config import STRUCTURAL_METHODS
+
+    expected_order = [
+        "multibox-k2-struct",
+        "multibox-k4-struct",
+        "multibox-k8-struct",
+        "multibox-k2-struct-reseed",
+        "multibox-k4-struct-reseed",
+        "multibox-k4-struct-nodef",
+        "multibox-k4-struct-sr0",
+        "prism-struct",
+    ]
+    assert STRUCTURAL_METHODS == expected_order
+
+    expected_specs = {
+        "multibox-k2-struct": (
+            "MultiBoxEL",
+            2,
+            {"objective": "structural", "max_components": 16},
+        ),
+        "multibox-k4-struct": (
+            "MultiBoxEL",
+            4,
+            {"objective": "structural", "max_components": 16},
+        ),
+        "multibox-k8-struct": (
+            "MultiBoxEL",
+            8,
+            {"objective": "structural", "max_components": 64},
+        ),
+        "multibox-k2-struct-reseed": (
+            "MultiBoxEL",
+            2,
+            {"objective": "structural", "max_components": 16, "reseed_every": 50},
+        ),
+        "multibox-k4-struct-reseed": (
+            "MultiBoxEL",
+            4,
+            {"objective": "structural", "max_components": 16, "reseed_every": 50},
+        ),
+        "multibox-k4-struct-nodef": (
+            "MultiBoxEL",
+            4,
+            {
+                "objective": "structural",
+                "max_components": 16,
+                "structural_definitions": False,
+            },
+        ),
+        "multibox-k4-struct-sr0": (
+            "MultiBoxEL",
+            4,
+            {"objective": "structural", "max_components": 16, "size_reg": 0.0},
+        ),
+        "prism-struct": (
+            "PrismEL",
+            1,
+            {"objective": "structural"},
+        ),
+    }
+
+    expected_ds = list(SYNTHETIC_DATASETS) + ["pizza"]
+    for m_id, (model_cls, k_val, obj_kw) in expected_specs.items():
+        assert m_id in METHODS
+        spec = METHODS[m_id]
+        assert spec["model"] == model_cls
+        assert spec["n_components"] == k_val
+        assert spec["init"] is None
+        assert spec["anchor_weight"] == 0.0
+        assert spec["objective_kwargs"] == obj_kw
+        assert spec["datasets"] == expected_ds
+
+    for ds in expected_ds:
+        assert set(STRUCTURAL_METHODS) <= set(methods_for_dataset(ds))
+    for ds in ("go", "foodon", "yeast-function", "helis"):
+        assert set(STRUCTURAL_METHODS).isdisjoint(set(methods_for_dataset(ds)))
+
+    struct_set = set(STRUCTURAL_METHODS)
+    for other_suite in ("synthetic", "objectives", "pizza", "real", "abox", "all"):
+        cells = sweep.enumerate_cells(other_suite, smoke=True)
+        suite_methods = {c.method for c in cells}
+        assert suite_methods.isdisjoint(struct_set), (
+            f"Suite {other_suite!r} must not include structural methods"
+        )
+
+    struct_cells = sweep.enumerate_cells("structural", smoke=False)
+    assert {c.method for c in struct_cells} == struct_set
+

@@ -270,6 +270,99 @@ METHODS["prism-init"] = {
     "datasets": list(_OBJECTIVE_ALLOWED_DATASETS),
 }
 
+_STRUCTURAL_ALLOWED_DATASETS: List[str] = list(SYNTHETIC_DATASETS) + ["pizza"]
+
+STRUCTURAL_METHODS: List[str] = [
+    "multibox-k2-struct",
+    "multibox-k4-struct",
+    "multibox-k8-struct",
+    "multibox-k2-struct-reseed",
+    "multibox-k4-struct-reseed",
+    "multibox-k4-struct-nodef",
+    "multibox-k4-struct-sr0",
+    "prism-struct",
+]
+
+_STRUCTURAL_SPECS: Dict[str, Dict[str, Any]] = {
+    "multibox-k2-struct": {
+        "model": "MultiBoxEL",
+        "backbone": "multibox",
+        "n_components": 2,
+        "objective_kwargs": {"objective": "structural", "max_components": 16},
+    },
+    "multibox-k4-struct": {
+        "model": "MultiBoxEL",
+        "backbone": "multibox",
+        "n_components": 4,
+        "objective_kwargs": {"objective": "structural", "max_components": 16},
+    },
+    "multibox-k8-struct": {
+        "model": "MultiBoxEL",
+        "backbone": "multibox",
+        "n_components": 8,
+        "objective_kwargs": {"objective": "structural", "max_components": 64},
+    },
+    "multibox-k2-struct-reseed": {
+        "model": "MultiBoxEL",
+        "backbone": "multibox",
+        "n_components": 2,
+        "objective_kwargs": {
+            "objective": "structural",
+            "max_components": 16,
+            "reseed_every": 50,
+        },
+    },
+    "multibox-k4-struct-reseed": {
+        "model": "MultiBoxEL",
+        "backbone": "multibox",
+        "n_components": 4,
+        "objective_kwargs": {
+            "objective": "structural",
+            "max_components": 16,
+            "reseed_every": 50,
+        },
+    },
+    "multibox-k4-struct-nodef": {
+        "model": "MultiBoxEL",
+        "backbone": "multibox",
+        "n_components": 4,
+        "objective_kwargs": {
+            "objective": "structural",
+            "max_components": 16,
+            "structural_definitions": False,
+        },
+    },
+    "multibox-k4-struct-sr0": {
+        "model": "MultiBoxEL",
+        "backbone": "multibox",
+        "n_components": 4,
+        "objective_kwargs": {
+            "objective": "structural",
+            "max_components": 16,
+            "size_reg": 0.0,
+        },
+    },
+    "prism-struct": {
+        "model": "PrismEL",
+        "backbone": "prism",
+        "n_components": 1,
+        "objective_kwargs": {"objective": "structural"},
+    },
+}
+
+for _s_id in STRUCTURAL_METHODS:
+    _s_entry = _STRUCTURAL_SPECS[_s_id]
+    METHODS[_s_id] = {
+        "model": _s_entry["model"],
+        "backbone": _s_entry["backbone"],
+        "n_components": _s_entry["n_components"],
+        "init": None,
+        "anchor_weight": 0.0,
+        "objective": "structural",
+        "objective_kwargs": dict(_s_entry["objective_kwargs"]),
+        "datasets": list(_STRUCTURAL_ALLOWED_DATASETS),
+    }
+
 
 def methods_for_dataset(dataset: str) -> List[str]:
     """Return ordered method identifiers applicable to ``dataset``."""
