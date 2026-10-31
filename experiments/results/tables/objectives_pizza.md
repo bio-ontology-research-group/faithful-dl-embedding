@@ -1,6 +1,6 @@
 # Objectives & Prisms: `pizza`
 
-- Provenance: `experiments` `d2dcde6,fc6b75f` (dirty), `mowl` `8a3e95a,f74b622` (dirty).
+- Provenance: `experiments` `bb530ad,d2dcde6,fc6b75f` (dirty), `mowl` `8a3e95a,a7d8c5b,f74b622` (dirty).
 - Margin semantics: `Mod strict` evaluates GCI losses at `margin = 0`; `Mod@γ` evaluates at the training margin `γ` (`relaxing` for Box²EL/MultiBoxEL, `tightening` for ELBE/MultiELBE/PrismEL).
 - Suite membership: the `suite` column distinguishes `objectives` methods (30 objective-grid methods + `prism`/`prism-init`) from `baseline` 10-29 methods.
 
@@ -26,3 +26,5 @@
 | `multielbe-k2-point` | objectives | multielbe | 2 | point | 0.001 | 50 | 0.0016 | 0.0000 | 1.0000 / 0.9994 | — | — | 1.72 | 1/1 |
 | `multielbe-k2-mixed` | objectives | multielbe | 2 | mixed | 0.001 | 50 | 0.0321 | 0.0016 | 0.9252 / 0.9982 | — | — | 1.07 | 1/1 |
 | `multielbe-k2-hybrid` | objectives | multielbe | 2 | hybrid | 0.001 | 50 | 0.3574 | 0.1731 | 0.9346 / 0.9979 | — | — | 1.00 | 1/1 |
+| `multibox-k4-struct` | structural | multibox | 4 | structural | 0.001 | 50 | 0.6624 ± 0.0082 | 0.6448 ± 0.0024 | — | — | — | 0.62 ± 0.06 | 3/3 |
+| `prism-struct` | structural | prism | 1 | structural | 0.001 | 50 | 0.8563 ± 0.0321 | 0.7794 ± 0.0285 | — | — | — | 0.78 ± 0.05 | 3/3 |

@@ -1,0 +1,12 @@
+{
+  "dataset": "tk5",
+  "dim": 10,
+  "epochs": 2000,
+  "exception": "OSError: JVM cannot be restarted",
+  "exception_type": "OSError",
+  "lr": 0.01,
+  "message": "JVM cannot be restarted",
+  "method": "multibox-k3-struct-K81-reseed",
+  "seed": 0,
+  "traceback": "Traceback (most recent call last):\n  File \"/home/leechuck/Public/software/faithful-dl-embedding/experiments/sweep.py\", line 389, in main\n    current_bundle = load_dataset(cell.dataset)\n  File \"/home/leechuck/Public/software/faithful-dl-embedding/experiments/datasets.py\", line 248, in load_dataset\n    mowl.init_jvm(\"8g\")\n    ~~~~~~~~~~~~~^^^^^^\n  File \"/home/leechuck/Public/software/mowl-wt/abox/mowl/__init__.py\", line 22, in init_jvm\n    jpype.startJVM(\n    ~~~~~~~~~~~~~~^\n        jpype.getDefaultJVMPath(), \"-ea\",\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n        f\"-Xmx{memory}\",\n        ^^^^^^^^^^^^^^^^\n        \"-Djava.class.path=\" + jars,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n        convertStrings=False)\n        ^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/leechuck/.venvs/mowl-ws/lib/python3.13/site-packages/jpype/_core.py\", line 266, in startJVM\n    raise OSError('JVM cannot be restarted')\nOSError: JVM cannot be restarted\n"
+}

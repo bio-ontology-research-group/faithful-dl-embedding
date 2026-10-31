@@ -1,0 +1,12 @@
+{
+  "dataset": "tk4",
+  "dim": 10,
+  "epochs": 2000,
+  "exception": "RuntimeError: unknown parameter type",
+  "exception_type": "RuntimeError",
+  "lr": 0.01,
+  "message": "unknown parameter type",
+  "method": "multibox-k3-struct-K81-reseed",
+  "seed": 0,
+  "traceback": "Traceback (most recent call last):\n  File \"/home/leechuck/Public/software/faithful-dl-embedding/experiments/sweep.py\", line 398, in main\n    payload = execute_run(\n        dataset=cell.dataset,\n    ...<10 lines>...\n        cm=current_cm,\n    )\n  File \"/home/leechuck/Public/software/faithful-dl-embedding/experiments/run.py\", line 754, in execute_run\n    model, init_report = _build_model(\n                         ~~~~~~~~~~~~^\n        bundle=bundle,\n        ^^^^^^^^^^^^^^\n    ...<12 lines>...\n        objective=objective,\n        ^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/home/leechuck/Public/software/faithful-dl-embedding/experiments/run.py\", line 451, in _build_model\n    model = MultiBoxEL(\n        bundle.dataset,\n    ...<14 lines>...\n        **obj_kw,\n    )\n  File \"/home/leechuck/Public/software/mowl-wt/abox/mowl/models/multiboxel/model.py\", line 276, in __init__\n    self.init_module()\n    ~~~~~~~~~~~~~~~~^^\n  File \"/home/leechuck/Public/software/mowl-wt/abox/mowl/models/multiboxel/model.py\", line 280, in init_module\n    self.module = MultiBoxELModule(\n                  ~~~~~~~~~~~~~~~~^\n        len(self.class_index_dict),\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<20 lines>...\n        reseed_every=self.reseed_every,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ).to(self.device)\n    ^\n  File \"/home/leechuck/Public/software/mowl-wt/abox/mowl/nn/el/multiboxel/module.py\", line 292, in __init__\n    self.class_center = self.init_class_embeddings(\n                        ~~~~~~~~~~~~~~~~~~~~~~~~~~^\n        nb_ont_classes, n_components, embed_dim\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/home/leechuck/Public/software/mowl-wt/abox/mowl/nn/el/multiboxel/module.py\", line 419, in init_class_embeddings\n    embeddings = nn.Embedding(num_classes, n_components * embed_dim)\n  File \"/home/leechuck/.venvs/mowl-ws/lib/python3.13/site-packages/torch/nn/modules/sparse.py\", line 166, in __init__\n    torch.empty((num_embeddings, embedding_dim), **factory_kwargs),\n    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: unknown parameter type\n"
+}

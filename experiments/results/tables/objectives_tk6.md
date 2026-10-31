@@ -1,6 +1,6 @@
 # Objectives & Prisms: `tk6`
 
-- Provenance: `experiments` `199295f,512b186,52d39ae,ce5f292,fc6b75f` (dirty), `mowl` `8a3e95a,ac6bd30,db4d483,e5d9a42,f74b622` (dirty).
+- Provenance: `experiments` `199295f,512b186,52d39ae,bb530ad,ce5f292,e372317,fc6b75f` (dirty), `mowl` `5c2a2cc,66a7d6d,8a3e95a,93010f2,a7d8c5b,ac6bd30,db4d483,e5d9a42,ead06b6,f74b622` (dirty).
 - Margin semantics: `Mod strict` evaluates GCI losses at `margin = 0`; `Mod@γ` evaluates at the training margin `γ` (`relaxing` for Box²EL/MultiBoxEL, `tightening` for ELBE/MultiELBE/PrismEL).
 - Suite membership: the `suite` column distinguishes `objectives` methods (30 objective-grid methods + `prism`/`prism-init`) from `baseline` 10-29 methods.
 - Prism dimension note (*): prism needs ≥ 3 dims; nominal d=2 cells trained at d=3.
@@ -54,6 +54,13 @@
 | `multielbe-k3-point` | objectives | multielbe | 3 | point | 0.001 | 2 | 0.0000 ± 0.0000 | 0.0000 ± 0.0000 | 0.9778 ± 0.0154 / 0.9435 ± 0.0049 | 0.9167 ± 0.1041 | 0.0000 ± 0.0000 | 2.83 ± 0.04 | 3/3 |
 | `multielbe-k3-mixed` | objectives | multielbe | 3 | mixed | 0.001 | 2 | 0.0290 ± 0.0145 | 0.0193 ± 0.0084 | 0.9778 ± 0.0077 / 0.9407 ± 0.0169 | 0.9000 ± 0.1000 | 0.0000 ± 0.0000 | 2.90 ± 0.06 | 3/3 |
 | `multielbe-k3-hybrid` | objectives | multielbe | 3 | hybrid | 0.001 | 2 | 0.0386 ± 0.0221 | 0.0242 ± 0.0167 | 0.9667 ± 0.0133 / 0.9520 ± 0.0353 | 0.8667 ± 0.1258 | 0.0000 ± 0.0000 | 2.68 ± 0.15 | 3/3 |
+| `multibox-k2-struct` | structural | multibox | 2 | structural | 0.001 | 2 | 0.6812 ± 0.0502 | 0.5652 ± 0.0383 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 1.72 ± 0.04 | 3/3 |
+| `multibox-k4-struct` | structural | multibox | 4 | structural | 0.001 | 2 | 0.3720 ± 0.0221 | 0.3478 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 3.05 ± 0.20 | 3/3 |
+| `multibox-k8-struct` | structural | multibox | 8 | structural | 0.001 | 2 | 0.3575 ± 0.0167 | 0.3478 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 5.74 ± 0.13 | 3/3 |
+| `multibox-k2-struct-reseed` | structural | multibox | 2 | structural | 0.001 | 2 | 0.6860 ± 0.0549 | 0.5652 ± 0.0251 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 1.73 ± 0.02 | 3/3 |
+| `multibox-k4-struct-reseed` | structural | multibox | 4 | structural | 0.001 | 2 | 0.3720 ± 0.0221 | 0.3478 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 3.05 ± 0.20 | 3/3 |
+| `multibox-k4-struct-nodef` | structural | multibox | 4 | structural | 0.001 | 2 | 0.0338 ± 0.0167 | 0.0048 ± 0.0084 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 2.69 ± 0.18 | 3/3 |
+| `multibox-k4-struct-sr0` | structural | multibox | 4 | structural | 0.001 | 2 | 0.3865 ± 0.0365 | 0.3527 ± 0.0084 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 3.37 ± 0.19 | 3/3 |
 | `multibox-k1-axiom` | objectives | multibox | 1 | axiom | 0.01 | 2 | 0.2271 ± 0.0549 | 1.0000 ± 0.0000 | — | 0.9833 ± 0.0289 | 0.4000 ± 0.1732 | 0.95 ± 0.02 | 3/3 |
 | `multibox-k1-soft` | objectives | multibox | 1 | soft | 0.01 | 2 | 0.2271 ± 0.0549 | 1.0000 ± 0.0000 | — | 0.9833 ± 0.0289 | 0.4000 ± 0.1732 | 0.95 ± 0.02 | 3/3 |
 | `multibox-k1-softdiv` | objectives | multibox | 1 | softdiv | 0.01 | 2 | 0.2271 ± 0.0549 | 1.0000 ± 0.0000 | — | 0.9833 ± 0.0289 | 0.4000 ± 0.1732 | 0.95 ± 0.02 | 3/3 |
@@ -90,10 +97,26 @@
 | `multielbe-k3-point` | objectives | multielbe | 3 | point | 0.01 | 2 | 0.0290 ± 0.0383 | 0.0193 ± 0.0221 | 0.9933 ± 0.0000 / 0.9774 ± 0.0129 | 0.6833 ± 0.1893 | 0.0000 ± 0.0000 | 2.83 ± 0.02 | 3/3 |
 | `multielbe-k3-mixed` | objectives | multielbe | 3 | mixed | 0.01 | 2 | 0.0821 ± 0.0335 | 0.0628 ± 0.0302 | 1.0000 ± 0.0000 / 0.9972 ± 0.0049 | 0.7167 ± 0.0577 | 0.0000 ± 0.0000 | 2.88 ± 0.12 | 3/3 |
 | `multielbe-k3-hybrid` | objectives | multielbe | 3 | hybrid | 0.01 | 2 | 0.1546 ± 0.0084 | 0.0628 ± 0.0221 | 0.9956 ± 0.0077 / 0.9915 ± 0.0147 | 0.6000 ± 0.1803 | 0.0000 ± 0.0000 | 2.42 ± 0.06 | 3/3 |
+| `multibox-k2-struct` | structural | multibox | 2 | structural | 0.01 | 2 | 0.7585 ± 0.0365 | 0.5749 ± 0.0509 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 1.65 ± 0.02 | 3/3 |
+| `multibox-k4-struct` | structural | multibox | 4 | structural | 0.01 | 2 | 0.5652 ± 0.0145 | 0.3623 ± 0.0251 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 2.70 ± 0.27 | 3/3 |
+| `multibox-k8-struct` | structural | multibox | 8 | structural | 0.01 | 2 | 0.5556 ± 0.0965 | 0.3865 ± 0.0549 | — | 0.9667 ± 0.0577 | 0.0000 ± 0.0000 | 5.11 ± 0.48 | 3/3 |
+| `multibox-k2-struct-reseed` | structural | multibox | 2 | structural | 0.01 | 2 | 0.7536 ± 0.0435 | 0.5894 ± 0.0084 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 1.69 ± 0.02 | 3/3 |
+| `multibox-k4-struct-reseed` | structural | multibox | 4 | structural | 0.01 | 2 | 0.6039 ± 0.0549 | 0.3720 ± 0.0418 | — | 0.8667 ± 0.2309 | 0.0000 ± 0.0000 | 2.59 ± 0.15 | 3/3 |
+| `multibox-k4-struct-nodef` | structural | multibox | 4 | structural | 0.01 | 2 | 0.4010 ± 0.0586 | 0.0483 ± 0.0509 | — | 0.9667 ± 0.0577 | 0.0000 ± 0.0000 | 1.75 ± 0.21 | 3/3 |
+| `multibox-k4-struct-sr0` | structural | multibox | 4 | structural | 0.01 | 2 | 0.5459 ± 0.0365 | 0.3816 ± 0.0586 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 3.00 ± 0.13 | 3/3 |
+| `multibox-k3-struct-K27-reseed` | structural | multibox | 3 | structural | 0.01 | 2 | 0.7729 ± 0.1393 | 0.5942 ± 0.0290 | — | 1.0000 ± 0.0000 | 0.6167 ± 0.5346 | 2.47 ± 0.09 | 3/3 |
+| `multibox-k4-struct-K64` | structural | multibox | 4 | structural | 0.01 | 2 | 0.8019 ± 0.0418 | 0.7198 ± 0.0167 | — | 0.2667 ± 0.2566 | 0.2167 ± 0.3753 | 3.10 ± 0.13 | 3/3 |
+| `multibox-k4-struct-K64-reseed` | structural | multibox | 4 | structural | 0.01 | 2 | 0.7633 ± 0.0418 | 0.5749 ± 0.0084 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 3.11 ± 0.15 | 3/3 |
+| `multibox-k4-struct-ew10` | structural | multibox | 4 | structural | 0.01 | 2 | 0.5604 ± 0.1097 | 0.3768 ± 0.0383 | — | 0.9500 ± 0.0866 | 0.0000 ± 0.0000 | 2.69 ± 0.28 | 3/3 |
+| `multibox-k2-struct-K32-reseed` | structural | multibox | 2 | structural | 0.01 | 2 | 0.9275 ± 0.1255 | 0.9179 ± 0.1171 | — | 0.3333 ± 0.5774 | 0.6000 ± 0.5220 | 1.75 ± 0.04 | 3/3 |
 | `prism` | objectives | prism | 1 | axiom | 0.001 | 3 | 0.4879 ± 0.0221 | 0.2222 ± 0.0509 | — | 0.7167 ± 0.1893 | 0.4333 ± 0.2255 | 0.94 ± 0.04 | 3/3 |
 | `prism-init` | objectives | prism | 1 | axiom | 0.001 | 3 | 0.5024 ± 0.0365 | 0.1546 ± 0.0509 | — | 0.8333 ± 0.2887 | 1.0000 ± 0.0000 | 0.75 ± 0.06 | 3/3 |
+| `prism-struct` | structural | prism | 1 | structural | 0.001 | 3 | 1.0000 ± 0.0000 | 0.7826 ± 0.0000 | — | 0.0000 ± 0.0000 | 0.9333 ± 0.0289 | 0.77 ± 0.02 | 3/3 |
 | `prism` | objectives | prism | 1 | axiom | 0.01 | 3 | 0.5652 ± 0.0632 | 0.1836 ± 0.0466 | — | 0.4667 ± 0.4010 | 0.6167 ± 0.2517 | 0.89 ± 0.07 | 3/3 |
 | `prism-init` | objectives | prism | 1 | axiom | 0.01 | 3 | 0.5459 ± 0.1018 | 0.1401 ± 0.0729 | — | 0.9167 ± 0.1041 | 0.3333 ± 0.4163 | 0.93 ± 0.04 | 3/3 |
+| `prism-struct` | structural | prism | 1 | structural | 0.01 | 3 | 1.0000 ± 0.0000 | 0.7826 ± 0.0000 | — | 0.0000 ± 0.0000 | 0.9667 ± 0.0289 | 0.78 ± 0.04 | 3/3 |
+| `prism-struct-ew10` | structural | prism | 1 | structural | 0.01 | 3 | 0.7826 ± 0.0000 | 0.7826 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 0.96 ± 0.00 | 3/3 |
+| `prism-struct-sr1e-2` | structural | prism | 1 | structural | 0.01 | 3 | 1.0000 ± 0.0000 | 0.7826 ± 0.0000 | — | 0.0000 ± 0.0000 | 0.9667 ± 0.0289 | 0.83 ± 0.08 | 3/3 |
 | `elbe` | baseline | ELBE | 1 | axiom | 0.001 | 10 | 0.4203 ± 0.0383 | 0.0000 ± 0.0000 | — | 0.6500 ± 0.2291 | 1.0000 ± 0.0000 | 0.73 ± 0.02 | 3/3 |
 | `elbe-init` | baseline | ELBE | 1 | axiom | 0.001 | 10 | 0.4348 ± 0.0435 | 0.0097 ± 0.0167 | — | 0.4333 ± 0.2754 | 1.0000 ± 0.0000 | 0.67 ± 0.04 | 3/3 |
 | `elbe-anchor` | baseline | ELBE | 1 | axiom | 0.001 | 10 | 0.4976 ± 0.0221 | 0.0193 ± 0.0084 | — | 1.0000 ± 0.0000 | 1.0000 ± 0.0000 | 0.74 ± 0.00 | 3/3 |
@@ -143,6 +166,14 @@
 | `multielbe-k3-hybrid` | objectives | multielbe | 3 | hybrid | 0.001 | 10 | 0.0870 ± 0.0145 | 0.0242 ± 0.0221 | 1.0000 ± 0.0000 / 1.0000 ± 0.0000 | 0.9833 ± 0.0289 | 0.0000 ± 0.0000 | 1.91 ± 0.06 | 3/3 |
 | `prism` | objectives | prism | 1 | axiom | 0.001 | 10 | 0.4734 ± 0.0586 | 0.0483 ± 0.0221 | — | 0.8167 ± 0.2021 | 1.0000 ± 0.0000 | 0.83 ± 0.04 | 3/3 |
 | `prism-init` | objectives | prism | 1 | axiom | 0.001 | 10 | 0.4928 ± 0.0383 | 0.0676 ± 0.0084 | — | 0.8000 ± 0.0500 | 1.0000 ± 0.0000 | 0.79 ± 0.04 | 3/3 |
+| `multibox-k2-struct` | structural | multibox | 2 | structural | 0.001 | 10 | 0.7053 ± 0.0221 | 0.5217 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.1667 ± 0.2887 | 1.62 ± 0.02 | 3/3 |
+| `multibox-k4-struct` | structural | multibox | 4 | structural | 0.001 | 10 | 0.4155 ± 0.0084 | 0.3478 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 2.62 ± 0.08 | 3/3 |
+| `multibox-k8-struct` | structural | multibox | 8 | structural | 0.001 | 10 | 0.4010 ± 0.0221 | 0.3478 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 4.89 ± 0.10 | 3/3 |
+| `multibox-k2-struct-reseed` | structural | multibox | 2 | structural | 0.001 | 10 | 0.7005 ± 0.0365 | 0.5217 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.1667 ± 0.2887 | 1.63 ± 0.04 | 3/3 |
+| `multibox-k4-struct-reseed` | structural | multibox | 4 | structural | 0.001 | 10 | 0.3865 ± 0.0418 | 0.3478 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 2.68 ± 0.09 | 3/3 |
+| `multibox-k4-struct-nodef` | structural | multibox | 4 | structural | 0.001 | 10 | 0.0870 ± 0.0383 | 0.0000 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 1.89 ± 0.06 | 3/3 |
+| `multibox-k4-struct-sr0` | structural | multibox | 4 | structural | 0.001 | 10 | 0.4251 ± 0.0302 | 0.3478 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 2.91 ± 0.08 | 3/3 |
+| `prism-struct` | structural | prism | 1 | structural | 0.001 | 10 | 1.0000 ± 0.0000 | 0.7826 ± 0.0000 | — | 0.0000 ± 0.0000 | 0.9667 ± 0.0289 | 0.70 ± 0.10 | 3/3 |
 | `multibox-k1-axiom` | objectives | multibox | 1 | axiom | 0.01 | 10 | 0.0000 ± 0.0000 | 1.0000 ± 0.0000 | — | 0.7000 ± 0.1803 | 1.0000 ± 0.0000 | 0.77 ± 0.06 | 3/3 |
 | `multibox-k1-soft` | objectives | multibox | 1 | soft | 0.01 | 10 | 0.0000 ± 0.0000 | 1.0000 ± 0.0000 | — | 0.7000 ± 0.1803 | 1.0000 ± 0.0000 | 0.77 ± 0.06 | 3/3 |
 | `multibox-k1-softdiv` | objectives | multibox | 1 | softdiv | 0.01 | 10 | 0.0000 ± 0.0000 | 1.0000 ± 0.0000 | — | 0.7000 ± 0.1803 | 1.0000 ± 0.0000 | 0.77 ± 0.06 | 3/3 |
@@ -181,5 +212,20 @@
 | `multielbe-k3-hybrid` | objectives | multielbe | 3 | hybrid | 0.01 | 10 | 0.1739 ± 0.0523 | 0.0580 ± 0.0290 | 1.0000 ± 0.0000 / 1.0000 ± 0.0000 | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 1.65 ± 0.06 | 3/3 |
 | `prism` | objectives | prism | 1 | axiom | 0.01 | 10 | 0.4300 ± 0.0365 | 0.0676 ± 0.0221 | — | 0.4667 ± 0.2363 | 0.4833 ± 0.4252 | 0.91 ± 0.09 | 3/3 |
 | `prism-init` | objectives | prism | 1 | axiom | 0.01 | 10 | 0.4396 ± 0.0586 | 0.0628 ± 0.0084 | — | 0.9167 ± 0.0577 | 0.4833 ± 0.4752 | 0.91 ± 0.06 | 3/3 |
+| `multibox-k2-struct` | structural | multibox | 2 | structural | 0.01 | 10 | 0.6908 ± 0.0302 | 0.5217 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.1667 ± 0.2887 | 1.64 ± 0.02 | 3/3 |
+| `multibox-k4-struct` | structural | multibox | 4 | structural | 0.01 | 10 | 0.4493 ± 0.0435 | 0.3575 ± 0.0167 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 2.60 ± 0.15 | 3/3 |
+| `multibox-k8-struct` | structural | multibox | 8 | structural | 0.01 | 10 | 0.4493 ± 0.0580 | 0.3720 ± 0.0302 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 4.17 ± 0.13 | 3/3 |
+| `multibox-k2-struct-reseed` | structural | multibox | 2 | structural | 0.01 | 10 | 0.6908 ± 0.0302 | 0.5314 ± 0.0084 | — | 1.0000 ± 0.0000 | 0.1667 ± 0.2887 | 1.62 ± 0.06 | 3/3 |
+| `multibox-k4-struct-reseed` | structural | multibox | 4 | structural | 0.01 | 10 | 0.4734 ± 0.0365 | 0.3575 ± 0.0084 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 2.48 ± 0.16 | 3/3 |
+| `multibox-k4-struct-nodef` | structural | multibox | 4 | structural | 0.01 | 10 | 0.1643 ± 0.0221 | 0.0193 ± 0.0221 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 1.64 ± 0.18 | 3/3 |
+| `multibox-k4-struct-sr0` | structural | multibox | 4 | structural | 0.01 | 10 | 0.4348 ± 0.0383 | 0.3623 ± 0.0251 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 3.12 ± 0.15 | 3/3 |
+| `prism-struct` | structural | prism | 1 | structural | 0.01 | 10 | 1.0000 ± 0.0000 | 0.7826 ± 0.0000 | — | 0.0000 ± 0.0000 | 0.9667 ± 0.0577 | 0.80 ± 0.02 | 3/3 |
+| `multibox-k3-struct-K27-reseed` | structural | multibox | 3 | structural | 0.01 | 10 | 0.6667 ± 0.0767 | 0.6087 ± 0.0753 | — | 0.8667 ± 0.2309 | 0.3000 ± 0.5196 | 2.19 ± 0.13 | 3/3 |
+| `multibox-k4-struct-K64` | structural | multibox | 4 | structural | 0.01 | 10 | 0.7295 ± 0.0824 | 0.6715 ± 0.0932 | — | 0.5333 ± 0.4752 | 0.4000 ± 0.5292 | 2.83 ± 0.12 | 3/3 |
+| `multibox-k4-struct-K64-reseed` | structural | multibox | 4 | structural | 0.01 | 10 | 0.6667 ± 0.0882 | 0.6232 ± 0.1004 | — | 0.6667 ± 0.5774 | 0.0000 ± 0.0000 | 2.99 ± 0.11 | 3/3 |
+| `multibox-k4-struct-ew10` | structural | multibox | 4 | structural | 0.01 | 10 | 0.4589 ± 0.0837 | 0.3527 ± 0.0084 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 2.56 ± 0.16 | 3/3 |
+| `prism-struct-ew10` | structural | prism | 1 | structural | 0.01 | 10 | 0.7826 ± 0.0000 | 0.7826 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 0.96 ± 0.00 | 3/3 |
+| `prism-struct-sr1e-2` | structural | prism | 1 | structural | 0.01 | 10 | 1.0000 ± 0.0000 | 0.7826 ± 0.0000 | — | 0.0000 ± 0.0000 | 0.9833 ± 0.0289 | 0.81 ± 0.04 | 3/3 |
+| `multibox-k2-struct-K32-reseed` | structural | multibox | 2 | structural | 0.01 | 10 | 1.0000 ± 0.0000 | 0.9855 ± 0.0000 | — | 0.0000 ± 0.0000 | 0.9500 ± 0.0500 | 1.69 ± 0.02 | 3/3 |
 
 *Footnote: prism needs ≥ 3 dims; nominal d=2 cells trained at d=3.*
