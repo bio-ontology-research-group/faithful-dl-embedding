@@ -290,6 +290,8 @@ STRUCTURAL_EXTRA_METHODS: List[str] = [
     "multibox-k4-struct-ew10",
     "prism-struct-ew10",
     "prism-struct-sr1e-2",
+    "multibox-k3-struct-K81-reseed",
+    "multibox-k2-struct-K32-reseed",
 ]
 
 STRUCTURAL_METHODS: List[str] = list(STRUCTURAL_BASE_METHODS) + list(
@@ -418,6 +420,28 @@ _STRUCTURAL_SPECS: Dict[str, Dict[str, Any]] = {
             "size_reg": 0.01,
         },
     },
+    "multibox-k3-struct-K81-reseed": {
+        "model": "MultiBoxEL",
+        "backbone": "multibox",
+        "n_components": 3,
+        "objective_kwargs": {
+            "objective": "structural",
+            "max_components": 81,
+            "reseed_every": 50,
+        },
+        "datasets": ["tk4", "tk5", "pizza"],
+    },
+    "multibox-k2-struct-K32-reseed": {
+        "model": "MultiBoxEL",
+        "backbone": "multibox",
+        "n_components": 2,
+        "objective_kwargs": {
+            "objective": "structural",
+            "max_components": 32,
+            "reseed_every": 50,
+        },
+        "datasets": ["tk4", "tk5", "tk6", "pizza"],
+    },
 }
 
 for _s_id in STRUCTURAL_METHODS:
@@ -430,7 +454,7 @@ for _s_id in STRUCTURAL_METHODS:
         "anchor_weight": 0.0,
         "objective": "structural",
         "objective_kwargs": dict(_s_entry["objective_kwargs"]),
-        "datasets": list(_STRUCTURAL_ALLOWED_DATASETS),
+        "datasets": list(_s_entry.get("datasets", _STRUCTURAL_ALLOWED_DATASETS)),
     }
 
 

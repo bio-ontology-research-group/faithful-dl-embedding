@@ -181,36 +181,44 @@ def test_structural_methods_config() -> None:
         "multibox-k4-struct-ew10",
         "prism-struct-ew10",
         "prism-struct-sr1e-2",
+        "multibox-k3-struct-K81-reseed",
+        "multibox-k2-struct-K32-reseed",
     ]
     assert STRUCTURAL_BASE_METHODS == expected_base_order
     assert STRUCTURAL_EXTRA_METHODS == expected_extra_order
     assert STRUCTURAL_METHODS == expected_base_order + expected_extra_order
 
+    default_ds = list(SYNTHETIC_DATASETS) + ["pizza"]
     expected_specs = {
         "multibox-k2-struct": (
             "MultiBoxEL",
             2,
             {"objective": "structural", "max_components": 16},
+            default_ds,
         ),
         "multibox-k4-struct": (
             "MultiBoxEL",
             4,
             {"objective": "structural", "max_components": 16},
+            default_ds,
         ),
         "multibox-k8-struct": (
             "MultiBoxEL",
             8,
             {"objective": "structural", "max_components": 64},
+            default_ds,
         ),
         "multibox-k2-struct-reseed": (
             "MultiBoxEL",
             2,
             {"objective": "structural", "max_components": 16, "reseed_every": 50},
+            default_ds,
         ),
         "multibox-k4-struct-reseed": (
             "MultiBoxEL",
             4,
             {"objective": "structural", "max_components": 16, "reseed_every": 50},
+            default_ds,
         ),
         "multibox-k4-struct-nodef": (
             "MultiBoxEL",
@@ -220,51 +228,71 @@ def test_structural_methods_config() -> None:
                 "max_components": 16,
                 "structural_definitions": False,
             },
+            default_ds,
         ),
         "multibox-k4-struct-sr0": (
             "MultiBoxEL",
             4,
             {"objective": "structural", "max_components": 16, "size_reg": 0.0},
+            default_ds,
         ),
         "prism-struct": (
             "PrismEL",
             1,
             {"objective": "structural"},
+            default_ds,
         ),
         "multibox-k3-struct-K27-reseed": (
             "MultiBoxEL",
             3,
             {"objective": "structural", "max_components": 27, "reseed_every": 50},
+            default_ds,
         ),
         "multibox-k4-struct-K64": (
             "MultiBoxEL",
             4,
             {"objective": "structural", "max_components": 64},
+            default_ds,
         ),
         "multibox-k4-struct-K64-reseed": (
             "MultiBoxEL",
             4,
             {"objective": "structural", "max_components": 64, "reseed_every": 50},
+            default_ds,
         ),
         "multibox-k4-struct-ew10": (
             "MultiBoxEL",
             4,
             {"objective": "structural", "max_components": 16, "existence_weight": 10.0},
+            default_ds,
         ),
         "prism-struct-ew10": (
             "PrismEL",
             1,
             {"objective": "structural", "existence_weight": 10.0},
+            default_ds,
         ),
         "prism-struct-sr1e-2": (
             "PrismEL",
             1,
             {"objective": "structural", "size_reg": 0.01},
+            default_ds,
+        ),
+        "multibox-k3-struct-K81-reseed": (
+            "MultiBoxEL",
+            3,
+            {"objective": "structural", "max_components": 81, "reseed_every": 50},
+            ["tk4", "tk5", "pizza"],
+        ),
+        "multibox-k2-struct-K32-reseed": (
+            "MultiBoxEL",
+            2,
+            {"objective": "structural", "max_components": 32, "reseed_every": 50},
+            ["tk4", "tk5", "tk6", "pizza"],
         ),
     }
 
-    expected_ds = list(SYNTHETIC_DATASETS) + ["pizza"]
-    for m_id, (model_cls, k_val, obj_kw) in expected_specs.items():
+    for m_id, (model_cls, k_val, obj_kw, exp_ds) in expected_specs.items():
         assert m_id in METHODS
         spec = METHODS[m_id]
         assert spec["model"] == model_cls
@@ -273,10 +301,14 @@ def test_structural_methods_config() -> None:
         assert spec["anchor_weight"] == 0.0
         assert spec["objective"] == "structural"
         assert spec["objective_kwargs"] == obj_kw
-        assert spec["datasets"] == expected_ds
+        assert spec["datasets"] == exp_ds
 
-    for ds in expected_ds:
+    for ds in ("tk4", "tk5", "pizza"):
         assert set(STRUCTURAL_METHODS) <= set(methods_for_dataset(ds))
+    assert "multibox-k3-struct-K81-reseed" not in methods_for_dataset("tk3")
+    assert "multibox-k3-struct-K81-reseed" not in methods_for_dataset("tk6")
+    assert "multibox-k2-struct-K32-reseed" not in methods_for_dataset("tk3")
+    assert "multibox-k2-struct-K32-reseed" in methods_for_dataset("tk6")
     for ds in ("go", "foodon", "yeast-function", "helis"):
         assert set(STRUCTURAL_METHODS).isdisjoint(set(methods_for_dataset(ds)))
 

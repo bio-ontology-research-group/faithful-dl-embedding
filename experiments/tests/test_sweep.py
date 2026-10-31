@@ -412,15 +412,16 @@ def test_sweep_structural_suite_cells() -> None:
 
 
 def test_sweep_structural_extra_suite_cells() -> None:
-    """Verify structural-extra suite enumerates 144 cells at default lr=[0.01], supports --lr override, and enumerates 6 cells under --smoke."""
+    """Verify structural-extra suite enumerates 174 cells at default lr=[0.01], supports --lr override, and enumerates tk3-allowed methods under --smoke."""
     from experiments.config import (
         STRUCTURAL_BASE_METHODS,
         STRUCTURAL_EXTRA_METHODS,
         SYNTHETIC_DATASETS,
+        methods_for_dataset,
     )
 
     cells_full = sweep.enumerate_cells("structural-extra", smoke=False)
-    assert len(cells_full) == 144
+    assert len(cells_full) == 174
     assert {c.dataset for c in cells_full} == set(SYNTHETIC_DATASETS)
     assert {c.method for c in cells_full} == set(STRUCTURAL_EXTRA_METHODS)
     assert {c.method for c in cells_full}.isdisjoint(set(STRUCTURAL_BASE_METHODS))
@@ -428,16 +429,26 @@ def test_sweep_structural_extra_suite_cells() -> None:
     assert {c.seed for c in cells_full} == {0, 1, 2}
     assert {c.lr for c in cells_full} == {0.01}
     assert all(c.epochs == 2000 for c in cells_full)
+    assert {
+        c.dataset for c in cells_full if c.method == "multibox-k3-struct-K81-reseed"
+    } == {"tk4", "tk5"}
+    assert {
+        c.dataset for c in cells_full if c.method == "multibox-k2-struct-K32-reseed"
+    } == {"tk4", "tk5", "tk6"}
 
     cells_override_lr = sweep.enumerate_cells(
         "structural-extra", smoke=False, lrs=[0.001, 0.01]
     )
-    assert len(cells_override_lr) == 288
+    assert len(cells_override_lr) == 348
     assert {c.lr for c in cells_override_lr} == {0.001, 0.01}
 
     cells_smoke = sweep.enumerate_cells("structural-extra", smoke=True)
-    assert len(cells_smoke) == len(STRUCTURAL_EXTRA_METHODS) == 6
-    assert [c.method for c in cells_smoke] == list(STRUCTURAL_EXTRA_METHODS)
+    tk3_extra = [
+        m for m in STRUCTURAL_EXTRA_METHODS if m in methods_for_dataset("tk3")
+    ]
+    assert len(STRUCTURAL_EXTRA_METHODS) == 8
+    assert len(cells_smoke) == len(tk3_extra) == 6
+    assert [c.method for c in cells_smoke] == tk3_extra
     assert all(c.epochs == 5 for c in cells_smoke)
     assert all(c.seed == 0 for c in cells_smoke)
     assert all(c.dim == 2 for c in cells_smoke)
