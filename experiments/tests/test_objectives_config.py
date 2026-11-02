@@ -169,6 +169,9 @@ def test_structural_methods_config() -> None:
         "multibox-k4-struct",
         "multibox-k8-struct",
         "multibox-k2-struct-reseed",
+        "multibox-k2-struct-sum",
+        "multibox-k2-struct-wit",
+        "multibox-k2-struct-wit-reseed",
         "multibox-k4-struct-reseed",
         "multibox-k4-struct-nodef",
         "multibox-k4-struct-sr0",
@@ -212,6 +215,42 @@ def test_structural_methods_config() -> None:
             "MultiBoxEL",
             2,
             {"objective": "structural", "max_components": 16, "reseed_every": 50},
+            default_ds,
+        ),
+        "multibox-k2-struct-sum": (
+            "MultiBoxEL",
+            2,
+            {
+                "objective": "structural",
+                "max_components": 32,
+                "bot_agg": "sum",
+            },
+            default_ds,
+        ),
+        "multibox-k2-struct-wit": (
+            "MultiBoxEL",
+            2,
+            {
+                "objective": "structural",
+                "max_components": 32,
+                "bot_agg": "sum",
+                "witness_weight": 1.0,
+                "size_reg": 0.0,
+            },
+            default_ds,
+        ),
+        "multibox-k2-struct-wit-reseed": (
+            "MultiBoxEL",
+            2,
+            {
+                "objective": "structural",
+                "max_components": 32,
+                "bot_agg": "sum",
+                "witness_weight": 1.0,
+                "size_reg": 0.0,
+                "reseed_every": 50,
+                "reseed_mode": "idle",
+            },
             default_ds,
         ),
         "multibox-k4-struct-reseed": (
@@ -331,5 +370,121 @@ def test_structural_methods_config() -> None:
     struct_extra_cells = sweep.enumerate_cells("structural-extra", smoke=False)
     assert {c.method for c in struct_extra_cells} == struct_extra_set
     assert {c.method for c in struct_extra_cells}.isdisjoint(struct_base_set)
+
+    wit_reseed_cells = sweep.enumerate_cells(
+        "structural",
+        smoke=False,
+        methods=["multibox-k2-struct-wit-reseed"],
+    )
+    assert len(wit_reseed_cells) == 48
+    assert {c.dataset for c in wit_reseed_cells} == set(SYNTHETIC_DATASETS)
+    assert {c.dim for c in wit_reseed_cells} == {2, 10}
+    assert {c.seed for c in wit_reseed_cells} == {0, 1, 2}
+    assert {c.lr for c in wit_reseed_cells} == {0.001, 0.01}
+    assert all(c.epochs == 2000 for c in wit_reseed_cells)
+
+    wit_all_cells = sweep.enumerate_cells(
+        "structural",
+        smoke=False,
+        methods=[
+            "multibox-k2-struct-sum",
+            "multibox-k2-struct-wit",
+            "multibox-k2-struct-wit-reseed",
+        ],
+    )
+    assert len(wit_all_cells) == 144
+
+
+def test_witness_methods_objective_kwargs_passthrough(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Verify run._build_model forwards witness objective_kwargs to MultiBoxEL unchanged."""
+    import sys
+    import types
+    from experiments import run
+
+    captured = []
+
+    class _DummyMultiBox:
+        def __init__(self, *args, **kwargs):
+            captured.append(dict(kwargs))
+            self.class_index_dict = {}
+
+        def _load_datasets(self):
+            return None
+
+    if "mowl.models" in sys.modules:
+        monkeypatch.setattr(sys.modules["mowl.models"], "MultiBoxEL", _DummyMultiBox)
+    else:
+        dummy_models = types.ModuleType("mowl.models")
+        for cls_name in (
+            "BoxSquaredEL",
+            "CanonicalMixture",
+            "ELBE",
+            "ELEmbeddings",
+            "MultiBoxEL",
+            "MultiELBE",
+            "PrismEL",
+        ):
+            setattr(dummy_models, cls_name, _DummyMultiBox)
+        monkeypatch.setitem(sys.modules, "mowl.models", dummy_models)
+
+    if "mowl.ontology.normalize" not in sys.modules:
+        dummy_norm_mod = types.ModuleType("mowl.ontology.normalize")
+
+        class _DummyELNormalizer:
+            def normalize(self, ontology, load=False, ontology_path=None, use_cache=True):
+                return {}
+
+        setattr(dummy_norm_mod, "ELNormalizer", _DummyELNormalizer)
+        if "mowl.ontology" not in sys.modules:
+            monkeypatch.setitem(
+                sys.modules, "mowl.ontology", types.ModuleType("mowl.ontology")
+            )
+        monkeypatch.setitem(sys.modules, "mowl.ontology.normalize", dummy_norm_mod)
+
+    dummy_bundle = types.SimpleNamespace(
+        name="tk3",
+        dataset="dummy_ds",
+        task="satisfaction",
+    )
+    dummy_cm = object()
+
+    for m_id in (
+        "multibox-k2-struct-sum",
+        "multibox-k2-struct-wit",
+        "multibox-k2-struct-wit-reseed",
+    ):
+        captured.clear()
+        model, init_rep = run._build_model(
+            bundle=dummy_bundle,  # type: ignore[arg-type]
+            cm=dummy_cm,  # type: ignore[arg-type]
+            method_id=m_id,
+            dim=2,
+            seed=0,
+            batch_size=1024,
+            learning_rate=0.001,
+            margin=0.02,
+            delta=2.5,
+            reg_factor=0.2,
+            num_negs=4,
+            device="cpu",
+            checkpoint_path=tmp_path / f"{m_id}.pt",
+        )
+        assert init_rep is None
+        assert len(captured) == 1
+        kw = captured[0]
+        expected_obj_kw = METHODS[m_id]["objective_kwargs"]
+        for k, v in expected_obj_kw.items():
+            assert kw[k] == v
+        assert kw["canonical_model"] is dummy_cm
+        assert kw["n_components"] == 2
+        recorded = getattr(model, "_recorded_objective_kwargs")
+        for k, v in expected_obj_kw.items():
+            assert recorded[k] == v
+        assert recorded["canonical_model_used"] is True
+
+
 
 

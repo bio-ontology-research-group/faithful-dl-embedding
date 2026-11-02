@@ -392,11 +392,11 @@ def test_sweep_returns_nonzero_when_all_pending_cells_fail(
 
 
 def test_sweep_structural_suite_cells() -> None:
-    """Verify structural suite enumerates 384 cells at default grid and 8 cells (one per method at 5 epochs) under --smoke."""
+    """Verify structural suite enumerates 528 cells at default grid and 11 cells (one per method at 5 epochs) under --smoke."""
     from experiments.config import LR_GRID, STRUCTURAL_BASE_METHODS, SYNTHETIC_DATASETS
 
     cells_full = sweep.enumerate_cells("structural", smoke=False)
-    assert len(cells_full) == 384
+    assert len(cells_full) == 528
     assert {c.dataset for c in cells_full} == set(SYNTHETIC_DATASETS)
     assert {c.method for c in cells_full} == set(STRUCTURAL_BASE_METHODS)
     assert {c.dim for c in cells_full} == {2, 10}
@@ -405,7 +405,7 @@ def test_sweep_structural_suite_cells() -> None:
     assert all(c.epochs == 2000 for c in cells_full)
 
     cells_smoke = sweep.enumerate_cells("structural", smoke=True)
-    assert len(cells_smoke) == len(STRUCTURAL_BASE_METHODS) == 8
+    assert len(cells_smoke) == len(STRUCTURAL_BASE_METHODS) == 11
     assert [c.method for c in cells_smoke] == list(STRUCTURAL_BASE_METHODS)
     assert all(c.epochs == 5 for c in cells_smoke)
     assert all(c.seed == 0 for c in cells_smoke)
