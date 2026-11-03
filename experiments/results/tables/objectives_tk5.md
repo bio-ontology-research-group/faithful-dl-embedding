@@ -1,6 +1,6 @@
 # Objectives & Prisms: `tk5`
 
-- Provenance: `experiments` `199295f,512b186,52d39ae,7e5e987,bb530ad,ce5f292,fc6b75f,fd972f8` (dirty), `mowl` `23c69aa,5c2a2cc,8a3e95a,a7d8c5b,ac6bd30,db4d483,e5d9a42,ead06b6,edc7b11` (dirty).
+- Provenance: `experiments` `199295f,512b186,52d39ae,7e5e987,80b3e74,bb530ad,ce5f292,fc6b75f,fd972f8` (dirty), `mowl` `23c69aa,3892615,5c2a2cc,8a3e95a,9b8eb65,a7d8c5b,ac6bd30,b2dc9ee,db4d483,e2e7133,e5d9a42,ead06b6,edc7b11` (dirty).
 - Margin semantics: `Mod strict` evaluates GCI losses at `margin = 0`; `Mod@γ` evaluates at the training margin `γ` (`relaxing` for Box²EL/MultiBoxEL, `tightening` for ELBE/MultiELBE/PrismEL).
 - Suite membership: the `suite` column distinguishes `objectives` methods (30 objective-grid methods + `prism`/`prism-init`) from `baseline` 10-29 methods.
 - Prism dimension note (*): prism needs ≥ 3 dims; nominal d=2 cells trained at d=3.
@@ -58,6 +58,9 @@
 | `multibox-k4-struct` | structural | multibox | 4 | structural | 0.001 | 2 | 0.7029 ± 0.0251 | 0.6232 ± 0.0502 | — | 0.4667 ± 0.3215 | 0.0000 ± 0.0000 | 3.25 ± 0.10 | 3/3 |
 | `multibox-k8-struct` | structural | multibox | 8 | structural | 0.001 | 2 | 0.7319 ± 0.0547 | 0.5217 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 6.15 ± 0.20 | 3/3 |
 | `multibox-k2-struct-reseed` | structural | multibox | 2 | structural | 0.001 | 2 | 1.0000 ± 0.0000 | 0.8478 ± 0.1130 | — | 0.6667 ± 0.5774 | 0.7667 ± 0.1528 | 1.83 ± 0.03 | 3/3 |
+| `multibox-k2-struct-sum` | structural | multibox | 2 | structural | 0.001 | 2 | 1.0000 ± 0.0000 | 0.9130 ± 0.1130 | — | 0.3333 ± 0.5774 | 0.9667 ± 0.0577 | 1.73 ± 0.12 | 3/3 |
+| `multibox-k2-struct-wit` | structural | multibox | 2 | structural | 0.001 | 2 | 1.0000 ± 0.0000 | 0.8841 ± 0.0905 | — | 0.3333 ± 0.5774 | 0.5333 ± 0.5033 | 2.00 ± 0.00 | 3/3 |
+| `multibox-k2-struct-wit-reseed` | structural | multibox | 2 | structural | 0.001 | 2 | 1.0000 ± 0.0000 | 0.9638 ± 0.0251 | — | 0.0000 ± 0.0000 | 0.6333 ± 0.5508 | 2.00 ± 0.00 | 3/3 |
 | `multibox-k4-struct-reseed` | structural | multibox | 4 | structural | 0.001 | 2 | 0.6812 ± 0.1381 | 0.5870 ± 0.1130 | — | 0.8000 ± 0.3464 | 0.1667 ± 0.2887 | 3.30 ± 0.13 | 3/3 |
 | `multibox-k4-struct-nodef` | structural | multibox | 4 | structural | 0.001 | 2 | 0.0580 ± 0.0126 | 0.0000 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 2.58 ± 0.08 | 3/3 |
 | `multibox-k4-struct-sr0` | structural | multibox | 4 | structural | 0.001 | 2 | 0.7029 ± 0.0126 | 0.6014 ± 0.0126 | — | 0.5333 ± 0.2082 | 0.0000 ± 0.0000 | 3.62 ± 0.13 | 3/3 |
@@ -101,6 +104,9 @@
 | `multibox-k4-struct` | structural | multibox | 4 | structural | 0.01 | 2 | 0.7971 ± 0.0126 | 0.7174 ± 0.0377 | — | 0.0333 ± 0.0577 | 0.0000 ± 0.0000 | 3.12 ± 0.08 | 3/3 |
 | `multibox-k8-struct` | structural | multibox | 8 | structural | 0.01 | 2 | 0.7609 ± 0.0948 | 0.6159 ± 0.0980 | — | 0.4333 ± 0.5132 | 0.1000 ± 0.1732 | 5.50 ± 0.05 | 3/3 |
 | `multibox-k2-struct-reseed` | structural | multibox | 2 | structural | 0.01 | 2 | 0.9275 ± 0.1255 | 0.8478 ± 0.1130 | — | 0.6667 ± 0.5774 | 0.8000 ± 0.2646 | 1.75 ± 0.00 | 3/3 |
+| `multibox-k2-struct-sum` | structural | multibox | 2 | structural | 0.01 | 2 | 0.7826 ± 0.0000 | 0.7826 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 1.72 ± 0.08 | 3/3 |
+| `multibox-k2-struct-wit` | structural | multibox | 2 | structural | 0.01 | 2 | 0.9275 ± 0.1255 | 0.9058 ± 0.1072 | — | 0.3333 ± 0.5774 | 0.3333 ± 0.5774 | 2.00 ± 0.00 | 3/3 |
+| `multibox-k2-struct-wit-reseed` | structural | multibox | 2 | structural | 0.01 | 2 | 1.0000 ± 0.0000 | 0.9710 ± 0.0126 | — | 0.0000 ± 0.0000 | 0.3000 ± 0.5196 | 2.00 ± 0.00 | 3/3 |
 | `multibox-k4-struct-reseed` | structural | multibox | 4 | structural | 0.01 | 2 | 0.6667 ± 0.0664 | 0.5290 ± 0.0126 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 3.05 ± 0.13 | 3/3 |
 | `multibox-k4-struct-nodef` | structural | multibox | 4 | structural | 0.01 | 2 | 0.2826 ± 0.0217 | 0.0000 ± 0.0000 | — | 0.9667 ± 0.0577 | 0.0000 ± 0.0000 | 2.05 ± 0.13 | 3/3 |
 | `multibox-k4-struct-sr0` | structural | multibox | 4 | structural | 0.01 | 2 | 0.7536 ± 0.0453 | 0.6667 ± 0.0547 | — | 0.1333 ± 0.0577 | 0.0000 ± 0.0000 | 3.58 ± 0.20 | 3/3 |
@@ -171,6 +177,9 @@
 | `multibox-k4-struct` | structural | multibox | 4 | structural | 0.001 | 10 | 0.7319 ± 0.0126 | 0.6594 ± 0.0547 | — | 0.3333 ± 0.2082 | 0.0000 ± 0.0000 | 3.05 ± 0.10 | 3/3 |
 | `multibox-k8-struct` | structural | multibox | 8 | structural | 0.001 | 10 | 0.7464 ± 0.0126 | 0.6594 ± 0.0251 | — | 0.2667 ± 0.2309 | 0.0000 ± 0.0000 | 5.50 ± 0.09 | 3/3 |
 | `multibox-k2-struct-reseed` | structural | multibox | 2 | structural | 0.001 | 10 | 1.0000 ± 0.0000 | 0.9130 ± 0.1130 | — | 0.3333 ± 0.5774 | 0.8333 ± 0.1155 | 1.73 ± 0.10 | 3/3 |
+| `multibox-k2-struct-sum` | structural | multibox | 2 | structural | 0.001 | 10 | 1.0000 ± 0.0000 | 0.9783 ± 0.0000 | — | 0.0000 ± 0.0000 | 0.7333 ± 0.2082 | 1.67 ± 0.08 | 3/3 |
+| `multibox-k2-struct-wit` | structural | multibox | 2 | structural | 0.001 | 10 | 1.0000 ± 0.0000 | 0.9275 ± 0.0547 | — | 0.0000 ± 0.0000 | 0.4333 ± 0.4041 | 1.98 ± 0.03 | 3/3 |
+| `multibox-k2-struct-wit-reseed` | structural | multibox | 2 | structural | 0.001 | 10 | 1.0000 ± 0.0000 | 0.9928 ± 0.0126 | — | 0.0000 ± 0.0000 | 0.5667 ± 0.4933 | 1.98 ± 0.03 | 3/3 |
 | `multibox-k4-struct-reseed` | structural | multibox | 4 | structural | 0.001 | 10 | 0.6594 ± 0.0251 | 0.5435 ± 0.0377 | — | 0.9333 ± 0.1155 | 0.0000 ± 0.0000 | 2.97 ± 0.16 | 3/3 |
 | `multibox-k4-struct-nodef` | structural | multibox | 4 | structural | 0.001 | 10 | 0.0435 ± 0.0217 | 0.0000 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 1.87 ± 0.19 | 3/3 |
 | `multibox-k4-struct-sr0` | structural | multibox | 4 | structural | 0.001 | 10 | 0.7246 ± 0.0251 | 0.6739 ± 0.0217 | — | 0.1667 ± 0.2082 | 0.0000 ± 0.0000 | 3.48 ± 0.14 | 3/3 |
@@ -217,6 +226,9 @@
 | `multibox-k4-struct` | structural | multibox | 4 | structural | 0.01 | 10 | 0.6522 ± 0.0784 | 0.6014 ± 0.0763 | — | 0.3000 ± 0.3000 | 0.1667 ± 0.2887 | 2.85 ± 0.15 | 3/3 |
 | `multibox-k8-struct` | structural | multibox | 8 | structural | 0.01 | 10 | 0.6957 ± 0.0575 | 0.6594 ± 0.0453 | — | 0.1667 ± 0.1155 | 0.3000 ± 0.3000 | 4.83 ± 0.12 | 3/3 |
 | `multibox-k2-struct-reseed` | structural | multibox | 2 | structural | 0.01 | 10 | 0.9275 ± 0.1255 | 0.9203 ± 0.1197 | — | 0.3333 ± 0.5774 | 0.4667 ± 0.4163 | 1.70 ± 0.00 | 3/3 |
+| `multibox-k2-struct-sum` | structural | multibox | 2 | structural | 0.01 | 10 | 1.0000 ± 0.0000 | 0.9783 ± 0.0000 | — | 0.0000 ± 0.0000 | 0.9667 ± 0.0577 | 1.60 ± 0.05 | 3/3 |
+| `multibox-k2-struct-wit` | structural | multibox | 2 | structural | 0.01 | 10 | 1.0000 ± 0.0000 | 0.9855 ± 0.0126 | — | 0.0000 ± 0.0000 | 0.9000 ± 0.1000 | 1.98 ± 0.03 | 3/3 |
+| `multibox-k2-struct-wit-reseed` | structural | multibox | 2 | structural | 0.01 | 10 | 1.0000 ± 0.0000 | 0.9783 ± 0.0000 | — | 0.0000 ± 0.0000 | 0.6000 ± 0.5196 | 1.98 ± 0.03 | 3/3 |
 | `multibox-k4-struct-reseed` | structural | multibox | 4 | structural | 0.01 | 10 | 0.7319 ± 0.0332 | 0.7029 ± 0.0251 | — | 0.0667 ± 0.0577 | 0.0000 ± 0.0000 | 2.78 ± 0.15 | 3/3 |
 | `multibox-k4-struct-nodef` | structural | multibox | 4 | structural | 0.01 | 10 | 0.1812 ± 0.0251 | 0.0000 ± 0.0000 | — | 1.0000 ± 0.0000 | 0.0000 ± 0.0000 | 1.57 ± 0.18 | 3/3 |
 | `multibox-k4-struct-sr0` | structural | multibox | 4 | structural | 0.01 | 10 | 0.7101 ± 0.0332 | 0.6812 ± 0.0126 | — | 0.2000 ± 0.1732 | 0.1667 ± 0.2887 | 3.50 ± 0.05 | 3/3 |
