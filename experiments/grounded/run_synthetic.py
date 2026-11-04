@@ -99,13 +99,17 @@ def cell_filename(
     dim: int,
     seed: int,
     kr_spec: Optional[Union[str, int]] = None,
+    reseed_every: int = 100,
 ) -> str:
-    """Return canonical E1 JSON filename ``{theory}__K{K}[__Kr{Kr}]__d{dim}__s{seed}.json``."""
+    """Return canonical E1 JSON filename ``{theory}__K{K}[__Kr{Kr}]__d{dim}__r{reseed}__s{seed}.json``."""
     k_str = str(k_spec)
     kr_str = str(k_spec if kr_spec is None else kr_spec)
     if kr_str != k_str:
-        return f"{theory}__K{k_str}__Kr{kr_str}__d{int(dim)}__s{int(seed)}.json"
-    return f"{theory}__K{k_str}__d{int(dim)}__s{int(seed)}.json"
+        return (
+            f"{theory}__K{k_str}__Kr{kr_str}__d{int(dim)}"
+            f"__r{int(reseed_every)}__s{int(seed)}.json"
+        )
+    return f"{theory}__K{k_str}__d{int(dim)}__r{int(reseed_every)}__s{int(seed)}.json"
 
 
 def resolve_out_path(
@@ -115,12 +119,15 @@ def resolve_out_path(
     dim: int,
     seed: int,
     kr_spec: Optional[Union[str, int]] = None,
+    reseed_every: int = 100,
 ) -> Path:
     """Resolve ``out`` as either a direct ``.json`` file path or a directory containing :func:`cell_filename`."""
     p = Path(out).expanduser().resolve()
     if p.suffix.lower() == ".json":
         return p
-    return p / cell_filename(theory, k_spec, dim, seed, kr_spec=kr_spec)
+    return p / cell_filename(
+        theory, k_spec, dim, seed, kr_spec=kr_spec, reseed_every=reseed_every
+    )
 
 
 def subsample_loss_curve(
@@ -151,6 +158,8 @@ def run_synthetic_cell(
     seed: int = 0,
     epochs: int = 3000,
     lr: float = 0.01,
+    reseed_every: int = 100,
+    n_filler_samples: int = 64,
     out: Path | str = DEFAULT_E1_OUT_DIR,
     device: str = "cpu",
     n_eval: int = 10000,
@@ -174,6 +183,10 @@ def run_synthetic_cell(
         Training epochs :math:`\\ge 0`.
     lr : float, default 0.01
         Adam learning rate :math:`> 0`.
+    reseed_every : int, default 100
+        Reseed interval in epochs (``0`` disables).
+    n_filler_samples : int, default 64
+        Maximum number of candidate filler elements per batch row in ``gci3`` / ``gci3_bot``.
     out : Path or str, default ``/mnt/data1/gfe/runs/grounded-e1``
         Output directory or explicit ``.json`` path.
     device : str, default "cpu"
@@ -210,8 +223,26 @@ def run_synthetic_cell(
         raise ValueError(f"epochs must be an int >= 0, got {epochs!r}")
     if isinstance(lr, bool) or not isinstance(lr, (int, float)) or float(lr) <= 0.0:
         raise ValueError(f"lr must be > 0, got {lr!r}")
+    if isinstance(reseed_every, bool) or not isinstance(reseed_every, int) or reseed_every < 0:
+        raise ValueError(f"reseed_every must be an int >= 0, got {reseed_every!r}")
+    if (
+        isinstance(n_filler_samples, bool)
+        or not isinstance(n_filler_samples, int)
+        or n_filler_samples < 1
+    ):
+        raise ValueError(
+            f"n_filler_samples must be an int >= 1, got {n_filler_samples!r}"
+        )
 
-    out_path = resolve_out_path(out, theory, k_spec, dim, seed, kr_spec=kr_spec)
+    out_path = resolve_out_path(
+        out,
+        theory,
+        k_spec,
+        dim,
+        seed,
+        kr_spec=kr_spec,
+        reseed_every=reseed_every,
+    )
     if str(out_path).startswith("/tmp/"):
         raise ValueError(f"Refusing to write under /tmp: {out_path}")
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -236,6 +267,8 @@ def run_synthetic_cell(
         n_role_components=init_kr,
         epochs=int(epochs),
         learning_rate=float(lr),
+        reseed_every=int(reseed_every),
+        n_filler_samples=int(n_filler_samples),
         device=device,
         seed=int(seed),
         init="random",
@@ -299,6 +332,8 @@ def run_synthetic_cell(
             "seed": int(seed),
             "epochs": int(epochs),
             "lr": float(lr),
+            "reseed_every": int(reseed_every),
+            "n_filler_samples": int(n_filler_samples),
             "init": "random",
             "device": str(device),
             "param_count": param_count,
@@ -370,6 +405,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Adam learning rate (default: 0.01).",
     )
     parser.add_argument(
+        "--reseed-every",
+        type=int,
+        default=100,
+        help="Reseed interval in epochs; 0 disables reseeding (default: 100).",
+    )
+    parser.add_argument(
+        "--n-filler-samples",
+        type=int,
+        default=64,
+        help="Max filler samples per batch in gci3/gci3_bot (default: 64).",
+    )
+    parser.add_argument(
         "--out",
         type=Path,
         default=DEFAULT_E1_OUT_DIR,
@@ -396,13 +443,16 @@ def main(argv: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         seed=args.seed,
         epochs=args.epochs,
         lr=args.lr,
+        reseed_every=args.reseed_every,
+        n_filler_samples=args.n_filler_samples,
         out=args.out,
         device=args.device,
     )
     cfg = res["config"]
     m = res["metrics"]
     print(
-        f"[{cfg['theory']} K={cfg['K']} (eff={cfg['n_components']}) d={cfg['dim']} s={cfg['seed']}] "
+        f"[{cfg['theory']} K={cfg['K']} (eff={cfg['n_components']}) d={cfg['dim']} "
+        f"r={cfg['reseed_every']} s={cfg['seed']}] "
         f"exact={m['exact']} elem_viol={m['elem_viol']:.4f} region_viol={m['region_viol']:.4f} "
         f"exist={m['exist']:.4f} dead_ok={m['dead_ok']} "
         f"faith=({m['faithful_named_precision']:.4f}, {m['faithful_named_recall']:.4f}) "

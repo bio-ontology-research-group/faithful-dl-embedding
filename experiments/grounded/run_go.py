@@ -71,474 +71,12 @@ def _validate_args(args: argparse.Namespace) -> None:
         raise ValueError(
             f"--max-test-tuples must be >= 1 when specified, got {args.max_test_tuples}"
         )
-
-
-def _batched_crisp_elem_membership(
-    mod: Any,
-    points: th.Tensor,
-    class_chunk_size: int = 2048,
-) -> th.Tensor:
-    """Compute crisp membership ``(L, nb_classes)`` for ``points`` ``(L, d)`` in class chunks.
-
-    Guarantees
-    ----------
-    - Returns a float32 tensor of shape ``(L, nb_classes)`` with entries in ``{0.0, 1.0}``
-      identical to stacking ``crisp_membership(mod.depth(points, c_id, crisp=True))``
-      across all ``c_id in range(mod.nb_classes)``.
-
-    Non-guarantees
-    --------------
-    - Assumes ``torch.no_grad()`` context is active for memory efficiency.
-    """
-    from mowl.nn.el.grounded.losses import crisp_membership
-
-    l_cnt = int(points.shape[0])
-    nb_classes = int(mod.nb_classes)
-    device = points.device
-    if l_cnt == 0:
-        return th.empty((0, nb_classes), dtype=th.float32, device=device)
-
-    out = th.empty((l_cnt, nb_classes), dtype=th.float32, device=device)
-    pts_exp = points.unsqueeze(1).unsqueeze(2)  # (L, 1, 1, d)
-
-    for start in range(0, nb_classes, class_chunk_size):
-        end = min(start + class_chunk_size, nb_classes)
-        c_ids = th.arange(start, end, dtype=th.long, device=device)
-        regs = mod.class_regions(c_ids)  # cen, w: (C, K, d), active: (C, K)
-        coord_depth = regs.w.unsqueeze(0) - th.abs(pts_exp - regs.cen.unsqueeze(0))  # (L, C, K, d)
-        slot_depth = th.amin(coord_depth, dim=-1)  # (L, C, K)
-        act = regs.active.unsqueeze(0)  # (1, C, K)
-        has_act = act.any(dim=-1, keepdim=True)  # (1, C, 1)
-        inactive_fill = th.where(
-            has_act,
-            th.full_like(slot_depth, float("-inf")),
-            th.full_like(slot_depth, -1e6),
+    if args.reseed_every < 0:
+        raise ValueError(f"--reseed-every must be >= 0, got {args.reseed_every}")
+    if args.n_filler_samples < 1:
+        raise ValueError(
+            f"--n-filler-samples must be >= 1, got {args.n_filler_samples}"
         )
-        dep = th.amax(th.where(act, slot_depth, inactive_fill), dim=-1)  # (L, C)
-        if mod.top_id is not None and start <= mod.top_id < end:
-            dep[:, mod.top_id - start] = 1e6
-        if mod.bot_id is not None and start <= mod.bot_id < end:
-            dep[:, mod.bot_id - start] = -1e6
-        out[:, start:end] = crisp_membership(dep)
-    return out
-
-
-def compute_crisp_and_eval_metrics(
-    model: Any,
-    n_eval: int = 10000,
-    force_batched: bool = False,
-) -> Tuple[Dict[str, float], Dict[str, Any]]:
-    """Compute ``crisp_report`` and ``evaluate_model(use_reasoner=False)`` safely at any scale.
-
-    When ``model.nb_elements * model.nb_classes <= 200_000`` (and ``not force_batched``),
-    delegates directly to ``model.crisp_report(n_eval=n_eval)`` and
-    ``model.evaluate_model(use_reasoner=False, n_eval=n_eval)``.
-    On larger ontologies (such as GO where ``nb_elements = nb_classes = 56,191``),
-    computes the identical crisp ``elem_viol``, ``region_viol`` (on ``n_eval``
-    samples), ``exist``, ``dead_ok``, and ``exact`` metrics in batched tensor form
-    to avoid materialising a ``(nb_elements, nb_classes)`` matrix.
-
-    Guarantees
-    ----------
-    - Reasoner-free (R1): never imports or calls any OWL reasoner or ``CanonicalModel``.
-    - Returns ``(crisp_dict, eval_dict)`` with the exact schema of
-      :meth:`~mowl.models.GroundedEL.crisp_report` and
-      :meth:`~mowl.models.GroundedEL.evaluate_model`.
-
-    Non-guarantees
-    --------------
-    - ``faithful_named_*`` entries are ``None`` since ``use_reasoner=False``.
-    """
-    if not force_batched and int(model.nb_elements) * int(model.nb_classes) <= 200_000:
-        crisp = model.crisp_report(n_eval=n_eval)
-        eval_metrics = model.evaluate_model(use_reasoner=False, n_eval=n_eval)
-        if isinstance(eval_metrics.get("faithful_named"), tuple):
-            eval_metrics = dict(eval_metrics)
-            eval_metrics["faithful_named"] = list(eval_metrics["faithful_named"])
-        return crisp, eval_metrics
-
-    from mowl.nn.el.grounded.losses import (
-        class_assertion,
-        crisp_membership,
-        gci0,
-        gci0_bot,
-        gci1,
-        gci1_bot,
-        gci2,
-        gci3,
-        gci3_bot,
-        role_assertion,
-        role_chain,
-        role_inclusion,
-    )
-    from mowl.nn.el.grounded.sampling import (
-        sample_class_region,
-        sample_pair_region,
-        sample_role_region,
-    )
-
-    mod = model.module
-    device = model.device
-    td = model.training_datasets
-    gen = th.Generator(device="cpu")
-    gen.manual_seed(int(model.seed) + 9999)
-
-    with th.no_grad():
-        pos_all = mod.positions()  # (nb_elements, d)
-        dead_c = mod.dead() > 0.5
-        if model.bot_id is not None:
-            dead_c[model.bot_id] = True
-        dead_f = dead_c.to(dtype=th.float32)
-        live_mask = ~dead_c
-        live_ids = th.nonzero(live_mask, as_tuple=False).view(-1)
-
-        if live_ids.numel() > 256:
-            perm = th.randperm(live_ids.numel(), device="cpu", generator=gen)[:256].to(
-                device=device
-            )
-            eval_elem_ids = live_ids[perm]
-        else:
-            eval_elem_ids = live_ids
-
-        eval_pos = pos_all[eval_elem_ids]  # (L, d)
-        eval_dead_f = dead_f[eval_elem_ids]  # (L,)
-        elem_m_live = _batched_crisp_elem_membership(mod, eval_pos)  # (L, nb_classes)
-
-        elem_viol_count = 0
-        elem_total_count = 0
-
-        # 1. Batched elem_viol across all training axioms on eval_elem_ids
-        if "gci0" in td and len(td["gci0"]) > 0:
-            rows = td["gci0"][:].to(device=device, dtype=th.long)
-            if eval_elem_ids.numel() > 0:
-                for s in range(0, rows.shape[0], 4096):
-                    chunk = rows[s : s + 4096]
-                    ma = elem_m_live[:, chunk[:, 0]]
-                    mb = elem_m_live[:, chunk[:, 1]]
-                    h_e = gci0(ma, mb, dead=eval_dead_f.unsqueeze(1).expand_as(ma))
-                    elem_viol_count += int((h_e > 0.0).sum().item())
-                    elem_total_count += int(h_e.numel())
-
-        if "gci0_bot" in td and len(td["gci0_bot"]) > 0:
-            rows = td["gci0_bot"][:].to(device=device, dtype=th.long)
-            if eval_elem_ids.numel() > 0:
-                a_ids = rows[:, 0]
-                ma = elem_m_live[:, a_ids]
-                h_e = gci0_bot(ma, dead=eval_dead_f.unsqueeze(1).expand_as(ma))
-                elem_viol_count += int((h_e > 0.0).sum().item())
-                elem_total_count += int(h_e.numel())
-
-        if "gci1" in td and len(td["gci1"]) > 0:
-            rows = td["gci1"][:].to(device=device, dtype=th.long)
-            if eval_elem_ids.numel() > 0:
-                for s in range(0, rows.shape[0], 4096):
-                    chunk = rows[s : s + 4096]
-                    ma = elem_m_live[:, chunk[:, 0]]
-                    mb = elem_m_live[:, chunk[:, 1]]
-                    mc = elem_m_live[:, chunk[:, 2]]
-                    h_e = gci1(ma, mb, mc, dead=eval_dead_f.unsqueeze(1).expand_as(ma))
-                    elem_viol_count += int((h_e > 0.0).sum().item())
-                    elem_total_count += int(h_e.numel())
-
-        if "gci1_bot" in td and len(td["gci1_bot"]) > 0:
-            rows = td["gci1_bot"][:].to(device=device, dtype=th.long)
-            if eval_elem_ids.numel() > 0:
-                for s in range(0, rows.shape[0], 4096):
-                    chunk = rows[s : s + 4096]
-                    ma = elem_m_live[:, chunk[:, 0]]
-                    mb = elem_m_live[:, chunk[:, 1]]
-                    h_e = gci1_bot(ma, mb, dead=eval_dead_f.unsqueeze(1).expand_as(ma))
-                    elem_viol_count += int((h_e > 0.0).sum().item())
-                    elem_total_count += int(h_e.numel())
-
-        if "gci2" in td and len(td["gci2"]) > 0 and eval_elem_ids.numel() > 0:
-            rows = td["gci2"][:].to(device=device, dtype=th.long)
-            l_cnt = int(eval_pos.shape[0])
-            for s in range(0, rows.shape[0], 512):
-                chunk = rows[s : s + 512]
-                c_sz = int(chunk.shape[0])
-                a_ids = chunk[:, 0]
-                r_ids = chunk[:, 1]
-                b_ids = chunk[:, 2]
-                xp = eval_pos.unsqueeze(1).expand(l_cnt, c_sz, model.embed_dim).reshape(-1, model.embed_dim)
-                yp = pos_all[b_ids].unsqueeze(0).expand(l_cnt, c_sz, model.embed_dim).reshape(-1, model.embed_dim)
-                rr = r_ids.unsqueeze(0).expand(l_cnt, c_sz).reshape(-1)
-                rho_e = crisp_membership(mod.role_depth(xp, yp, rr, crisp=True)).reshape(l_cnt, c_sz)
-                ma = elem_m_live[:, a_ids]
-                db_e = dead_f[b_ids].unsqueeze(0).expand(l_cnt, c_sz)
-                h_e = gci2(
-                    ma,
-                    rho_e,
-                    dead=eval_dead_f.unsqueeze(1).expand_as(ma),
-                    dead_filler=db_e,
-                )
-                elem_viol_count += int((h_e > 0.0).sum().item())
-                elem_total_count += int(h_e.numel())
-
-        # Precompute crisp role memberships on (eval_pos, eval_pos[:32]) across all roles
-        y_cnt = min(32, int(eval_elem_ids.numel()))
-        if y_cnt > 0 and model.nb_rels > 0:
-            l_cnt = int(eval_pos.shape[0])
-            y_pos = eval_pos[:y_cnt]
-            rho_xy_all = th.empty((l_cnt, y_cnt, model.nb_rels), dtype=th.float32, device=device)
-            xp_grid = eval_pos.unsqueeze(1).expand(l_cnt, y_cnt, model.embed_dim).reshape(-1, model.embed_dim)
-            yp_grid = y_pos.unsqueeze(0).expand(l_cnt, y_cnt, model.embed_dim).reshape(-1, model.embed_dim)
-            for r_id in range(model.nb_rels):
-                rho_xy_all[:, :, r_id] = crisp_membership(
-                    mod.role_depth(xp_grid, yp_grid, r_id, crisp=True)
-                ).reshape(l_cnt, y_cnt)
-
-            if "gci3" in td and len(td["gci3"]) > 0:
-                rows = td["gci3"][:].to(device=device, dtype=th.long)
-                for s in range(0, rows.shape[0], 512):
-                    chunk = rows[s : s + 512]
-                    r_ids = chunk[:, 0]
-                    b_ids = chunk[:, 1]
-                    c_ids = chunk[:, 2]
-                    rho_c = rho_xy_all[:, :, r_ids]  # (L, y_cnt, C)
-                    mb_y = elem_m_live[:y_cnt, b_ids].unsqueeze(0).expand_as(rho_c)
-                    mc_x = elem_m_live[:, c_ids].unsqueeze(1).expand_as(rho_c)
-                    dead_x = eval_dead_f.view(l_cnt, 1, 1).expand_as(rho_c)
-                    h_e = gci3(rho_c, mb_y, mc_x, dead=dead_x)
-                    elem_viol_count += int((h_e > 0.0).sum().item())
-                    elem_total_count += int(h_e.numel())
-
-            if "gci3_bot" in td and len(td["gci3_bot"]) > 0:
-                rows = td["gci3_bot"][:].to(device=device, dtype=th.long)
-                r_ids = rows[:, 0]
-                b_ids = rows[:, 1]
-                rho_c = rho_xy_all[:, :, r_ids]
-                mb_y = elem_m_live[:y_cnt, b_ids].unsqueeze(0).expand_as(rho_c)
-                dead_x = eval_dead_f.view(l_cnt, 1, 1).expand_as(rho_c)
-                h_e = gci3_bot(rho_c, mb_y, dead=dead_x)
-                elem_viol_count += int((h_e > 0.0).sum().item())
-                elem_total_count += int(h_e.numel())
-
-            if "role_inclusion" in td and len(td["role_inclusion"]) > 0:
-                rows = td["role_inclusion"][:].to(device=device, dtype=th.long)
-                rr = rho_xy_all[:, :, rows[:, 0]]
-                rs = rho_xy_all[:, :, rows[:, 1]]
-                h_e = role_inclusion(rr, rs)
-                elem_viol_count += int((h_e > 0.0).sum().item())
-                elem_total_count += int(h_e.numel())
-
-            if "role_chain" in td and len(td["role_chain"]) > 0:
-                c_cnt = min(16, y_cnt)
-                rows = td["role_chain"][:].to(device=device, dtype=th.long)
-                for row in rows.detach().cpu().tolist():
-                    r_id, s_id, t_id = int(row[0]), int(row[1]), int(row[2])
-                    rho_xy = rho_xy_all[:c_cnt, :c_cnt, r_id].unsqueeze(2)  # (C, C, 1)
-                    rho_yz = rho_xy_all[:c_cnt, :c_cnt, s_id].unsqueeze(0)  # (1, C, C)
-                    rho_xz = rho_xy_all[:c_cnt, :c_cnt, t_id].unsqueeze(1)  # (C, 1, C)
-                    h_e = role_chain(
-                        rho_xy.expand(c_cnt, c_cnt, c_cnt),
-                        rho_yz.expand(c_cnt, c_cnt, c_cnt),
-                        rho_xz.expand(c_cnt, c_cnt, c_cnt),
-                    )
-                    elem_viol_count += int((h_e > 0.0).sum().item())
-                    elem_total_count += int(h_e.numel())
-
-        # 2. Region violations on n_eval sample budget across sampled axioms
-        axiom_keys = (
-            "gci0",
-            "gci0_bot",
-            "gci1",
-            "gci1_bot",
-            "gci2",
-            "gci3",
-            "gci3_bot",
-            "role_inclusion",
-            "role_chain",
-        )
-        key_counts = {
-            k: len(td[k]) for k in axiom_keys if k in td and len(td[k]) > 0
-        }
-        total_region_axioms = sum(key_counts.values())
-        n_per_ax = 16
-        max_sampled_axioms = max(1, n_eval // n_per_ax)
-
-        reg_viol_axioms = 0
-        reg_total_axioms = 0
-        all_regs = mod.class_regions()
-
-        for k, cnt in key_counts.items():
-            rows_all = td[k][:].detach().cpu()
-            if total_region_axioms > max_sampled_axioms:
-                quota = max(1, int(round(max_sampled_axioms * (cnt / total_region_axioms))))
-                quota = min(cnt, quota)
-                perm_ax = th.randperm(cnt, generator=gen)[:quota]
-                rows_sel = rows_all[perm_ax].tolist()
-            else:
-                rows_sel = rows_all.tolist()
-
-            for row in rows_sel:
-                reg_total_axioms += 1
-                if k == "gci0":
-                    a_id, b_id = int(row[0]), int(row[1])
-                    s_reg = sample_class_region(mod, a_id, generator=gen, n_samples=n_per_ax)
-                    corners = model._box_corner_samples(
-                        all_regs.cen[a_id : a_id + 1],
-                        all_regs.w[a_id : a_id + 1],
-                        all_regs.active[a_id : a_id + 1],
-                        gen,
-                    )
-                    pts_list = [eval_pos]
-                    if bool(s_reg.valid.any().item()):
-                        pts_list.append(s_reg.points[s_reg.valid])
-                    if corners.numel() > 0:
-                        pts_list.append(corners)
-                    pts = th.cat(pts_list, dim=0)
-                    if pts.shape[0] > 0:
-                        ma = crisp_membership(mod.depth(pts, a_id, crisp=True))
-                        mb = crisp_membership(mod.depth(pts, b_id, crisp=True))
-                        if bool((gci0(ma, mb, dead=None) > 0.0).any().item()):
-                            reg_viol_axioms += 1
-                elif k == "gci0_bot":
-                    a_id = int(row[0])
-                    s_reg = sample_class_region(mod, a_id, generator=gen, n_samples=n_per_ax)
-                    if bool(s_reg.valid.any().item()):
-                        reg_viol_axioms += 1
-                    elif eval_pos.shape[0] > 0:
-                        ma = elem_m_live[:, a_id]
-                        if bool((gci0_bot(ma, dead=None) > 0.0).any().item()):
-                            reg_viol_axioms += 1
-                elif k == "gci1":
-                    a_id, b_id, c_id = int(row[0]), int(row[1]), int(row[2])
-                    s_reg = sample_pair_region(mod, a_id, b_id, generator=gen, n_samples=n_per_ax)
-                    pts_list = [eval_pos]
-                    if bool(s_reg.valid.any().item()):
-                        pts_list.append(s_reg.points[s_reg.valid])
-                    pts = th.cat(pts_list, dim=0)
-                    if pts.shape[0] > 0:
-                        ma = crisp_membership(mod.depth(pts, a_id, crisp=True))
-                        mb = crisp_membership(mod.depth(pts, b_id, crisp=True))
-                        mc = crisp_membership(mod.depth(pts, c_id, crisp=True))
-                        if bool((gci1(ma, mb, mc, dead=None) > 0.0).any().item()):
-                            reg_viol_axioms += 1
-                elif k == "gci1_bot":
-                    a_id, b_id = int(row[0]), int(row[1])
-                    s_inter = sample_pair_region(mod, a_id, b_id, generator=gen, n_samples=n_per_ax)
-                    if bool(s_inter.valid.any().item()):
-                        reg_viol_axioms += 1
-                    else:
-                        s_a = sample_class_region(mod, a_id, generator=gen, n_samples=n_per_ax)
-                        pts_list = [eval_pos]
-                        if bool(s_a.valid.any().item()):
-                            pts_list.append(s_a.points[s_a.valid])
-                        pts = th.cat(pts_list, dim=0)
-                        if pts.shape[0] > 0:
-                            ma = crisp_membership(mod.depth(pts, a_id, crisp=True))
-                            mb = crisp_membership(mod.depth(pts, b_id, crisp=True))
-                            if bool((gci1_bot(ma, mb, dead=None) > 0.0).any().item()):
-                                reg_viol_axioms += 1
-                elif k == "gci2":
-                    a_id, r_id, b_id = int(row[0]), int(row[1]), int(row[2])
-                    pb = pos_all[b_id]
-                    s_reg = sample_class_region(mod, a_id, generator=gen, n_samples=n_per_ax)
-                    corners = model._box_corner_samples(
-                        all_regs.cen[a_id : a_id + 1],
-                        all_regs.w[a_id : a_id + 1],
-                        all_regs.active[a_id : a_id + 1],
-                        gen,
-                    )
-                    pts_list = [eval_pos]
-                    if bool(s_reg.valid.any().item()):
-                        pts_list.append(s_reg.points[s_reg.valid])
-                    if corners.numel() > 0:
-                        pts_list.append(corners)
-                    pts = th.cat(pts_list, dim=0)
-                    if pts.shape[0] > 0:
-                        ma = crisp_membership(mod.depth(pts, a_id, crisp=True))
-                        rho_z = crisp_membership(mod.role_depth(pts, pb, r_id, crisp=True))
-                        db_z = dead_f[b_id].expand_as(ma)
-                        if bool((gci2(ma, rho_z, dead=None, dead_filler=db_z) > 0.0).any().item()):
-                            reg_viol_axioms += 1
-                elif k == "gci3":
-                    r_id, b_id, c_id = int(row[0]), int(row[1]), int(row[2])
-                    h_s, t_s = sample_role_region(mod, r_id, generator=gen, n_samples=n_per_ax)
-                    if bool(h_s.valid.any().item()):
-                        zx = h_s.points[h_s.valid]
-                        zy = t_s.points[t_s.valid]
-                        rho_z = crisp_membership(mod.role_depth(zx, zy, r_id, crisp=True))
-                        mb_z = crisp_membership(mod.depth(zy, b_id, crisp=True))
-                        mc_z = crisp_membership(mod.depth(zx, c_id, crisp=True))
-                        if bool((gci3(rho_z, mb_z, mc_z, dead=None) > 0.0).any().item()):
-                            reg_viol_axioms += 1
-                elif k == "gci3_bot":
-                    r_id, b_id = int(row[0]), int(row[1])
-                    h_s, t_s = sample_role_region(mod, r_id, generator=gen, n_samples=n_per_ax)
-                    if bool(h_s.valid.any().item()):
-                        zx = h_s.points[h_s.valid]
-                        zy = t_s.points[t_s.valid]
-                        rho_z = crisp_membership(mod.role_depth(zx, zy, r_id, crisp=True))
-                        mb_z = crisp_membership(mod.depth(zy, b_id, crisp=True))
-                        if bool((gci3_bot(rho_z, mb_z, dead=None) > 0.0).any().item()):
-                            reg_viol_axioms += 1
-                elif k == "role_inclusion":
-                    r_id, s_id = int(row[0]), int(row[1])
-                    h_s, t_s = sample_role_region(mod, r_id, generator=gen, n_samples=n_per_ax)
-                    if bool(h_s.valid.any().item()):
-                        zx = h_s.points[h_s.valid]
-                        zy = t_s.points[t_s.valid]
-                        rr = crisp_membership(mod.role_depth(zx, zy, r_id, crisp=True))
-                        rs = crisp_membership(mod.role_depth(zx, zy, s_id, crisp=True))
-                        if bool((role_inclusion(rr, rs) > 0.0).any().item()):
-                            reg_viol_axioms += 1
-                elif k == "role_chain":
-                    r_id, s_id, t_id = int(row[0]), int(row[1]), int(row[2])
-                    hx, hy = sample_role_region(mod, r_id, generator=gen, n_samples=n_per_ax)
-                    _, tz = sample_role_region(mod, s_id, generator=gen, n_samples=n_per_ax)
-                    v_c = hx.valid & tz.valid
-                    if bool(v_c.any().item()):
-                        zx = hx.points[v_c]
-                        zy = hy.points[v_c]
-                        zz = tz.points[v_c]
-                        rr = crisp_membership(mod.role_depth(zx, zy, r_id, crisp=True))
-                        rs = crisp_membership(mod.role_depth(zy, zz, s_id, crisp=True))
-                        rt = crisp_membership(mod.role_depth(zx, zz, t_id, crisp=True))
-                        if bool((role_chain(rr, rs, rt) > 0.0).any().item()):
-                            reg_viol_axioms += 1
-
-        elem_viol = (
-            float(elem_viol_count / elem_total_count) if elem_total_count > 0 else 0.0
-        )
-        region_viol = (
-            float(reg_viol_axioms / reg_total_axioms) if reg_total_axioms > 0 else 0.0
-        )
-        crisp = {
-            "elem_viol": elem_viol,
-            "region_viol": region_viol,
-        }
-
-        # Vectorised self-membership exist metric over live classes (use_reasoner=False)
-        all_cls_ids = th.arange(model.nb_classes, dtype=th.long, device=device)
-        self_depths = mod.depth(pos_all[: model.nb_classes], all_cls_ids, crisp=True)
-        dead_cls = dead_c[: model.nb_classes]
-        live_cls = ~dead_cls
-        self_inside = (self_depths > 0.0) & live_cls
-        exist_val = (
-            float(self_inside[live_cls].to(dtype=th.float32).mean().item())
-            if bool(live_cls.any().item())
-            else 1.0
-        )
-        dead_ok = True
-        exact = bool(
-            elem_viol == 0.0
-            and region_viol == 0.0
-            and exist_val == 1.0
-            and dead_ok
-        )
-        eval_metrics: Dict[str, Any] = {
-            "elem_viol": elem_viol,
-            "region_viol": region_viol,
-            "exist": exist_val,
-            "dead_ok": dead_ok,
-            "faithful_named_precision": None,
-            "faithful_named_recall": None,
-            "faithful_named": [None, None],
-            "exact": exact,
-        }
-        return crisp, eval_metrics
 
 
 def _extract_subclass_pairs(
@@ -862,6 +400,8 @@ def run_go_cell(
     n_eval: int = 10000,
     eval_batch_size: int = 64,
     max_test_tuples: Optional[int] = None,
+    reseed_every: int = 0,
+    n_filler_samples: int = 64,
     jvm_memory: str = "4g",
 ) -> Dict[str, Any]:
     """Train :class:`~mowl.models.GroundedEL` on GO and compute §9 E2 metrics.
@@ -911,41 +451,11 @@ def run_go_cell(
         batch_size=batch_size,
         learning_rate=lr,
         epochs=epochs,
+        reseed_every=reseed_every,
+        n_filler_samples=n_filler_samples,
         device=eff_device,
         seed=seed,
     )
-
-    # Guard against O(nb_elements^2 * d) allocation in GroundedEL.reseed_idle on GO
-    # and unsubsampled 1-D all_fillers in GroundedEL.compute_batch_losses on GO.
-    if model.nb_elements > 5000:
-        if model.reseed_every == 0:
-            model.reseed_idle = lambda *a, **kw: 0  # type: ignore[method-assign]
-        import mowl.models.grounded.model as _gmod
-
-        _orig_sfe = _gmod.sample_filler_elements
-
-        def _capped_sample_filler_elements(
-            filler_elements: th.Tensor,
-            nb_elements: int,
-            n_random: int,
-            generator: th.Generator,
-            batch_size: int = 1,
-        ) -> th.Tensor:
-            if filler_elements.ndim == 1 and filler_elements.numel() > 16:
-                max_f = max(n_random, 8)
-                perm = th.randperm(
-                    filler_elements.numel(), device=generator.device, generator=generator
-                )[:max_f].to(device=filler_elements.device)
-                filler_elements = filler_elements[perm]
-            return _orig_sfe(
-                filler_elements,
-                nb_elements,
-                n_random,
-                generator=generator,
-                batch_size=batch_size,
-            )
-
-        _gmod.sample_filler_elements = _capped_sample_filler_elements
 
     t0 = time.perf_counter()
     history = model.train(epochs=epochs)
@@ -964,7 +474,11 @@ def run_go_cell(
     )
 
     t_eval0 = time.perf_counter()
-    crisp, eval_metrics = compute_crisp_and_eval_metrics(model, n_eval=n_eval)
+    crisp = model.crisp_report(n_eval=n_eval)
+    eval_metrics = model.evaluate_model(use_reasoner=False, n_eval=n_eval)
+    if isinstance(eval_metrics.get("faithful_named"), tuple):
+        eval_metrics = dict(eval_metrics)
+        eval_metrics["faithful_named"] = list(eval_metrics["faithful_named"])
     ranking = evaluate_subsumption_ranking(
         model,
         dataset,
@@ -983,6 +497,8 @@ def run_go_cell(
             "epochs": epochs,
             "batch_size": batch_size,
             "lr": lr,
+            "reseed_every": reseed_every,
+            "n_filler_samples": n_filler_samples,
             "seed": seed,
             "device": eff_device,
             "nb_classes": int(model.nb_classes),
@@ -1022,8 +538,8 @@ def build_parser() -> argparse.ArgumentParser:
     Guarantees
     ----------
     - Exposes ``--K``, ``--Kr``, ``--d`` / ``--dim``, ``--eps-min`` / ``--eps``,
-      ``--epochs``, ``--batch-size``, ``--lr``, ``--seed``, ``--device``,
-      ``--data-root``, and ``--out``.
+      ``--epochs``, ``--batch-size``, ``--lr``, ``--reseed-every``,
+      ``--n-filler-samples``, ``--seed``, ``--device``, ``--data-root``, and ``--out``.
 
     Non-guarantees
     --------------
@@ -1072,6 +588,18 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.01,
         help="Adam learning rate (default: 0.01).",
+    )
+    parser.add_argument(
+        "--reseed-every",
+        type=int,
+        default=0,
+        help="Reseed interval in epochs (0 disables reseeding; default: 0).",
+    )
+    parser.add_argument(
+        "--n-filler-samples",
+        type=int,
+        default=64,
+        help="Maximum candidate fillers sampled per gci3/gci3_bot batch (default: 64).",
     )
     parser.add_argument(
         "--seed",
@@ -1145,6 +673,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         n_eval=args.n_eval,
         eval_batch_size=args.eval_batch_size,
         max_test_tuples=args.max_test_tuples,
+        reseed_every=args.reseed_every,
+        n_filler_samples=args.n_filler_samples,
         jvm_memory=args.jvm_memory,
     )
     cr = res["crisp_report"]

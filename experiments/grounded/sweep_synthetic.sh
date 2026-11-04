@@ -6,6 +6,7 @@
 #                role_functional, role_cycle, role_chain, unsat_mix}
 #   K in {1, 2, 4, 8, full} (with Kr = K)
 #   dim in {2, 10}
+#   reseed in {0, 100}
 #   seed in {0, 1, 2}
 #   epochs = 3000, lr = 0.01
 #
@@ -15,7 +16,7 @@
 # exists on disk.
 #
 # Environment overrides (for subset testing):
-#   THEORIES, KS, DIMS, SEEDS, CELLS, EPOCHS, LR, JOBS, OUT_DIR, LOG_DIR, PYTHON
+#   THEORIES, KS, DIMS, RESEEDS, SEEDS, CELLS, EPOCHS, LR, JOBS, OUT_DIR, LOG_DIR, PYTHON
 
 set -euo pipefail
 
@@ -41,6 +42,7 @@ JOBS="${JOBS:-12}"
 THEORIES="${THEORIES:-tk3 tk4 tk5 tk6 tk7 box2el_t1 box2el_c4 role_functional role_cycle role_chain unsat_mix}"
 KS="${KS:-1 2 4 8 full}"
 DIMS="${DIMS:-2 10}"
+RESEEDS="${RESEEDS:-0 100}"
 SEEDS="${SEEDS:-0 1 2}"
 
 mkdir -p "${OUT_DIR}" "${LOG_DIR}"
@@ -50,15 +52,27 @@ mkdir -p "${OUT_DIR}" "${LOG_DIR}"
 
 emit_cells() {
     if [[ -n "${CELLS:-}" ]]; then
-        printf '%s\n' "${CELLS}" | awk 'NF == 4 { print $1, $2, $3, $4 }'
+        printf '%s\n' "${CELLS}" | awk -v reseeds="${RESEEDS}" '
+            NF == 5 { print $1, $2, $3, $4, $5 }
+            NF == 4 {
+                n = split(reseeds, r_arr, " ")
+                for (i = 1; i <= n; i++) {
+                    if (r_arr[i] != "") {
+                        print $1, $2, $3, r_arr[i], $4
+                    }
+                }
+            }
+        '
         return
     fi
-    local th k d s
+    local th k d r s
     for th in ${THEORIES}; do
         for k in ${KS}; do
             for d in ${DIMS}; do
-                for s in ${SEEDS}; do
-                    printf '%s %s %s %s\n' "${th}" "${k}" "${d}" "${s}"
+                for r in ${RESEEDS}; do
+                    for s in ${SEEDS}; do
+                        printf '%s %s %s %s %s\n' "${th}" "${k}" "${d}" "${r}" "${s}"
+                    done
                 done
             done
         done
@@ -66,14 +80,14 @@ emit_cells() {
 }
 
 filter_missing_cells() {
-    local th k d s json_path
-    while read -r th k d s; do
+    local th k d r s json_path
+    while read -r th k d r s; do
         [[ -z "${th}" ]] && continue
-        json_path="${OUT_DIR}/${th}__K${k}__d${d}__s${s}.json"
+        json_path="${OUT_DIR}/${th}__K${k}__d${d}__r${r}__s${s}.json"
         if [[ -s "${json_path}" ]]; then
             continue
         fi
-        printf '%s %s %s %s\n' "${th}" "${k}" "${d}" "${s}"
+        printf '%s %s %s %s %s\n' "${th}" "${k}" "${d}" "${r}" "${s}"
     done
 }
 
@@ -83,9 +97,10 @@ run_one_cell() {
     local th="$1"
     local k="$2"
     local d="$3"
-    local s="$4"
-    local json_path="${OUT_DIR}/${th}__K${k}__d${d}__s${s}.json"
-    local log_path="${LOG_DIR}/${th}__K${k}__d${d}__s${s}.log"
+    local r="$4"
+    local s="$5"
+    local json_path="${OUT_DIR}/${th}__K${k}__d${d}__r${r}__s${s}.json"
+    local log_path="${LOG_DIR}/${th}__K${k}__d${d}__r${r}__s${s}.log"
     if [[ -s "${json_path}" ]]; then
         return 0
     fi
@@ -94,6 +109,7 @@ run_one_cell() {
         --K "${k}" \
         --Kr "${k}" \
         --dim "${d}" \
+        --reseed-every "${r}" \
         --seed "${s}" \
         --epochs "${EPOCHS}" \
         --lr "${LR}" \
@@ -102,4 +118,4 @@ run_one_cell() {
 }
 export -f run_one_cell
 
-emit_cells | filter_missing_cells | xargs -r -P "${JOBS}" -n 4 bash -c 'run_one_cell "$1" "$2" "$3" "$4"' _
+emit_cells | filter_missing_cells | xargs -r -P "${JOBS}" -n 5 bash -c 'run_one_cell "$1" "$2" "$3" "$4" "$5"' _

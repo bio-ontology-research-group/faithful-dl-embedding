@@ -28,8 +28,7 @@ from experiments.grounded.aggregate import (
     write_grounded_markdown,
 )
 from experiments.grounded.run_go import (
-    _batched_crisp_elem_membership,
-    compute_crisp_and_eval_metrics,
+    build_parser as build_go_parser,
     evaluate_subsumption_ranking,
 )
 from experiments.grounded.run_synthetic import (
@@ -116,15 +115,19 @@ def test_parse_k_and_run_synthetic_smoke(tmp_path: Path) -> None:
     )
     assert res["config"]["n_components"] == res["config"]["nb_elements"]
     assert res["config"]["n_role_components"] == res["config"]["nb_elements"]
+    assert res["config"]["reseed_every"] == 100
+    assert res["config"]["n_filler_samples"] == 64
     assert "elem_viol" in res["crisp_report"]
     assert "region_viol" in res["crisp_report"]
     assert "exact" in res["metrics"]
     assert len(res["loss_curve"]) >= 1
 
-    out_json = tmp_path / "runs" / "role_functional__Kfull__d2__s0.json"
+    out_json = tmp_path / "runs" / "role_functional__Kfull__d2__r100__s0.json"
     assert out_json.exists()
     loaded = json.loads(out_json.read_text(encoding="utf-8"))
     assert loaded["config"]["theory"] == "role_functional"
+    assert loaded["config"]["reseed_every"] == 100
+    assert loaded["config"]["n_filler_samples"] == 64
 
 
 def test_aggregate_report_generation(tmp_path: Path) -> None:
@@ -139,6 +142,8 @@ def test_aggregate_report_generation(tmp_path: Path) -> None:
             "n_components": 4,
             "n_role_components": 4,
             "dim": 2,
+            "reseed_every": 100,
+            "n_filler_samples": 64,
             "seed": 0,
             "epochs": 100,
             "lr": 0.01,
@@ -161,7 +166,7 @@ def test_aggregate_report_generation(tmp_path: Path) -> None:
         "loss_curve": [{"epoch": 1, "total": 1.0}, {"epoch": 100, "total": 0.001}],
         "wall_time_s": 1.25,
     }
-    (runs_dir / "tk3__K4__d2__s0.json").write_text(
+    (runs_dir / "tk3__K4__d2__r100__s0.json").write_text(
         json.dumps(sample), encoding="utf-8"
     )
 
@@ -172,13 +177,18 @@ def test_aggregate_report_generation(tmp_path: Path) -> None:
     assert len(runs) == 1
     summary = summarize_cell_group(runs)
     assert summary["exact_rate"] == 1.0
+    assert summary["reseed_every"] == 100
     text = out_md.read_text(encoding="utf-8")
     assert "`tk3`" in text
     assert "1.00 (1/1)" in text
 
 
 def test_go_batched_helpers_and_sbatch(tmp_path: Path) -> None:
-    """Batched GO crisp membership and ranking helpers match GroundedELModule."""
+    """GO CLI defaults, mOWL crisp/eval metrics, and ranking helpers work."""
+    go_args = build_go_parser().parse_args([])
+    assert go_args.reseed_every == 0
+    assert go_args.n_filler_samples == 64
+
     owl_path = build_theory("box2el_t1", out_dir=tmp_path / "owl")
     ds = PathDataset(str(owl_path), validation_path=str(owl_path), testing_path=str(owl_path))
     model = GroundedEL(
@@ -188,32 +198,18 @@ def test_go_batched_helpers_and_sbatch(tmp_path: Path) -> None:
         n_role_components=2,
         epochs=3,
         learning_rate=0.02,
+        reseed_every=0,
+        n_filler_samples=64,
         device="cpu",
         seed=0,
     )
     model.train(epochs=3)
 
-    mod = model.module
-    with th.no_grad():
-        pts = mod.positions()
-        batched_m = _batched_crisp_elem_membership(mod, pts, class_chunk_size=2)
-        ref_m = th.stack(
-            [
-                crisp_membership(mod.depth(pts, c_id, crisp=True))
-                for c_id in range(model.nb_classes)
-            ],
-            dim=1,
-        )
-        assert th.equal(batched_m, ref_m)
-
-    crisp_direct, eval_direct = compute_crisp_and_eval_metrics(model, n_eval=64)
-    crisp_batched, eval_batched = compute_crisp_and_eval_metrics(
-        model, n_eval=64, force_batched=True
-    )
+    crisp_direct = model.crisp_report(n_eval=64)
+    eval_direct = model.evaluate_model(use_reasoner=False, n_eval=64)
     assert "elem_viol" in crisp_direct
     assert "exist" in eval_direct
-    assert pytest.approx(crisp_batched["elem_viol"]) == crisp_direct["elem_viol"]
-    assert pytest.approx(eval_batched["exist"]) == eval_direct["exist"]
+    assert pytest.approx(eval_direct["elem_viol"]) == crisp_direct["elem_viol"]
 
     ranking = evaluate_subsumption_ranking(model, ds, eval_batch_size=4)
     assert "mrr" in ranking

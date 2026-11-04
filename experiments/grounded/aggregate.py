@@ -44,7 +44,7 @@ _K_ORDER: Tuple[str, ...] = ("1", "2", "4", "8", "full")
 
 
 def load_grounded_runs(in_dir: Path | str = DEFAULT_E1_OUT_DIR) -> List[Dict[str, Any]]:
-    """Load all ``*.json`` run records from ``in_dir``, deduplicated by ``(theory, K, Kr, dim, seed)``.
+    """Load all ``*.json`` run records from ``in_dir``, deduplicated by ``(theory, K, Kr, dim, reseed_every, seed)``.
 
     Parameters
     ----------
@@ -70,7 +70,7 @@ def load_grounded_runs(in_dir: Path | str = DEFAULT_E1_OUT_DIR) -> List[Dict[str
     if not p_dir.exists():
         return []
 
-    by_cell_key: Dict[Tuple[str, str, str, int, int], Dict[str, Any]] = {}
+    by_cell_key: Dict[Tuple[str, str, str, int, int, int], Dict[str, Any]] = {}
     for p in sorted(p_dir.glob("*.json")):
         if p.name.startswith(".") or p.name.endswith(".failed.json"):
             continue
@@ -83,6 +83,7 @@ def load_grounded_runs(in_dir: Path | str = DEFAULT_E1_OUT_DIR) -> List[Dict[str
             str(cfg["K"]),
             str(cfg.get("Kr", cfg["K"])),
             int(cfg["dim"]),
+            int(cfg.get("reseed_every", 0)),
             int(cfg.get("seed", 0)),
         )
         payload["_source_file"] = p.name
@@ -169,6 +170,7 @@ def summarize_cell_group(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     k_str = str(cfg0["K"])
     eff_k = int(cfg0.get("n_components", 0))
     dim = int(cfg0["dim"])
+    reseed_every = int(cfg0.get("reseed_every", 0))
     n_seeds = len(runs)
 
     exact_flags = [bool(r["metrics"].get("exact", False)) for r in runs]
@@ -195,6 +197,7 @@ def summarize_cell_group(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         "K": k_str,
         "n_components": eff_k,
         "dim": dim,
+        "reseed_every": reseed_every,
         "n": n_seeds,
         "exact_rate": float(np.mean(exact_flags)),
         "exact_count": int(sum(exact_flags)),
@@ -224,7 +227,7 @@ def summarize_cell_group(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def render_grounded_markdown(runs: Sequence[Dict[str, Any]]) -> str:
-    """Render the Markdown summary table per ``theory × K × d`` for ``GROUNDED.md``.
+    """Render the Markdown summary table per ``theory × K × d × reseed`` for ``GROUNDED.md``.
 
     Parameters
     ----------
@@ -238,7 +241,7 @@ def render_grounded_markdown(runs: Sequence[Dict[str, Any]]) -> str:
 
     Guarantees
     ----------
-    - Includes columns for ``Theory``, ``K``, ``eff_K``, ``d``, ``n``,
+    - Includes columns for ``Theory``, ``K``, ``eff_K``, ``d``, ``reseed``, ``n``,
       ``Exact Rate``, ``elem_viol``, ``region_viol``, ``exist``, ``dead_ok``,
       ``Faithful Prec``, ``Faithful Rec``, and ``Wall Time (s)``.
 
@@ -246,15 +249,20 @@ def render_grounded_markdown(runs: Sequence[Dict[str, Any]]) -> str:
     --------------
     - Does not write to disk.
     """
-    grouped: Dict[Tuple[str, str, int], List[Dict[str, Any]]] = defaultdict(list)
+    grouped: Dict[Tuple[str, str, int, int], List[Dict[str, Any]]] = defaultdict(list)
     for r in runs:
         cfg = r["config"]
-        key = (str(cfg["theory"]), str(cfg["K"]), int(cfg["dim"]))
+        key = (
+            str(cfg["theory"]),
+            str(cfg["K"]),
+            int(cfg["dim"]),
+            int(cfg.get("reseed_every", 0)),
+        )
         grouped[key].append(r)
 
     sorted_keys = sorted(
         grouped.keys(),
-        key=lambda t: (_theory_sort_key(t[0]), t[2], _k_sort_key(t[1])),
+        key=lambda t: (_theory_sort_key(t[0]), t[2], _k_sort_key(t[1]), t[3]),
     )
 
     headers = [
@@ -262,6 +270,7 @@ def render_grounded_markdown(runs: Sequence[Dict[str, Any]]) -> str:
         "K",
         "eff_K",
         "d",
+        "reseed",
         "n",
         "Exact Rate",
         "elem_viol",
@@ -286,6 +295,7 @@ def render_grounded_markdown(runs: Sequence[Dict[str, Any]]) -> str:
         "---:",
         "---:",
         "---:",
+        "---:",
     ]
 
     lines: List[str] = [
@@ -293,7 +303,7 @@ def render_grounded_markdown(runs: Sequence[Dict[str, Any]]) -> str:
         "",
         f"Total cells loaded: **{len(runs)}**",
         "",
-        "## Summary Table (`theory × K × d`)",
+        "## Summary Table (`theory × K × d × reseed`)",
         "",
         "| " + " | ".join(headers) + " |",
         "| " + " | ".join(align) + " |",
@@ -308,6 +318,7 @@ def render_grounded_markdown(runs: Sequence[Dict[str, Any]]) -> str:
             str(summary["K"]),
             str(summary["n_components"]),
             str(summary["dim"]),
+            str(summary["reseed_every"]),
             str(summary["n"]),
             fmt["exact_rate"],
             fmt["elem_viol"],
