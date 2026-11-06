@@ -187,6 +187,7 @@ def run_synthetic_cell(
     lr_final: Optional[float] = None,
     lr_schedule: str = "cosine",
     save_model: Optional[Path | str] = None,
+    dead_from_bot_only: bool = True,
 ) -> Dict[str, Any]:
     """Train and evaluate ``GroundedEL`` on synthetic ``theory`` and write the output JSON.
 
@@ -226,6 +227,9 @@ def run_synthetic_cell(
     save_model : Path or str or None, default None
         Optional output checkpoint path (or directory) where ``torch.save`` writes
         ``{"state_dict": model.module.state_dict(), "config": payload["config"]}``.
+    dead_from_bot_only : bool, default True
+        When ``True``, only bottom-derived hinges (``gci0_bot``, ``gci1_bot``,
+        ``gci3_bot``, ``gci2_dead``) raise element dead scores :math:`\\delta_x`.
 
     Returns
     -------
@@ -273,6 +277,10 @@ def run_synthetic_cell(
     ):
         raise ValueError(
             f"n_filler_samples must be an int >= 1, got {n_filler_samples!r}"
+        )
+    if not isinstance(dead_from_bot_only, bool):
+        raise ValueError(
+            f"dead_from_bot_only must be a bool, got {dead_from_bot_only!r}"
         )
 
     out_path = resolve_out_path(
@@ -325,6 +333,7 @@ def run_synthetic_cell(
         learning_rate=float(lr),
         reseed_every=int(reseed_every),
         n_filler_samples=int(n_filler_samples),
+        dead_from_bot_only=bool(dead_from_bot_only),
         device=device,
         seed=int(seed),
         init="random",
@@ -396,6 +405,7 @@ def run_synthetic_cell(
             "lr_schedule": str(lr_schedule),
             "reseed_every": int(reseed_every),
             "n_filler_samples": int(n_filler_samples),
+            "dead_from_bot_only": bool(dead_from_bot_only),
             "init": "random",
             "device": str(device),
             "param_count": param_count,
@@ -406,9 +416,14 @@ def run_synthetic_cell(
             "region_viol": float(crisp["region_viol"]),
             "worst_depth": crisp["worst_depth"],
             "n_axioms_violated_by_depth": dict(crisp["n_axioms_violated_by_depth"]),
+            "n_empty_classes": int(crisp["n_empty_classes"]),
+            "n_dead_elements": int(crisp["n_dead_elements"]),
         },
         "worst_depth": crisp["worst_depth"],
         "n_axioms_violated_by_depth": dict(crisp["n_axioms_violated_by_depth"]),
+        "n_empty_classes": int(crisp["n_empty_classes"]),
+        "n_dead_elements": int(crisp["n_dead_elements"]),
+        "n_false_dead": serialisable_metrics.get("n_false_dead"),
         "wall_time_s": wall_time_s,
         "timings": {
             "wall_time_s": wall_time_s,
@@ -512,6 +527,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Max filler samples per batch in gci3/gci3_bot (default: 64).",
     )
     parser.add_argument(
+        "--dead-from-bot-only",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Only raise dead scores through bottom-derived hinges (default: True).",
+    )
+    parser.add_argument(
         "--out",
         type=Path,
         default=DEFAULT_E1_OUT_DIR,
@@ -548,6 +569,7 @@ def main(argv: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         lr_schedule=args.lr_schedule,
         reseed_every=args.reseed_every,
         n_filler_samples=args.n_filler_samples,
+        dead_from_bot_only=args.dead_from_bot_only,
         out=args.out,
         save_model=args.save_model,
         device=args.device,

@@ -106,6 +106,7 @@ def test_parse_k_and_run_synthetic_smoke(tmp_path: Path) -> None:
     assert syn_defaults.lr_final is None
     assert syn_defaults.lr_schedule == "cosine"
     assert syn_defaults.save_model is None
+    assert syn_defaults.dead_from_bot_only is True
     syn_custom = build_synthetic_parser().parse_args(
         [
             "--theory",
@@ -116,12 +117,14 @@ def test_parse_k_and_run_synthetic_smoke(tmp_path: Path) -> None:
             "1e-4",
             "--lr-schedule",
             "linear",
+            "--no-dead-from-bot-only",
             "--save-model",
             str(tmp_path / "ckpt.pt"),
         ]
     )
     assert syn_custom.lr_final == pytest.approx(1e-4)
     assert syn_custom.lr_schedule == "linear"
+    assert syn_custom.dead_from_bot_only is False
     assert syn_custom.save_model == tmp_path / "ckpt.pt"
 
     ckpt_path = tmp_path / "models" / "role_functional__Kfull__d2__r100__s0.pt"
@@ -146,15 +149,24 @@ def test_parse_k_and_run_synthetic_smoke(tmp_path: Path) -> None:
     assert res["config"]["n_filler_samples"] == 64
     assert res["config"]["lr_final"] == pytest.approx(2e-4)
     assert res["config"]["lr_schedule"] == "cosine"
+    assert res["config"]["dead_from_bot_only"] is True
     assert "elem_viol" in res["crisp_report"]
     assert "region_viol" in res["crisp_report"]
     assert "worst_depth" in res["crisp_report"]
     assert "n_axioms_violated_by_depth" in res["crisp_report"]
+    assert "n_empty_classes" in res["crisp_report"]
+    assert "n_dead_elements" in res["crisp_report"]
     assert "worst_depth" in res
     assert "n_axioms_violated_by_depth" in res
+    assert "n_empty_classes" in res
+    assert "n_dead_elements" in res
+    assert "n_false_dead" in res
     assert "exact" in res["metrics"]
     assert "exact_tol1e-4" in res["metrics"]
     assert "region_viol_tol1e-4" in res["metrics"]
+    assert "n_empty_classes" in res["metrics"]
+    assert "n_dead_elements" in res["metrics"]
+    assert "n_false_dead" in res["metrics"]
     assert len(res["loss_curve"]) >= 1
 
     assert ckpt_path.exists()
@@ -199,13 +211,21 @@ def test_aggregate_report_generation(tmp_path: Path) -> None:
             "nb_elements": 12,
             "nb_rels": 1,
         },
-        "crisp_report": {"elem_viol": 0.0, "region_viol": 0.0833},
+        "crisp_report": {
+            "elem_viol": 0.0,
+            "region_viol": 0.0833,
+            "n_empty_classes": 0,
+            "n_dead_elements": 0,
+        },
         "metrics": {
             "elem_viol": 0.0,
             "region_viol": 0.0833,
             "region_viol_tol1e-4": 0.0,
             "exist": 1.0,
             "dead_ok": True,
+            "n_empty_classes": 0,
+            "n_dead_elements": 0,
+            "n_false_dead": 0,
             "faithful_named_precision": 1.0,
             "faithful_named_recall": 1.0,
             "faithful_named": [1.0, 1.0],
@@ -229,11 +249,15 @@ def test_aggregate_report_generation(tmp_path: Path) -> None:
     assert summary["exact_rate"] == 0.0
     assert summary["exact_tol1e-4_rate"] == 1.0
     assert summary["region_viol_tol1e-4_mean"] == 0.0
+    assert summary["n_false_dead_mean"] == 0.0
+    assert summary["n_empty_classes_mean"] == 0.0
     assert summary["reseed_every"] == 100
     text = out_md.read_text(encoding="utf-8")
     assert "`tk3`" in text
     assert "exact_tol1e-4/3" in text
     assert "region_viol_tol1e-4" in text
+    assert "n_false_dead" in text
+    assert "n_empty_classes" in text
     assert "0.00 (0/1)" in text
     assert "1.00 (1/1)" in text
 

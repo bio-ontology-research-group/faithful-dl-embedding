@@ -186,6 +186,18 @@ def summarize_cell_group(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         for r in runs
     ]
     exists = [float(r["metrics"]["exist"]) for r in runs]
+    n_false_deads = [
+        r["metrics"].get("n_false_dead", r.get("n_false_dead")) for r in runs
+    ]
+    n_empty_classes_list = [
+        r["metrics"].get(
+            "n_empty_classes",
+            r.get("crisp_report", {}).get(
+                "n_empty_classes", r.get("n_empty_classes")
+            ),
+        )
+        for r in runs
+    ]
     faith_precs = [
         r["metrics"].get("faithful_named_precision") for r in runs
     ]
@@ -199,6 +211,8 @@ def summarize_cell_group(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
 
     clean_precs = [float(v) for v in faith_precs if v is not None]
     clean_recs = [float(v) for v in faith_recs if v is not None]
+    clean_false_deads = [float(v) for v in n_false_deads if v is not None]
+    clean_empty_classes = [float(v) for v in n_empty_classes_list if v is not None]
 
     return {
         "theory": theory,
@@ -217,6 +231,12 @@ def summarize_cell_group(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         "exist_mean": float(np.mean(exists)),
         "dead_ok_rate": float(np.mean(dead_flags)),
         "dead_ok_count": int(sum(dead_flags)),
+        "n_false_dead_mean": (
+            float(np.mean(clean_false_deads)) if clean_false_deads else None
+        ),
+        "n_empty_classes_mean": (
+            float(np.mean(clean_empty_classes)) if clean_empty_classes else None
+        ),
         "faithful_precision_mean": (
             float(np.mean(clean_precs)) if clean_precs else None
         ),
@@ -233,6 +253,8 @@ def summarize_cell_group(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
             "region_viol_tol1e-4": _format_mean_sd(region_viols_tol1e4, decimals=4),
             "exist": _format_mean_sd(exists, decimals=4),
             "dead_ok": _format_bool_rate(dead_flags),
+            "n_false_dead": _format_mean_sd(n_false_deads, decimals=2),
+            "n_empty_classes": _format_mean_sd(n_empty_classes_list, decimals=2),
             "faithful_precision": _format_mean_sd(faith_precs, decimals=4),
             "faithful_recall": _format_mean_sd(faith_recs, decimals=4),
             "wall_time_s": _format_mean_sd(wall_times, decimals=2),
@@ -294,12 +316,16 @@ def render_grounded_markdown(runs: Sequence[Dict[str, Any]]) -> str:
         "region_viol_tol1e-4",
         "exist",
         "dead_ok",
+        "n_false_dead",
+        "n_empty_classes",
         "Faithful Prec",
         "Faithful Rec",
         "Wall Time (s)",
     ]
     align = [
         "---",
+        "---:",
+        "---:",
         "---:",
         "---:",
         "---:",
@@ -346,6 +372,8 @@ def render_grounded_markdown(runs: Sequence[Dict[str, Any]]) -> str:
             fmt["region_viol_tol1e-4"],
             fmt["exist"],
             fmt["dead_ok"],
+            fmt["n_false_dead"],
+            fmt["n_empty_classes"],
             fmt["faithful_precision"],
             fmt["faithful_recall"],
             fmt["wall_time_s"],
