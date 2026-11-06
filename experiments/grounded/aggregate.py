@@ -174,9 +174,17 @@ def summarize_cell_group(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     n_seeds = len(runs)
 
     exact_flags = [bool(r["metrics"].get("exact", False)) for r in runs]
+    exact_tol1e4_flags = [
+        bool(r["metrics"].get("exact_tol1e-4", r["metrics"].get("exact", False)))
+        for r in runs
+    ]
     dead_flags = [bool(r["metrics"].get("dead_ok", False)) for r in runs]
     elem_viols = [float(r["metrics"]["elem_viol"]) for r in runs]
     region_viols = [float(r["metrics"]["region_viol"]) for r in runs]
+    region_viols_tol1e4 = [
+        float(r["metrics"].get("region_viol_tol1e-4", r["metrics"]["region_viol"]))
+        for r in runs
+    ]
     exists = [float(r["metrics"]["exist"]) for r in runs]
     faith_precs = [
         r["metrics"].get("faithful_named_precision") for r in runs
@@ -201,8 +209,11 @@ def summarize_cell_group(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         "n": n_seeds,
         "exact_rate": float(np.mean(exact_flags)),
         "exact_count": int(sum(exact_flags)),
+        "exact_tol1e-4_rate": float(np.mean(exact_tol1e4_flags)),
+        "exact_tol1e-4_count": int(sum(exact_tol1e4_flags)),
         "elem_viol_mean": float(np.mean(elem_viols)),
         "region_viol_mean": float(np.mean(region_viols)),
+        "region_viol_tol1e-4_mean": float(np.mean(region_viols_tol1e4)),
         "exist_mean": float(np.mean(exists)),
         "dead_ok_rate": float(np.mean(dead_flags)),
         "dead_ok_count": int(sum(dead_flags)),
@@ -215,8 +226,11 @@ def summarize_cell_group(runs: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         "wall_time_mean_s": float(np.mean(wall_times)),
         "formatted": {
             "exact_rate": _format_bool_rate(exact_flags),
+            "exact_tol1e-4/3": _format_bool_rate(exact_tol1e4_flags),
+            "exact_tol1e-4_rate": _format_bool_rate(exact_tol1e4_flags),
             "elem_viol": _format_mean_sd(elem_viols, decimals=4),
             "region_viol": _format_mean_sd(region_viols, decimals=4),
+            "region_viol_tol1e-4": _format_mean_sd(region_viols_tol1e4, decimals=4),
             "exist": _format_mean_sd(exists, decimals=4),
             "dead_ok": _format_bool_rate(dead_flags),
             "faithful_precision": _format_mean_sd(faith_precs, decimals=4),
@@ -242,8 +256,9 @@ def render_grounded_markdown(runs: Sequence[Dict[str, Any]]) -> str:
     Guarantees
     ----------
     - Includes columns for ``Theory``, ``K``, ``eff_K``, ``d``, ``reseed``, ``n``,
-      ``Exact Rate``, ``elem_viol``, ``region_viol``, ``exist``, ``dead_ok``,
-      ``Faithful Prec``, ``Faithful Rec``, and ``Wall Time (s)``.
+      ``Exact Rate``, ``exact_tol1e-4/3``, ``elem_viol``, ``region_viol``,
+      ``region_viol_tol1e-4``, ``exist``, ``dead_ok``, ``Faithful Prec``,
+      ``Faithful Rec``, and ``Wall Time (s)``.
 
     Non-guarantees
     --------------
@@ -273,8 +288,10 @@ def render_grounded_markdown(runs: Sequence[Dict[str, Any]]) -> str:
         "reseed",
         "n",
         "Exact Rate",
+        "exact_tol1e-4/3",
         "elem_viol",
         "region_viol",
+        "region_viol_tol1e-4",
         "exist",
         "dead_ok",
         "Faithful Prec",
@@ -283,6 +300,8 @@ def render_grounded_markdown(runs: Sequence[Dict[str, Any]]) -> str:
     ]
     align = [
         "---",
+        "---:",
+        "---:",
         "---:",
         "---:",
         "---:",
@@ -321,8 +340,10 @@ def render_grounded_markdown(runs: Sequence[Dict[str, Any]]) -> str:
             str(summary["reseed_every"]),
             str(summary["n"]),
             fmt["exact_rate"],
+            fmt["exact_tol1e-4/3"],
             fmt["elem_viol"],
             fmt["region_viol"],
+            fmt["region_viol_tol1e-4"],
             fmt["exist"],
             fmt["dead_ok"],
             fmt["faithful_precision"],

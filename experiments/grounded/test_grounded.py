@@ -105,12 +105,26 @@ def test_parse_k_and_run_synthetic_smoke(tmp_path: Path) -> None:
     syn_defaults = build_synthetic_parser().parse_args(["--theory", "tk3", "--K", "2"])
     assert syn_defaults.lr_final is None
     assert syn_defaults.lr_schedule == "cosine"
+    assert syn_defaults.save_model is None
     syn_custom = build_synthetic_parser().parse_args(
-        ["--theory", "tk3", "--K", "2", "--lr-final", "1e-4", "--lr-schedule", "linear"]
+        [
+            "--theory",
+            "tk3",
+            "--K",
+            "2",
+            "--lr-final",
+            "1e-4",
+            "--lr-schedule",
+            "linear",
+            "--save-model",
+            str(tmp_path / "ckpt.pt"),
+        ]
     )
     assert syn_custom.lr_final == pytest.approx(1e-4)
     assert syn_custom.lr_schedule == "linear"
+    assert syn_custom.save_model == tmp_path / "ckpt.pt"
 
+    ckpt_path = tmp_path / "models" / "role_functional__Kfull__d2__r100__s0.pt"
     res = run_synthetic_cell(
         theory="role_functional",
         K="full",
@@ -122,6 +136,7 @@ def test_parse_k_and_run_synthetic_smoke(tmp_path: Path) -> None:
         lr_final=2e-4,
         lr_schedule="cosine",
         out=tmp_path / "runs",
+        save_model=tmp_path / "models",
         theory_dir=tmp_path / "owl",
         n_eval=128,
     )
@@ -133,8 +148,21 @@ def test_parse_k_and_run_synthetic_smoke(tmp_path: Path) -> None:
     assert res["config"]["lr_schedule"] == "cosine"
     assert "elem_viol" in res["crisp_report"]
     assert "region_viol" in res["crisp_report"]
+    assert "worst_depth" in res["crisp_report"]
+    assert "n_axioms_violated_by_depth" in res["crisp_report"]
+    assert "worst_depth" in res
+    assert "n_axioms_violated_by_depth" in res
     assert "exact" in res["metrics"]
+    assert "exact_tol1e-4" in res["metrics"]
+    assert "region_viol_tol1e-4" in res["metrics"]
     assert len(res["loss_curve"]) >= 1
+
+    assert ckpt_path.exists()
+    ckpt = th.load(ckpt_path, map_location="cpu", weights_only=False)
+    assert "state_dict" in ckpt
+    assert "config" in ckpt
+    assert ckpt["config"]["theory"] == "role_functional"
+    assert "elem_pos.weight" in ckpt["state_dict"]
 
     out_json = tmp_path / "runs" / "role_functional__Kfull__d2__r100__s0.json"
     assert out_json.exists()
@@ -144,6 +172,10 @@ def test_parse_k_and_run_synthetic_smoke(tmp_path: Path) -> None:
     assert loaded["config"]["n_filler_samples"] == 64
     assert loaded["config"]["lr_final"] == pytest.approx(2e-4)
     assert loaded["config"]["lr_schedule"] == "cosine"
+    assert "worst_depth" in loaded
+    assert "n_axioms_violated_by_depth" in loaded
+    assert "exact_tol1e-4" in loaded["metrics"]
+    assert "region_viol_tol1e-4" in loaded["metrics"]
 
 
 def test_aggregate_report_generation(tmp_path: Path) -> None:
@@ -167,16 +199,18 @@ def test_aggregate_report_generation(tmp_path: Path) -> None:
             "nb_elements": 12,
             "nb_rels": 1,
         },
-        "crisp_report": {"elem_viol": 0.0, "region_viol": 0.0},
+        "crisp_report": {"elem_viol": 0.0, "region_viol": 0.0833},
         "metrics": {
             "elem_viol": 0.0,
-            "region_viol": 0.0,
+            "region_viol": 0.0833,
+            "region_viol_tol1e-4": 0.0,
             "exist": 1.0,
             "dead_ok": True,
             "faithful_named_precision": 1.0,
             "faithful_named_recall": 1.0,
             "faithful_named": [1.0, 1.0],
-            "exact": True,
+            "exact": False,
+            "exact_tol1e-4": True,
         },
         "final_losses": {"total": 0.001},
         "loss_curve": [{"epoch": 1, "total": 1.0}, {"epoch": 100, "total": 0.001}],
@@ -192,10 +226,15 @@ def test_aggregate_report_generation(tmp_path: Path) -> None:
     runs = load_grounded_runs(in_dir=runs_dir)
     assert len(runs) == 1
     summary = summarize_cell_group(runs)
-    assert summary["exact_rate"] == 1.0
+    assert summary["exact_rate"] == 0.0
+    assert summary["exact_tol1e-4_rate"] == 1.0
+    assert summary["region_viol_tol1e-4_mean"] == 0.0
     assert summary["reseed_every"] == 100
     text = out_md.read_text(encoding="utf-8")
     assert "`tk3`" in text
+    assert "exact_tol1e-4/3" in text
+    assert "region_viol_tol1e-4" in text
+    assert "0.00 (0/1)" in text
     assert "1.00 (1/1)" in text
 
 

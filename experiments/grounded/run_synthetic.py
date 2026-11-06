@@ -130,6 +130,26 @@ def resolve_out_path(
     )
 
 
+def resolve_save_model_path(
+    save_model: Path | str,
+    theory: str,
+    k_spec: Union[str, int],
+    dim: int,
+    seed: int,
+    kr_spec: Optional[Union[str, int]] = None,
+    reseed_every: int = 100,
+) -> Path:
+    """Resolve ``save_model`` as either a direct checkpoint file path or a directory containing the ``.pt`` file for :func:`cell_filename`."""
+    p = Path(save_model).expanduser().resolve()
+    if p.suffix.lower() in (".pt", ".pth", ".ckpt", ".bin"):
+        return p
+    json_name = cell_filename(
+        theory, k_spec, dim, seed, kr_spec=kr_spec, reseed_every=reseed_every
+    )
+    pt_name = json_name[:-5] + ".pt" if json_name.endswith(".json") else json_name + ".pt"
+    return p / pt_name
+
+
 def subsample_loss_curve(
     history: Sequence[Dict[str, float]],
     every: int = 100,
@@ -166,6 +186,7 @@ def run_synthetic_cell(
     theory_dir: Optional[Path | str] = None,
     lr_final: Optional[float] = None,
     lr_schedule: str = "cosine",
+    save_model: Optional[Path | str] = None,
 ) -> Dict[str, Any]:
     """Train and evaluate ``GroundedEL`` on synthetic ``theory`` and write the output JSON.
 
@@ -202,6 +223,9 @@ def run_synthetic_cell(
         Optional final learning rate :math:`> 0` for decay; ``None`` keeps constant ``lr``.
     lr_schedule : {"cosine", "linear"}, default "cosine"
         Learning-rate decay schedule used when ``lr_final`` is set.
+    save_model : Path or str or None, default None
+        Optional output checkpoint path (or directory) where ``torch.save`` writes
+        ``{"state_dict": model.module.state_dict(), "config": payload["config"]}``.
 
     Returns
     -------
@@ -263,6 +287,21 @@ def run_synthetic_cell(
     if str(out_path).startswith("/tmp/"):
         raise ValueError(f"Refusing to write under /tmp: {out_path}")
     out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    model_path: Optional[Path] = None
+    if save_model is not None:
+        model_path = resolve_save_model_path(
+            save_model,
+            theory,
+            k_spec,
+            dim,
+            seed,
+            kr_spec=kr_spec,
+            reseed_every=reseed_every,
+        )
+        if str(model_path).startswith("/tmp/"):
+            raise ValueError(f"Refusing to write model under /tmp: {model_path}")
+        model_path.parent.mkdir(parents=True, exist_ok=True)
 
     mowl.init_jvm("4g")
     from mowl.models import GroundedEL
@@ -362,7 +401,14 @@ def run_synthetic_cell(
             "param_count": param_count,
         },
         "metrics": serialisable_metrics,
-        "crisp_report": {k: float(v) for k, v in crisp.items()},
+        "crisp_report": {
+            "elem_viol": float(crisp["elem_viol"]),
+            "region_viol": float(crisp["region_viol"]),
+            "worst_depth": crisp["worst_depth"],
+            "n_axioms_violated_by_depth": dict(crisp["n_axioms_violated_by_depth"]),
+        },
+        "worst_depth": crisp["worst_depth"],
+        "n_axioms_violated_by_depth": dict(crisp["n_axioms_violated_by_depth"]),
         "wall_time_s": wall_time_s,
         "timings": {
             "wall_time_s": wall_time_s,
@@ -372,6 +418,19 @@ def run_synthetic_cell(
         "final_losses": final_losses,
         "loss_curve": loss_curve,
     }
+
+    if model_path is not None:
+        tmp_model_path = (
+            model_path.parent / f".{model_path.name}.{os.getpid()}.tmp"
+        )
+        th.save(
+            {
+                "state_dict": model.module.state_dict(),
+                "config": dict(payload["config"]),
+            },
+            tmp_model_path,
+        )
+        os.replace(tmp_model_path, model_path)
 
     tmp_path = out_path.parent / f".{out_path.name}.{os.getpid()}.tmp"
     tmp_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -459,6 +518,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Output directory or explicit .json path (default: /mnt/data1/gfe/runs/grounded-e1/).",
     )
     parser.add_argument(
+        "--save-model",
+        type=Path,
+        default=None,
+        help="Optional output checkpoint path or directory for saving module state_dict + config.",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="cpu",
@@ -484,6 +549,7 @@ def main(argv: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         reseed_every=args.reseed_every,
         n_filler_samples=args.n_filler_samples,
         out=args.out,
+        save_model=args.save_model,
         device=args.device,
     )
     cfg = res["config"]
@@ -491,7 +557,9 @@ def main(argv: Optional[Sequence[str]] = None) -> Dict[str, Any]:
     print(
         f"[{cfg['theory']} K={cfg['K']} (eff={cfg['n_components']}) d={cfg['dim']} "
         f"r={cfg['reseed_every']} s={cfg['seed']}] "
-        f"exact={m['exact']} elem_viol={m['elem_viol']:.4f} region_viol={m['region_viol']:.4f} "
+        f"exact={m['exact']} exact_tol1e-4={m['exact_tol1e-4']} "
+        f"elem_viol={m['elem_viol']:.4f} region_viol={m['region_viol']:.4f} "
+        f"region_viol_tol1e-4={m['region_viol_tol1e-4']:.4f} "
         f"exist={m['exist']:.4f} dead_ok={m['dead_ok']} "
         f"faith=({m['faithful_named_precision']:.4f}, {m['faithful_named_recall']:.4f}) "
         f"wall={res['wall_time_s']:.2f}s"
