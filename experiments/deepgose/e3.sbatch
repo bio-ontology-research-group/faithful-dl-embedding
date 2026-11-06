@@ -55,6 +55,8 @@ fi
 
 read -r ONT SEED KIND DIM K LAMBDA_TBOX <<< "${CELL_LINE}"
 DEVICE="${DEVICE:-cuda}"
+TBOX_BATCH="${TBOX_BATCH:-4096}"
+GROUNDED_EPOCHS="${GROUNDED_EPOCHS:-64}"
 
 cd "${REPO_DIR}"
 
@@ -69,9 +71,9 @@ if [[ "${KIND}" == "grounded_esm" || "${KIND}" == "grounded_esm_l0" ]]; then
         --dim "${DIM}" \
         --K "${K}" \
         --lambda-tbox "${LAMBDA_TBOX}" \
-        --epochs 64 \
+        --epochs "${GROUNDED_EPOCHS}" \
         --protein-batch 128 \
-        --tbox-batch 4096 \
+        --tbox-batch "${TBOX_BATCH}" \
         --lr-encoder 5e-4 \
         --lr-boxes 1e-2 \
         --lr-final 1e-4 \
