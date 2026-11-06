@@ -226,3 +226,78 @@ def test_go_batched_helpers_and_sbatch(tmp_path: Path) -> None:
     assert "#SBATCH --mem=64G" in sbatch_text
     assert "#SBATCH --time=12:00:00" in sbatch_text
     assert "/mnt/data/u/hohndor/gfe/venv/bin/python" in sbatch_text
+
+
+def test_grounded_b1_methods_abox_modelness_and_sbatch() -> None:
+    """Verify grounded-k1..k8 config specs, run_filename default lr, abox_modelness, and b1.sbatch."""
+    from experiments.abox_eval import abox_modelness
+    from experiments.config import GROUNDED_METHODS, METHODS, methods_for_dataset
+    from experiments.run import run_filename
+    from mowl.nn.el.grounded.module import GroundedELModule
+
+    assert GROUNDED_METHODS == [
+        "grounded-k1",
+        "grounded-k2",
+        "grounded-k4",
+        "grounded-k8",
+    ]
+    for k in (1, 2, 4, 8):
+        m_id = f"grounded-k{k}"
+        assert m_id in METHODS
+        spec = METHODS[m_id]
+        assert spec["model"] == "GroundedEL"
+        assert spec["n_components"] == k
+        assert spec["n_role_components"] == k
+        assert spec["reseed_every"] == 100
+        assert spec["eps_min"] == pytest.approx(1e-2)
+        assert spec["lambda_reg"] == pytest.approx(1.0)
+        assert spec["n_adv"] == 2
+        assert spec["epochs"] == 2000
+        assert spec["learning_rate"] == pytest.approx(0.01)
+        assert spec["batch_size"] == 4096
+        assert m_id in methods_for_dataset("yeast-function")
+        assert m_id not in methods_for_dataset("tk3")
+        assert (
+            run_filename("yeast-function", m_id, 50, 0, lr=0.01)
+            == f"yeast-function__{m_id}__d50__s0.json"
+        )
+
+    # Build a small GroundedELModule with 2 classes (0, 1) and 2 individuals (elements 2, 3)
+    g_mod = GroundedELModule(
+        nb_elements=4,
+        nb_classes=2,
+        nb_rels=0,
+        embed_dim=2,
+        n_components=1,
+        n_role_components=1,
+    )
+    with th.no_grad():
+        g_mod.class_centers.zero_()
+        # Individual 0 (element 2) at origin -> strictly inside class 0 (depth > 0 -> score < 0)
+        g_mod.elem_pos.weight[2].zero_()
+        # Individual 1 (element 3) far outside class 1 (depth < 0 -> score > 0)
+        g_mod.elem_pos.weight[3].fill_(5.0)
+
+    class _DummyGroundedModel:
+        def __init__(self, module: GroundedELModule) -> None:
+            self.module = module
+            self.individual_index_dict = {"a0": 0, "a1": 1}
+            self.class_index_dict = {"C0": 0, "C1": 1}
+            self.training_datasets = {
+                "class_assertion": th.tensor([[0, 0], [1, 1]], dtype=th.long)
+            }
+            self.device = "cpu"
+            self.margin = 0.0
+
+    assert abox_modelness(_DummyGroundedModel(g_mod)) == pytest.approx(0.5)
+
+    b1_sbatch = Path(__file__).resolve().parent / "b1.sbatch"
+    b1_text = b1_sbatch.read_text(encoding="utf-8")
+    assert "#SBATCH --partition=pi-hohndor" in b1_text
+    assert "#SBATCH --gres=gpu:1" in b1_text
+    assert "#SBATCH --array=0-11" in b1_text
+    assert 'export YEAST_FUNCTION_DIR="${YEAST_FUNCTION_DIR:-/mnt/data/u/hohndor/gfe/data/yeast-function}"' in b1_text
+    assert "--dataset yeast-function" in b1_text
+    assert 'EPOCHS="${EPOCHS:-2000}"' in b1_text
+    assert 'DEVICE="${DEVICE:-cuda}"' in b1_text
+

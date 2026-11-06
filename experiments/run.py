@@ -251,7 +251,11 @@ def run_filename(
     objective: Optional[str] = None,
 ) -> str:
     """Return canonical JSON filename ``{dataset}__{method}__d{dim}__s{seed}[__lr{lr}][__obj-{objective}].json``."""
-    default_lr = float(DEFAULT_HYPERPARAMS["learning_rate"])
+    default_lr = float(
+        METHODS.get(method, {}).get(
+            "learning_rate", DEFAULT_HYPERPARAMS["learning_rate"]
+        )
+    )
     stem = f"{dataset}__{method}__d{dim}__s{seed}"
     if lr is not None and abs(float(lr) - default_lr) > 1e-12:
         stem += f"__lr{float(lr):g}"
@@ -504,6 +508,26 @@ def _build_model(
                 model_filepath=ckpt_str,
                 device=device,
             )
+        elif model_cls_name == "GroundedEL":
+            from mowl.models import GroundedEL
+
+            model = GroundedEL(
+                bundle.dataset,
+                embed_dim=effective_dim,
+                n_components=k,
+                n_role_components=int(spec.get("n_role_components", k)),
+                learning_rate=learning_rate,
+                batch_size=batch_size,
+                reseed_every=int(spec.get("reseed_every", 100)),
+                eps_min=float(spec.get("eps_min", 1e-2)),
+                lambda_reg=float(spec.get("lambda_reg", 1.0)),
+                n_adv=int(spec.get("n_adv", 2)),
+                seed=seed,
+                init="random",
+                log_every=0,
+                model_filepath=ckpt_str,
+                device=device,
+            )
         else:  # pragma: no cover
             raise ValueError(f"Unsupported model class {model_cls_name!r}")
     finally:
@@ -655,7 +679,10 @@ def _train_model_with_chunking(
             extra_cb(epoch_idx, _m)
         t_last[0] = time.monotonic()
 
-    chunk_needed = effective_batch_size < int(DEFAULT_HYPERPARAMS["batch_size"])
+    chunk_needed = (
+        effective_batch_size < int(DEFAULT_HYPERPARAMS["batch_size"])
+        and type(mod_ref).__name__ != "GroundedELModule"
+    )
     with _chunked_module_forward(model.module, effective_batch_size, enabled=chunk_needed):
         t_last[0] = time.monotonic()
         model.train(
@@ -674,8 +701,8 @@ def execute_run(
     dim: int,
     seed: int,
     epochs: Optional[int] = None,
-    batch_size: int = int(DEFAULT_HYPERPARAMS["batch_size"]),
-    learning_rate: float = float(DEFAULT_HYPERPARAMS["learning_rate"]),
+    batch_size: Optional[int] = None,
+    learning_rate: Optional[float] = None,
     lr: Optional[float] = None,
     objective: Optional[str] = None,
     validate_every: int = int(DEFAULT_HYPERPARAMS["validate_every"]),
@@ -691,13 +718,33 @@ def execute_run(
     if method not in METHODS:
         raise ValueError(f"Unknown method {method!r}; expected one of {list(METHODS)}")
 
-    resolved_lr = float(lr if lr is not None else learning_rate)
-    effective_objective = _validate_method_objective(method, METHODS[method], objective)
+    method_spec = METHODS[method]
+    resolved_lr = float(
+        lr
+        if lr is not None
+        else (
+            learning_rate
+            if learning_rate is not None
+            else method_spec.get(
+                "learning_rate", DEFAULT_HYPERPARAMS["learning_rate"]
+            )
+        )
+    )
+    resolved_batch_size = int(
+        batch_size
+        if batch_size is not None
+        else method_spec.get("batch_size", DEFAULT_HYPERPARAMS["batch_size"])
+    )
+    effective_objective = _validate_method_objective(method, method_spec, objective)
 
     resolved_device = (
         device if device is not None else ("cuda" if torch.cuda.is_available() else "cpu")
     )
-    resolved_epochs = int(epochs if epochs is not None else DATASET_EPOCHS[dataset])
+    resolved_epochs = int(
+        epochs
+        if epochs is not None
+        else method_spec.get("epochs", DATASET_EPOCHS[dataset])
+    )
 
     t_run_start = time.monotonic()
     if bundle is None:
@@ -733,7 +780,7 @@ def execute_run(
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
 
-    effective_batch_size = int(batch_size)
+    effective_batch_size = int(resolved_batch_size)
     oom_retries = 0
     max_oom_retries = 3
     epoch_times: List[float] = []
@@ -872,7 +919,11 @@ def execute_run(
     modelness_time_s = time.monotonic() - t_m0
 
     t_h0 = time.monotonic()
-    if cm is not None and METHODS[method]["model"] not in ("CanonicalMixture", "ELEm"):
+    if cm is not None and METHODS[method]["model"] not in (
+        "CanonicalMixture",
+        "ELEm",
+        "GroundedEL",
+    ):
         certs = _resolve_certificates(bundle, cm)
         m_helly = helly_metrics(model, bundle=bundle, cm=cm, certificates=certs)
     else:
@@ -883,6 +934,13 @@ def execute_run(
             "n_certificates_unmapped": 0,
         }
     helly_time_s = time.monotonic() - t_h0
+
+    m_grounded: Dict[str, Any] = {}
+    if hasattr(model, "evaluate_model") and callable(model.evaluate_model):
+        ev_g = model.evaluate_model(use_reasoner=False)
+        m_grounded["elem_viol"] = float(ev_g["elem_viol"])
+        m_grounded["region_viol"] = float(ev_g["region_viol"])
+        m_grounded["exist"] = float(ev_g["exist"])
 
     if bundle.task == "abox":
         t_ab0 = time.monotonic()
@@ -1015,6 +1073,7 @@ def execute_run(
     all_metrics.update(m_helly)
     all_metrics["existence_violation_rate"] = m_exist_viol
     all_metrics.update(m_cost)
+    all_metrics.update(m_grounded)
     if bundle.task == "abox":
         all_metrics.update(m_abox)
         all_metrics["val_mrr_curve"] = validation_curve
@@ -1068,7 +1127,7 @@ def execute_run(
         "num_negs": num_negs,
         "learning_rate": resolved_lr,
         "lr": resolved_lr,
-        "batch_size": int(batch_size),
+        "batch_size": int(resolved_batch_size),
         "effective_batch_size": int(effective_batch_size),
         "oom_retries": int(oom_retries),
         "device": resolved_device,
@@ -1159,16 +1218,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=int(DEFAULT_HYPERPARAMS["batch_size"]),
-        help="Initial training batch size (default: 32768).",
+        default=None,
+        help="Initial training batch size (defaults to method spec or 32768).",
     )
     parser.add_argument(
         "--lr",
         "--learning-rate",
         dest="learning_rate",
         type=float,
-        default=float(DEFAULT_HYPERPARAMS["learning_rate"]),
-        help="Adam learning rate (default: 0.001).",
+        default=None,
+        help="Adam learning rate (defaults to method spec or 0.001).",
     )
     parser.add_argument(
         "--objective",

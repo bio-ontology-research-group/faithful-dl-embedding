@@ -1006,7 +1006,10 @@ def abox_modelness(
                     losses_np = (
                         losses.detach().reshape(-1).to(device="cpu").numpy()
                     )
-                    total_sat += int(np.sum(losses_np <= tol))
+                    if type(module).__name__ == "GroundedELModule" and tol == 1e-6:
+                        total_sat += int(np.sum(losses_np < 0.0))
+                    else:
+                        total_sat += int(np.sum(losses_np <= tol))
                     total_cnt += int(losses_np.size)
     finally:
         for (target_name, attr), val in saved_attrs.items():

@@ -928,7 +928,10 @@ def modelness(
                         supported = False
                         break
                     losses = raw_losses.reshape(-1)
-                    sat_gci += int((losses <= tol).sum().item())
+                    if type(module).__name__ == "GroundedELModule" and tol == 1e-6:
+                        sat_gci += int((losses < 0.0).sum().item())
+                    else:
+                        sat_gci += int((losses <= tol).sum().item())
                 if not supported:
                     continue
                 out[f"modelness_{gci_name}"] = float(sat_gci / n_rows)
@@ -1344,6 +1347,12 @@ def cost_metrics(
     if hasattr(module, "effective_components"):
         eff_tensor = module.effective_components()
         mean_eff = float(eff_tensor.to(dtype=torch.float32).mean().item())
+    elif type(module).__name__ == "GroundedELModule":
+        with torch.no_grad():
+            reg_g = module.class_regions()
+            mean_eff = float(
+                reg_g.active.to(dtype=torch.float32).sum(dim=-1).mean().item()
+            )
     else:
         try:
             regions = class_regions(model)

@@ -14,6 +14,7 @@ Non-guarantees
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -31,13 +32,23 @@ TABLES_DIR: Path = RESULTS_DIR / "tables"
 DATASET_STATS_PATH: Path = RESULTS_DIR / "dataset_stats.md"
 LOGS_DIR: Path = EXPERIMENTS_DIR / "logs"
 
-RAW_DATA_ROOT: Path = Path("~/tmp/gfe-data").expanduser()
-MOWL_DATA_ROOT: Path = RAW_DATA_ROOT / "mowl"
+RAW_DATA_ROOT: Path = Path(
+    os.environ.get("GFE_DATA_ROOT", os.environ.get("RAW_DATA_ROOT", "~/tmp/gfe-data"))
+).expanduser()
+MOWL_DATA_ROOT: Path = Path(
+    os.environ.get("MOWL_DATA_ROOT", str(RAW_DATA_ROOT / "mowl"))
+).expanduser()
 PIZZA_RAW_PATH: Path = RAW_DATA_ROOT / "pizza" / "pizza.owl"
 PIZZA_EL_DIR: Path = RAW_DATA_ROOT / "pizza-el"
-YEAST_FUNCTION_DIR: Path = RAW_DATA_ROOT / "yeast-function"
-HELIS_DIR: Path = RAW_DATA_ROOT / "helis"
-RUNS_DIR: Path = Path("~/tmp/gfe-runs").expanduser()
+YEAST_FUNCTION_DIR: Path = Path(
+    os.environ.get("YEAST_FUNCTION_DIR", str(RAW_DATA_ROOT / "yeast-function"))
+).expanduser()
+HELIS_DIR: Path = Path(
+    os.environ.get("HELIS_DIR", str(RAW_DATA_ROOT / "helis"))
+).expanduser()
+RUNS_DIR: Path = Path(
+    os.environ.get("GFE_RUNS_DIR", os.environ.get("RUNS_DIR", "~/tmp/gfe-runs"))
+).expanduser()
 
 SYNTHETIC_NS: str = "http://mowl.borg/geo#"
 SYNTHETIC_ONT_BASE: str = "http://mowl.borg/geo"
@@ -494,6 +505,31 @@ for _s_id in STRUCTURAL_METHODS:
         "objective": "structural",
         "objective_kwargs": dict(_s_entry["objective_kwargs"]),
         "datasets": list(_s_entry.get("datasets", _STRUCTURAL_ALLOWED_DATASETS)),
+    }
+
+GROUNDED_METHODS: List[str] = [
+    "grounded-k1",
+    "grounded-k2",
+    "grounded-k4",
+    "grounded-k8",
+]
+
+for _gk in (1, 2, 4, 8):
+    METHODS[f"grounded-k{_gk}"] = {
+        "model": "GroundedEL",
+        "backbone": "grounded",
+        "n_components": _gk,
+        "n_role_components": _gk,
+        "init": None,
+        "anchor_weight": 0.0,
+        "reseed_every": 100,
+        "eps_min": 1e-2,
+        "lambda_reg": 1.0,
+        "n_adv": 2,
+        "epochs": 2000,
+        "learning_rate": 0.01,
+        "batch_size": 4096,
+        "datasets": list(ABOX_DATASETS),
     }
 
 
