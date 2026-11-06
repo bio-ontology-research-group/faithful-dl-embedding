@@ -222,19 +222,11 @@ def _discover_candidate_models(
     found: List[Tuple[int, float, Path, Optional[Path]]] = []
     for mi in cand_ids:
         pred_p = out_ont_dir / f"test_predictions_{model_name}_{mi}.pkl"
-        if not pred_p.is_file() and mi == 0:
-            fallback_p = out_ont_dir / "test_predictions.pkl"
-            if fallback_p.is_file():
-                pred_p = fallback_p
         if not pred_p.is_file():
             continue
 
         val_bce = float("inf")
         metrics_p = out_ont_dir / f"metrics_{model_name}_{mi}.json"
-        if not metrics_p.is_file() and mi == 0:
-            fallback_m = out_ont_dir / "metrics.json"
-            if fallback_m.is_file():
-                metrics_p = fallback_m
         if metrics_p.is_file():
             try:
                 with open(metrics_p, "r", encoding="utf-8") as fh:
@@ -260,6 +252,24 @@ def _discover_candidate_models(
         if not np.isfinite(val_bce):
             val_bce = float(mi)
         found.append((mi, val_bce, pred_p, ckpt_p_Opt))
+
+    if not found and 0 in cand_ids:
+        fallback_p = out_ont_dir / "test_predictions.pkl"
+        if fallback_p.is_file():
+            val_bce = 0.0
+            fallback_m = out_ont_dir / "metrics.json"
+            if fallback_m.is_file():
+                try:
+                    with open(fallback_m, "r", encoding="utf-8") as fh:
+                        m_data = json.load(fh)
+                    if "best_val_bce" in m_data:
+                        val_bce = float(m_data["best_val_bce"])
+                except Exception:
+                    pass
+            ckpt_0 = out_ont_dir / f"{model_name}_0.pt"
+            found.append(
+                (0, val_bce, fallback_p, ckpt_0 if ckpt_0.is_file() else None)
+            )
 
     if not found:
         raise FileNotFoundError(
@@ -373,33 +383,64 @@ def run_evaluation(
     selected_ids = [item[0] for item in selected]
     selected_val_bces = [float(item[1]) for item in selected]
 
-    # Determine the evaluated terms list from checkpoint or terms.pkl
+    # Determine the evaluated terms list from checkpoint, metrics JSON, or terms.pkl
     first_ckpt = selected[0][3]
+    ckpt_meta: Any = None
     terms: Optional[List[str]] = None
     if first_ckpt is not None and first_ckpt.is_file():
         ckpt_meta = th.load(first_ckpt, map_location="cpu", weights_only=False)
         if isinstance(ckpt_meta, dict) and "terms" in ckpt_meta:
             terms = [str(t) for t in ckpt_meta["terms"]]
     if terms is None:
+        first_mi = selected[0][0]
+        first_metrics_p = out_ont_dir / f"metrics_{model_name}_{first_mi}.json"
+        if not first_metrics_p.is_file() and first_mi == 0:
+            fallback_m = out_ont_dir / "metrics.json"
+            if fallback_m.is_file():
+                first_metrics_p = fallback_m
+        if first_metrics_p.is_file():
+            try:
+                with open(first_metrics_p, "r", encoding="utf-8") as fh:
+                    m_info = json.load(fh)
+                if isinstance(m_info, dict) and "terms" in m_info and m_info["terms"]:
+                    terms = [str(t) for t in m_info["terms"]]
+            except Exception:
+                pass
+    if terms is None:
         terms_df = pd.read_pickle(ont_dir / "terms.pkl")
-        terms = [str(t) for t in terms_df["gos"].values]
+        terms = [str(t) for t in np.asarray(terms_df["gos"]).flatten()]
 
     terms_dict = {t: i for i, t in enumerate(terms)}
 
-    pred_matrices: List[np.ndarray] = []
+    raw_matrices: List[np.ndarray] = []
+    prop_matrices: List[Optional[np.ndarray]] = []
     base_test_df: Optional[pd.DataFrame] = None
     for _, _, pred_p, _ in selected:
         df_i = pd.read_pickle(pred_p)
         if base_test_df is None:
             base_test_df = df_i
-        mat_i = np.stack([np.asarray(r, dtype=np.float32) for r in df_i["preds"].values], axis=0)
-        if mat_i.shape[1] != len(terms):
-            # If terms.pkl had full terms while test_predictions had a subset (or vice-versa),
-            # align with metrics.json if available
-            raise ValueError(
-                f"Prediction matrix in {pred_p} has {mat_i.shape[1]} columns, expected {len(terms)}"
+        if "raw_preds" in df_i.columns:
+            raw_mat_i = np.stack(
+                [np.asarray(r, dtype=np.float32) for r in df_i["raw_preds"].values],
+                axis=0,
             )
-        pred_matrices.append(mat_i)
+            prop_mat_i: Optional[np.ndarray] = np.stack(
+                [np.asarray(r, dtype=np.float32) for r in df_i["preds"].values],
+                axis=0,
+            )
+        else:
+            raw_mat_i = np.stack(
+                [np.asarray(r, dtype=np.float32) for r in df_i["preds"].values],
+                axis=0,
+            )
+            prop_mat_i = None
+
+        if raw_mat_i.shape[1] != len(terms):
+            raise ValueError(
+                f"Prediction matrix in {pred_p} has {raw_mat_i.shape[1]} columns, expected {len(terms)}"
+            )
+        raw_matrices.append(raw_mat_i)
+        prop_matrices.append(prop_mat_i)
 
     assert base_test_df is not None
 
@@ -426,12 +467,18 @@ def run_evaluation(
         tmp_ic = ic_cache_path.with_suffix(f".pt.tmp.{os.getpid()}")
         th.save({"ic": dict(go.ic), "ic_norm": float(go.ic_norm)}, tmp_ic)
         tmp_ic.replace(ic_cache_path)
-    raw_combined = combine_prediction_matrices(pred_matrices, combine=combine)
+
+    raw_combined = combine_prediction_matrices(raw_matrices, combine=combine)
     raw_preds_arr = raw_combined.copy()
-    prop_preds_arr = np.stack(
-        [propagate_annots(row.copy(), go, terms_dict) for row in raw_combined],
-        axis=0,
-    )
+    if all(m is not None for m in prop_matrices):
+        prop_preds_arr = combine_prediction_matrices(
+            [m for m in prop_matrices if m is not None], combine=combine
+        )
+    else:
+        prop_preds_arr = np.stack(
+            [propagate_annots(row.copy(), go, terms_dict) for row in raw_combined],
+            axis=0,
+        )
 
     # 1. DeepGO-SE compute_metrics on raw and propagated scores
     raw_fmax, raw_smin, raw_tmax, raw_wfmax, raw_wtmax, raw_avg_auc, raw_aupr, raw_avg_ic, _ = (
@@ -450,12 +497,20 @@ def run_evaluation(
         tol=1e-6,
     )
 
-    # 3. GroundedEL crisp_report of the GO boxes (for the best checkpoint if available)
+    # 3. GroundedEL crisp_report of the GO boxes (only for GroundedEL checkpoints)
     eff_device = device
     if eff_device.startswith("cuda") and not th.cuda.is_available():
         eff_device = "cpu"
 
-    if first_ckpt is not None and first_ckpt.is_file():
+    is_grounded_ckpt = (
+        first_ckpt is not None
+        and first_ckpt.is_file()
+        and isinstance(ckpt_meta, dict)
+        and "state_dict" in ckpt_meta
+        and isinstance(ckpt_meta["state_dict"], Mapping)
+        and any(str(k).startswith("grounded.") for k in ckpt_meta["state_dict"].keys())
+    )
+    if is_grounded_ckpt and first_ckpt is not None:
         tbox_report = evaluate_tbox_crisp_report(
             ckpt_path=first_ckpt,
             data_root=root,

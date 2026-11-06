@@ -396,7 +396,7 @@ def load_deepgose_data(
     root = Path(data_root)
     ont_dir = root / ont
     terms_df = pd.read_pickle(ont_dir / "terms.pkl")
-    all_terms: List[str] = [str(t) for t in terms_df["gos"].values]
+    all_terms: List[str] = [str(t) for t in np.asarray(terms_df["gos"]).flatten()]
 
     train_df: pd.DataFrame = pd.read_pickle(ont_dir / "train_data.pkl")
     valid_df: pd.DataFrame = pd.read_pickle(ont_dir / "valid_data.pkl")

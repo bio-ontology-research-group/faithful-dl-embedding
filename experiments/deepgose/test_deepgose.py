@@ -290,3 +290,283 @@ def test_deepgose_prediction_format_round_trip() -> None:
             combine_prediction_matrices([raw_scores, m2], "max"),
             np.maximum(raw_scores, m2),
         )
+
+
+SYNTHETIC_OBO_TEXT = """format-version: 1.2
+data-version: test
+
+[Term]
+id: GO:0005575
+name: cellular_component
+namespace: cellular_component
+
+[Term]
+id: GO:0000003
+name: term_3
+namespace: cellular_component
+is_a: GO:0005575 ! cellular_component
+
+[Term]
+id: GO:0000002
+name: term_2
+namespace: cellular_component
+is_a: GO:0000003 ! term_3
+
+[Term]
+id: GO:0000001
+name: term_1
+namespace: cellular_component
+is_a: GO:0000002 ! term_2
+
+[Term]
+id: GO:0000004
+name: term_4
+namespace: cellular_component
+is_a: GO:0000002 ! term_2
+
+[Term]
+id: GO:0000005
+name: term_5
+namespace: cellular_component
+is_a: GO:0000003 ! term_3
+
+[Term]
+id: GO:0000006
+name: term_6
+namespace: cellular_component
+is_a: GO:0000005 ! term_5
+
+[Term]
+id: GO:0000007
+name: term_7
+namespace: cellular_component
+is_a: GO:0000003 ! term_3
+
+[Term]
+id: GO:0000008
+name: term_8
+namespace: cellular_component
+is_a: GO:0000007 ! term_7
+
+[Term]
+id: GO:0000009
+name: term_9
+namespace: cellular_component
+is_a: GO:0000003 ! term_3
+"""
+
+
+def _write_synthetic_deepgose_dataset(data_root: Path, n_proteins: int = 10) -> List[str]:
+    """Write 20-line go.norm fixture, synthetic go.obo, and 10-protein pickles under ``data_root``."""
+    cc_dir = data_root / "cc"
+    cc_dir.mkdir(parents=True, exist_ok=True)
+
+    (data_root / "go.norm").write_text("\n".join(FIXTURE_20_LINES) + "\n", encoding="utf-8")
+    (data_root / "go.obo").write_text(SYNTHETIC_OBO_TEXT, encoding="utf-8")
+
+    terms = ["GO:0000001", "GO:0000002", "GO:0000003"]
+    pd.DataFrame({"gos": np.array(terms, dtype=object)}).to_pickle(cc_dir / "terms.pkl")
+    pd.DataFrame({"interpros": np.array(["IPR000001", "IPR000002"], dtype=object)}).to_pickle(
+        cc_dir / "interpros.pkl"
+    )
+
+    rng = np.random.default_rng(12345)
+    proteins = [f"P{i:03d}" for i in range(n_proteins)]
+    esm2_vecs = [rng.standard_normal(2560).astype(np.float32) for _ in range(n_proteins)]
+    interpros_col = [["IPR000001"] if i % 2 == 0 else ["IPR000002"] for i in range(n_proteins)]
+
+    prop_annots: List[List[str]] = []
+    exp_annots: List[List[str]] = []
+    for i in range(n_proteins):
+        if i < 3:
+            prop_annots.append(["GO:0000001", "GO:0000002", "GO:0000003", "GO:0005575"])
+            exp_annots.append(["GO:0000001"])
+        elif i < 7:
+            prop_annots.append(["GO:0000002", "GO:0000003", "GO:0005575"])
+            exp_annots.append(["GO:0000002"])
+        elif i < 9:
+            prop_annots.append(["GO:0000003", "GO:0005575"])
+            exp_annots.append(["GO:0000003"])
+        else:
+            prop_annots.append(["GO:0000002", "GO:0005575"])
+            exp_annots.append(["GO:0000002"])
+
+    df = pd.DataFrame(
+        {
+            "proteins": proteins,
+            "esm2": esm2_vecs,
+            "interpros": interpros_col,
+            "prop_annotations": prop_annots,
+            "exp_annotations": exp_annots,
+        }
+    )
+    for split_name in ("train_data.pkl", "valid_data.pkl", "test_data.pkl"):
+        df.to_pickle(cc_dir / split_name)
+
+    return terms
+
+
+def test_baselines_main_1_epoch_and_evaluate_end_to_end() -> None:
+    """5. Both baseline modules run main() for 1 epoch on 20-line go.norm + 10-protein synthetic pickle and evaluate.py scores them (including --combine min for n_models > 1)."""
+    import json
+    from experiments.deepgose import evaluate as evaluate_mod
+    from experiments.deepgose.baselines import train_deepgo, train_mlp
+    from experiments.deepgose.data import load_deepgose_data
+
+    with tempfile.TemporaryDirectory(dir=_tmp_base_dir(), prefix="deepgose_base_") as tmpdir:
+        data_root = Path(tmpdir) / "data"
+        out_dir = Path(tmpdir) / "out"
+        expected_terms = _write_synthetic_deepgose_dataset(data_root, n_proteins=10)
+
+        # Verify GroundedEL data loader has exact same term order from terms.pkl
+        split_data = load_deepgose_data(data_root=data_root, ont="cc", cache_dir=out_dir / "cc")
+        assert split_data.terms == expected_terms
+
+        # 1. Run train_deepgo.main() for 1 epoch
+        train_deepgo.main(
+            [
+                "--data-root",
+                str(data_root),
+                "--out",
+                str(out_dir),
+                "--ont",
+                "cc",
+                "--model-name",
+                "deepgozero_esm",
+                "--model-id",
+                "0",
+                "--seed",
+                "0",
+                "--batch-size",
+                "5",
+                "--epochs",
+                "1",
+                "--device",
+                "cpu",
+            ]
+        )
+
+        cc_out = out_dir / "cc"
+        assert (cc_out / "deepgozero_esm_0.pt").is_file()
+        assert (cc_out / "test_predictions_deepgozero_esm_0.pkl").is_file()
+        assert (cc_out / "metrics_deepgozero_esm_0.json").is_file()
+
+        rc_dg = evaluate_mod.main(
+            [
+                "--ont",
+                "cc",
+                "--model-name",
+                "deepgozero_esm",
+                "--model-ids",
+                "0",
+                "--n-models",
+                "1",
+                "--combine",
+                "avg",
+                "--data-root",
+                str(data_root),
+                "--out",
+                str(out_dir),
+                "--device",
+                "cpu",
+            ]
+        )
+        assert rc_dg == 0
+        eval_dg_path = cc_out / "eval_deepgozero_esm_avg_1.json"
+        assert eval_dg_path.is_file()
+        eval_dg = json.loads(eval_dg_path.read_text(encoding="utf-8"))
+        assert eval_dg["n_terms"] == len(expected_terms)
+        assert eval_dg["n_test_proteins"] == 10
+        assert 0.0 <= eval_dg["propagated"]["fmax"] <= 1.0
+        assert eval_dg["propagated"]["hier_viol_rate"] if "hier_viol_rate" in eval_dg["propagated"] else True
+        assert eval_dg["crisp_report"]["elem_viol"] is None
+
+        # 2. Run train_mlp.main() for 1 epoch (two seeds/model_ids to test --combine min for n_models > 1)
+        for mi in (0, 1):
+            train_mlp.main(
+                [
+                    "--data-root",
+                    str(data_root),
+                    "--out",
+                    str(out_dir),
+                    "--ont",
+                    "cc",
+                    "--model-name",
+                    "mlp_esm",
+                    "--model-id",
+                    str(mi),
+                    "--seed",
+                    str(mi),
+                    "--batch-size",
+                    "5",
+                    "--epochs",
+                    "1",
+                    "--device",
+                    "cpu",
+                ]
+            )
+            assert (cc_out / f"mlp_esm_{mi}.pt").is_file()
+            assert (cc_out / f"test_predictions_mlp_esm_{mi}.pkl").is_file()
+            assert (cc_out / f"metrics_mlp_esm_{mi}.json").is_file()
+
+        # Also verify evaluate.py works when terms come solely from terms.pkl (no "terms" key in metrics JSON)
+        for mi in (0, 1):
+            m_path = cc_out / f"metrics_mlp_esm_{mi}.json"
+            m_obj = json.loads(m_path.read_text(encoding="utf-8"))
+            assert m_obj["terms"] == expected_terms
+            m_obj.pop("terms", None)
+            m_path.write_text(json.dumps(m_obj), encoding="utf-8")
+
+        rc_mlp_1 = evaluate_mod.main(
+            [
+                "--ont",
+                "cc",
+                "--model-name",
+                "mlp_esm",
+                "--model-ids",
+                "0",
+                "--n-models",
+                "1",
+                "--combine",
+                "avg",
+                "--data-root",
+                str(data_root),
+                "--out",
+                str(out_dir),
+                "--device",
+                "cpu",
+            ]
+        )
+        assert rc_mlp_1 == 0
+        assert (cc_out / "eval_mlp_esm_avg_1.json").is_file()
+
+        rc_mlp_min2 = evaluate_mod.main(
+            [
+                "--ont",
+                "cc",
+                "--model-name",
+                "mlp_esm",
+                "--model-ids",
+                "0",
+                "1",
+                "--n-models",
+                "2",
+                "--combine",
+                "min",
+                "--data-root",
+                str(data_root),
+                "--out",
+                str(out_dir),
+                "--device",
+                "cpu",
+            ]
+        )
+        assert rc_mlp_min2 == 0
+        eval_min2_path = cc_out / "eval_mlp_esm_min_2.json"
+        assert eval_min2_path.is_file()
+        eval_min2 = json.loads(eval_min2_path.read_text(encoding="utf-8"))
+        assert eval_min2["combine"] == "min"
+        assert eval_min2["n_models_used"] == 2
+        assert sorted(eval_min2["selected_model_ids"]) == [0, 1]
+        assert 0.0 <= eval_min2["propagated"]["fmax"] <= 1.0
+
