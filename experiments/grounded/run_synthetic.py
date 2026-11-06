@@ -164,6 +164,8 @@ def run_synthetic_cell(
     device: str = "cpu",
     n_eval: int = 10000,
     theory_dir: Optional[Path | str] = None,
+    lr_final: Optional[float] = None,
+    lr_schedule: str = "cosine",
 ) -> Dict[str, Any]:
     """Train and evaluate ``GroundedEL`` on synthetic ``theory`` and write the output JSON.
 
@@ -196,6 +198,10 @@ def run_synthetic_cell(
     theory_dir : Path or str or None, optional
         Directory for caching generated ``<theory>.owl`` files (default:
         ``$TMPDIR/gfe-grounded/``).
+    lr_final : float or None, default None
+        Optional final learning rate :math:`> 0` for decay; ``None`` keeps constant ``lr``.
+    lr_schedule : {"cosine", "linear"}, default "cosine"
+        Learning-rate decay schedule used when ``lr_final`` is set.
 
     Returns
     -------
@@ -223,6 +229,17 @@ def run_synthetic_cell(
         raise ValueError(f"epochs must be an int >= 0, got {epochs!r}")
     if isinstance(lr, bool) or not isinstance(lr, (int, float)) or float(lr) <= 0.0:
         raise ValueError(f"lr must be > 0, got {lr!r}")
+    if lr_final is not None:
+        if (
+            isinstance(lr_final, bool)
+            or not isinstance(lr_final, (int, float))
+            or float(lr_final) <= 0.0
+        ):
+            raise ValueError(f"lr_final must be > 0 or None, got {lr_final!r}")
+    if not isinstance(lr_schedule, str) or lr_schedule not in ("cosine", "linear"):
+        raise ValueError(
+            f"lr_schedule must be 'cosine' or 'linear', got {lr_schedule!r}"
+        )
     if isinstance(reseed_every, bool) or not isinstance(reseed_every, int) or reseed_every < 0:
         raise ValueError(f"reseed_every must be an int >= 0, got {reseed_every!r}")
     if (
@@ -284,7 +301,11 @@ def run_synthetic_cell(
         model.init_module()
 
     t_train_start = time.perf_counter()
-    history = model.train(epochs=int(epochs))
+    history = model.train(
+        epochs=int(epochs),
+        lr_final=None if lr_final is None else float(lr_final),
+        lr_schedule=str(lr_schedule),
+    )
     train_time_s = float(time.perf_counter() - t_train_start)
 
     t_eval_start = time.perf_counter()
@@ -332,6 +353,8 @@ def run_synthetic_cell(
             "seed": int(seed),
             "epochs": int(epochs),
             "lr": float(lr),
+            "lr_final": None if lr_final is None else float(lr_final),
+            "lr_schedule": str(lr_schedule),
             "reseed_every": int(reseed_every),
             "n_filler_samples": int(n_filler_samples),
             "init": "random",
@@ -405,6 +428,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Adam learning rate (default: 0.01).",
     )
     parser.add_argument(
+        "--lr-final",
+        type=float,
+        default=None,
+        help="Final Adam learning rate for decay; None keeps constant lr (default: None).",
+    )
+    parser.add_argument(
+        "--lr-schedule",
+        type=str,
+        default="cosine",
+        choices=("cosine", "linear"),
+        help="Learning rate decay schedule when --lr-final is set (default: cosine).",
+    )
+    parser.add_argument(
         "--reseed-every",
         type=int,
         default=100,
@@ -443,6 +479,8 @@ def main(argv: Optional[Sequence[str]] = None) -> Dict[str, Any]:
         seed=args.seed,
         epochs=args.epochs,
         lr=args.lr,
+        lr_final=args.lr_final,
+        lr_schedule=args.lr_schedule,
         reseed_every=args.reseed_every,
         n_filler_samples=args.n_filler_samples,
         out=args.out,

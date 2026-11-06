@@ -528,6 +528,10 @@ def _build_model(
                 model_filepath=ckpt_str,
                 device=device,
             )
+            if spec.get("lr_final") is not None:
+                setattr(model, "_lr_final", float(spec["lr_final"]))
+            if spec.get("lr_schedule") is not None:
+                setattr(model, "_lr_schedule", str(spec["lr_schedule"]))
         else:  # pragma: no cover
             raise ValueError(f"Unsupported model class {model_cls_name!r}")
     finally:
@@ -683,13 +687,18 @@ def _train_model_with_chunking(
         effective_batch_size < int(DEFAULT_HYPERPARAMS["batch_size"])
         and type(mod_ref).__name__ != "GroundedELModule"
     )
+    train_kwargs: Dict[str, Any] = {
+        "epochs": epochs,
+        "validate_every": validate_every,
+        "epoch_callback": _on_epoch,
+    }
+    if getattr(model, "_lr_final", None) is not None:
+        train_kwargs["lr_final"] = float(getattr(model, "_lr_final"))
+    if getattr(model, "_lr_schedule", None) is not None:
+        train_kwargs["lr_schedule"] = str(getattr(model, "_lr_schedule"))
     with _chunked_module_forward(model.module, effective_batch_size, enabled=chunk_needed):
         t_last[0] = time.monotonic()
-        model.train(
-            epochs=epochs,
-            validate_every=validate_every,
-            epoch_callback=_on_epoch,
-        )
+        model.train(**train_kwargs)
     setattr(model, "_reseed_moves_total", int(reseed_moves_total[0]))
     setattr(mod_ref, "_reseed_moves_total", int(reseed_moves_total[0]))
 
@@ -1134,6 +1143,10 @@ def execute_run(
         "checkpoint_path": str(ckpt_path),
         "init_report": init_report,
     }
+    if method_spec.get("lr_final") is not None:
+        config_dict["lr_final"] = float(method_spec["lr_final"])
+    if method_spec.get("lr_schedule") is not None:
+        config_dict["lr_schedule"] = str(method_spec["lr_schedule"])
     if (
         method in OBJECTIVE_METHODS
         or method in PRISM_METHODS

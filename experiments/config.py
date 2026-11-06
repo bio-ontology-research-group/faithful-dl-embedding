@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 REPO_ROOT: Path = Path(__file__).resolve().parent.parent
 EXPERIMENTS_DIR: Path = Path(__file__).resolve().parent
@@ -514,12 +514,27 @@ GROUNDED_METHODS: List[str] = [
     "grounded-k8",
 ]
 
-for _gk in (1, 2, 4, 8):
-    METHODS[f"grounded-k{_gk}"] = {
-        "model": "GroundedEL",
-        "backbone": "grounded",
+# Optional per-method keys ``lr_final`` (float > 0) and ``lr_schedule``
+# (``"cosine"`` | ``"linear"``) may be set on ``GROUNDED_METHODS`` entries and
+# are forwarded to ``GroundedEL.train`` by ``experiments/run.py`` when present
+# (not set by default).
+GROUNDED_OPTIONAL_KEYS: Tuple[str, ...] = ("lr_final", "lr_schedule")
+
+_GROUNDED_SPECS: Dict[str, Dict[str, Any]] = {
+    f"grounded-k{_gk}": {
         "n_components": _gk,
         "n_role_components": _gk,
+    }
+    for _gk in (1, 2, 4, 8)
+}
+
+for _g_id in GROUNDED_METHODS:
+    _g_entry = _GROUNDED_SPECS[_g_id]
+    _g_spec: Dict[str, Any] = {
+        "model": "GroundedEL",
+        "backbone": "grounded",
+        "n_components": _g_entry["n_components"],
+        "n_role_components": _g_entry["n_role_components"],
         "init": None,
         "anchor_weight": 0.0,
         "reseed_every": 100,
@@ -531,6 +546,10 @@ for _gk in (1, 2, 4, 8):
         "batch_size": 4096,
         "datasets": list(ABOX_DATASETS),
     }
+    for _opt_k in GROUNDED_OPTIONAL_KEYS:
+        if _opt_k in _g_entry and _g_entry[_opt_k] is not None:
+            _g_spec[_opt_k] = _g_entry[_opt_k]
+    METHODS[_g_id] = _g_spec
 
 
 def methods_for_dataset(dataset: str) -> List[str]:

@@ -32,6 +32,7 @@ from experiments.grounded.run_go import (
     evaluate_subsumption_ranking,
 )
 from experiments.grounded.run_synthetic import (
+    build_arg_parser as build_synthetic_parser,
     parse_capacity_arg,
     run_synthetic_cell,
 )
@@ -101,6 +102,15 @@ def test_parse_k_and_run_synthetic_smoke(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         parse_capacity_arg("invalid")
 
+    syn_defaults = build_synthetic_parser().parse_args(["--theory", "tk3", "--K", "2"])
+    assert syn_defaults.lr_final is None
+    assert syn_defaults.lr_schedule == "cosine"
+    syn_custom = build_synthetic_parser().parse_args(
+        ["--theory", "tk3", "--K", "2", "--lr-final", "1e-4", "--lr-schedule", "linear"]
+    )
+    assert syn_custom.lr_final == pytest.approx(1e-4)
+    assert syn_custom.lr_schedule == "linear"
+
     res = run_synthetic_cell(
         theory="role_functional",
         K="full",
@@ -109,6 +119,8 @@ def test_parse_k_and_run_synthetic_smoke(tmp_path: Path) -> None:
         seed=0,
         epochs=5,
         lr=0.02,
+        lr_final=2e-4,
+        lr_schedule="cosine",
         out=tmp_path / "runs",
         theory_dir=tmp_path / "owl",
         n_eval=128,
@@ -117,6 +129,8 @@ def test_parse_k_and_run_synthetic_smoke(tmp_path: Path) -> None:
     assert res["config"]["n_role_components"] == res["config"]["nb_elements"]
     assert res["config"]["reseed_every"] == 100
     assert res["config"]["n_filler_samples"] == 64
+    assert res["config"]["lr_final"] == pytest.approx(2e-4)
+    assert res["config"]["lr_schedule"] == "cosine"
     assert "elem_viol" in res["crisp_report"]
     assert "region_viol" in res["crisp_report"]
     assert "exact" in res["metrics"]
@@ -128,6 +142,8 @@ def test_parse_k_and_run_synthetic_smoke(tmp_path: Path) -> None:
     assert loaded["config"]["theory"] == "role_functional"
     assert loaded["config"]["reseed_every"] == 100
     assert loaded["config"]["n_filler_samples"] == 64
+    assert loaded["config"]["lr_final"] == pytest.approx(2e-4)
+    assert loaded["config"]["lr_schedule"] == "cosine"
 
 
 def test_aggregate_report_generation(tmp_path: Path) -> None:
@@ -228,13 +244,24 @@ def test_go_batched_helpers_and_sbatch(tmp_path: Path) -> None:
     assert "/mnt/data/u/hohndor/gfe/venv/bin/python" in sbatch_text
 
 
-def test_grounded_b1_methods_abox_modelness_and_sbatch() -> None:
-    """Verify grounded-k1..k8 config specs, run_filename default lr, abox_modelness, and b1.sbatch."""
+def test_grounded_b1_methods_abox_modelness_and_sbatch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Verify grounded-k1..k8 config specs, optional lr_final/lr_schedule passthrough in run.py, abox_modelness, and b1.sbatch."""
+    from experiments import run
     from experiments.abox_eval import abox_modelness
-    from experiments.config import GROUNDED_METHODS, METHODS, methods_for_dataset
+    from experiments.config import (
+        GROUNDED_METHODS,
+        GROUNDED_OPTIONAL_KEYS,
+        METHODS,
+        methods_for_dataset,
+    )
+    from experiments.datasets import load_dataset
     from experiments.run import run_filename
     from mowl.nn.el.grounded.module import GroundedELModule
 
+    assert GROUNDED_OPTIONAL_KEYS == ("lr_final", "lr_schedule")
     assert GROUNDED_METHODS == [
         "grounded-k1",
         "grounded-k2",
@@ -255,12 +282,57 @@ def test_grounded_b1_methods_abox_modelness_and_sbatch() -> None:
         assert spec["epochs"] == 2000
         assert spec["learning_rate"] == pytest.approx(0.01)
         assert spec["batch_size"] == 4096
+        assert "lr_final" not in spec
+        assert "lr_schedule" not in spec
         assert m_id in methods_for_dataset("yeast-function")
         assert m_id not in methods_for_dataset("tk3")
         assert (
             run_filename("yeast-function", m_id, 50, 0, lr=0.01)
             == f"yeast-function__{m_id}__d50__s0.json"
         )
+
+    # Verify optional lr_final / lr_schedule keys on GROUNDED_METHODS are passed through in run.py
+    spec_with_decay = dict(METHODS["grounded-k2"])
+    spec_with_decay["lr_final"] = 1e-4
+    spec_with_decay["lr_schedule"] = "linear"
+    monkeypatch.setitem(METHODS, "grounded-k2", spec_with_decay)
+    b_tk3 = load_dataset("tk3")
+    built_model, _ = run._build_model(
+        bundle=b_tk3,
+        cm=None,
+        method_id="grounded-k2",
+        dim=2,
+        seed=0,
+        batch_size=128,
+        learning_rate=0.01,
+        margin=0.02,
+        delta=2.5,
+        reg_factor=0.2,
+        num_negs=4,
+        device="cpu",
+        checkpoint_path=tmp_path / "gk2.pt",
+    )
+    assert getattr(built_model, "_lr_final") == pytest.approx(1e-4)
+    assert getattr(built_model, "_lr_schedule") == "linear"
+    captured_train_kw: dict = {}
+    orig_train = built_model.train
+
+    def _spy_train(**kw):
+        captured_train_kw.update(kw)
+        return orig_train(**kw)
+
+    monkeypatch.setattr(built_model, "train", _spy_train)
+    run._train_model_with_chunking(
+        model=built_model,
+        epochs=4,
+        validate_every=10,
+        effective_batch_size=128,
+        epoch_times=[],
+    )
+    assert captured_train_kw["lr_final"] == pytest.approx(1e-4)
+    assert captured_train_kw["lr_schedule"] == "linear"
+    assert built_model.optimizer is not None
+    assert float(built_model.optimizer.param_groups[0]["lr"]) == pytest.approx(1e-4)
 
     # Build a small GroundedELModule with 2 classes (0, 1) and 2 individuals (elements 2, 3)
     g_mod = GroundedELModule(
