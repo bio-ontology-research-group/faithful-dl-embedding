@@ -10,6 +10,8 @@
 #SBATCH --error=/mnt/data/u/hohndor/gfe/logs/deepgose/e3_%A_%a.err
 
 # Slurm array job for E3 (DeepGO-SE inductive protein function prediction on ORIX).
+# TBox step: TBOX_BATCH rows every TBOX_EVERY protein batches (default 4096 every 4 = same rows per epoch as
+# 1024 every step; the larger, rarer step keeps nvidia-smi utilisation above the 75 % that orix requires).
 # First round (24 cells):
 #   ont in {cc, mf} x seed in {0, 1, 2} x
 #   {grounded d128 K1 lambda=1, grounded d128 K1 lambda=0, deepgozero_esm, mlp_esm}
@@ -56,7 +58,7 @@ fi
 read -r ONT SEED KIND DIM K LAMBDA_TBOX <<< "${CELL_LINE}"
 DEVICE="${DEVICE:-cuda}"
 TBOX_BATCH="${TBOX_BATCH:-4096}"
-TBOX_EVERY="${TBOX_EVERY:-1}"
+TBOX_EVERY="${TBOX_EVERY:-4}"
 GROUNDED_EPOCHS="${GROUNDED_EPOCHS:-64}"
 
 cd "${REPO_DIR}"
