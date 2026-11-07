@@ -472,7 +472,7 @@ def test_baselines_main_1_epoch_and_evaluate_end_to_end() -> None:
             ]
         )
         assert rc_dg == 0
-        eval_dg_path = cc_out / "eval_deepgozero_esm_avg_1.json"
+        eval_dg_path = cc_out / "eval_deepgozero_esm_avg_1_ids0.json"
         assert eval_dg_path.is_file()
         eval_dg = json.loads(eval_dg_path.read_text(encoding="utf-8"))
         assert eval_dg["n_terms"] == len(expected_terms)
@@ -538,7 +538,7 @@ def test_baselines_main_1_epoch_and_evaluate_end_to_end() -> None:
             ]
         )
         assert rc_mlp_1 == 0
-        assert (cc_out / "eval_mlp_esm_avg_1.json").is_file()
+        assert (cc_out / "eval_mlp_esm_avg_1_ids0.json").is_file()
 
         rc_mlp_min2 = evaluate_mod.main(
             [
@@ -562,7 +562,7 @@ def test_baselines_main_1_epoch_and_evaluate_end_to_end() -> None:
             ]
         )
         assert rc_mlp_min2 == 0
-        eval_min2_path = cc_out / "eval_mlp_esm_min_2.json"
+        eval_min2_path = cc_out / "eval_mlp_esm_min_2_ids0-1.json"
         assert eval_min2_path.is_file()
         eval_min2 = json.loads(eval_min2_path.read_text(encoding="utf-8"))
         assert eval_min2["combine"] == "min"

@@ -18,7 +18,8 @@ computes:
    ``elem_viol``, ``region_viol``, ``region_viol_tol1e-4``, ``n_false_dead``,
    ``n_empty_classes``.
 
-Writes ``{out}/{ont}/eval_{model_name}_{combine}_{n}.json`` and prints a summary
+Writes ``{out}/{ont}/eval_{model_name}_{combine}_{n}.json`` (or ``..._{n}_ids{i-j-k}.json``
+when ``--model-ids`` is given) and prints a summary
 table.
 """
 
@@ -565,11 +566,17 @@ def run_evaluation(
         "crisp_report": tbox_report,
     }
 
-    # Write both requested n_models filename and actual n_used filename if they differ
-    out_paths = {
-        out_ont_dir / f"eval_{model_name}_{combine}_{n_models}.json",
-        out_ont_dir / f"eval_{model_name}_{combine}_{n_used}.json",
-    }
+    # Explicit model ids: name the file by the ids so per-seed evaluations never
+    # overwrite each other. Otherwise (top-n selection) write both the requested
+    # n_models filename and the actual n_used filename if they differ.
+    if model_ids is not None:
+        id_tag = "-".join(str(i) for i in sorted(selected_ids))
+        out_paths = {out_ont_dir / f"eval_{model_name}_{combine}_{n_used}_ids{id_tag}.json"}
+    else:
+        out_paths = {
+            out_ont_dir / f"eval_{model_name}_{combine}_{n_models}.json",
+            out_ont_dir / f"eval_{model_name}_{combine}_{n_used}.json",
+        }
     for out_p in out_paths:
         tmp_p = out_p.with_suffix(f".json.tmp.{os.getpid()}")
         with open(tmp_p, "w", encoding="utf-8") as fh:
