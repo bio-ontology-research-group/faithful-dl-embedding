@@ -131,6 +131,7 @@ def run_training(
     max_train_proteins: Optional[int] = None,
     min_term_annotations: Optional[int] = None,
     predict_only: bool = False,
+    tbox_every: int = 1,
 ) -> Dict[str, Any]:
     """Run DeepGO-SE GroundedEL training and write checkpoint, predictions, and metrics JSON."""
     if ont not in ("mf", "bp", "cc"):
@@ -141,6 +142,8 @@ def run_training(
         raise ValueError(f"protein_batch must be >= 1, got {protein_batch}")
     if tbox_batch < 1:
         raise ValueError(f"tbox_batch must be >= 1, got {tbox_batch}")
+    if tbox_every < 1:
+        raise ValueError(f"tbox_every must be >= 1, got {tbox_every}")
 
     eff_device = device
     if eff_device.startswith("cuda") and not th.cuda.is_available():
@@ -252,6 +255,7 @@ def run_training(
         tbox_sum = 0.0
         total_sum = 0.0
         n_batches = 0
+        n_tbox_batches = 0
 
         for start in range(0, n_train, protein_batch):
             end = min(start + protein_batch, n_train)
@@ -260,11 +264,16 @@ def run_training(
             lbl_b = split_data.train_labels[batch_idx]
 
             bce_loss, _ = model.compute_data_loss(feat_b, lbl_b)
-            if lambda_tbox > 0.0:
+            # TBox step every ``tbox_every`` protein batches (a larger, rarer TBox batch
+            # amortises the per-step kernel-launch overhead; same rows per epoch when
+            # tbox_batch scales with tbox_every).
+            if lambda_tbox > 0.0 and (global_step % tbox_every == 0):
                 tbox_losses = model.grounded.compute_batch_losses()
                 tbox_total = tbox_losses["total"]
                 step_loss = bce_loss + lambda_tbox * tbox_total
                 tbox_val = float(tbox_total.detach().item())
+                tbox_sum += tbox_val
+                n_tbox_batches += 1
             else:
                 step_loss = bce_loss
                 tbox_val = 0.0
@@ -275,7 +284,6 @@ def run_training(
             model.grounded.clamp_dead_logits()
 
             bce_sum += float(bce_loss.detach().item())
-            tbox_sum += tbox_val
             total_sum += float(step_loss.detach().item())
             n_batches += 1
             global_step += 1
@@ -329,7 +337,7 @@ def run_training(
         rec = {
             "epoch": epoch + 1,
             "train_bce": bce_sum / max(n_batches, 1),
-            "train_tbox": tbox_sum / max(n_batches, 1),
+            "train_tbox": tbox_sum / max(n_tbox_batches, 1),
             "train_total": total_sum / max(n_batches, 1),
             "val_bce": val_bce,
             "val_fmax": val_fmax,
@@ -385,6 +393,7 @@ def run_training(
         "predict_only": bool(predict_only),
         "protein_batch": int(protein_batch),
         "tbox_batch": int(tbox_batch),
+        "tbox_every": int(tbox_every),
         "lr_encoder": float(lr_encoder),
         "lr_boxes": float(lr_boxes),
         "lr_final": float(lr_final),
@@ -496,6 +505,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="TBox mini-batch size per axiom type (default: 4096).",
     )
     parser.add_argument(
+        "--tbox-every",
+        type=int,
+        default=1,
+        help="Run the GroundedEL TBox step every N protein batches (default: 1).",
+    )
+    parser.add_argument(
         "--lr-encoder",
         type=float,
         default=5e-4,
@@ -573,6 +588,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         epochs=args.epochs,
         protein_batch=args.protein_batch,
         tbox_batch=args.tbox_batch,
+        tbox_every=args.tbox_every,
         lr_encoder=args.lr_encoder,
         lr_boxes=args.lr_boxes,
         lr_final=args.lr_final,

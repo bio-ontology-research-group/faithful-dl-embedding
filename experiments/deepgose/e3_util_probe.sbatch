@@ -20,12 +20,12 @@ export TMPDIR="${TMPDIR:-/mnt/data/u/hohndor/gfe/tmp}"
 export DEEPGO2_DIR PYTHONPATH="${MOWL_DIR}:${REPO_DIR}:${DEEPGO2_DIR}:${PYTHONPATH:-}"
 mkdir -p "${OUT_DIR}"
 cd "${REPO_DIR}"
-ONT="${ONT:-cc}"; EPOCHS="${EPOCHS:-2}"; TBOX_BATCH="${TBOX_BATCH:-1024}"; LAMBDA="${LAMBDA:-1.0}"
+ONT="${ONT:-cc}"; EPOCHS="${EPOCHS:-2}"; TBOX_BATCH="${TBOX_BATCH:-1024}"; TBOX_EVERY="${TBOX_EVERY:-1}"; LAMBDA="${LAMBDA:-1.0}"
 DMON="${OUT_DIR}/dmon_${ONT}_${SLURM_JOB_ID}.txt"
 nvidia-smi dmon -s u -d 5 > "${DMON}" 2>&1 &
 DPID=$!
 "${PYTHON}" -m experiments.deepgose.train --ont "${ONT}" --seed 0 --model-id 0 --model-name probe_grounded \
-    --dim 128 --K 1 --lambda-tbox "${LAMBDA}" --epochs "${EPOCHS}" --protein-batch 128 --tbox-batch "${TBOX_BATCH}" \
+    --dim 128 --K 1 --lambda-tbox "${LAMBDA}" --epochs "${EPOCHS}" --protein-batch 128 --tbox-batch "${TBOX_BATCH}" --tbox-every "${TBOX_EVERY}" \
     --data-root "${DATA_ROOT}" --out "${OUT_DIR}" --device cuda
 status=$?
 kill ${DPID} 2>/dev/null
