@@ -570,3 +570,45 @@ def test_baselines_main_1_epoch_and_evaluate_end_to_end() -> None:
         assert sorted(eval_min2["selected_model_ids"]) == [0, 1]
         assert 0.0 <= eval_min2["propagated"]["fmax"] <= 1.0
 
+
+
+def test_grounded_train_1_epoch_evaluate_crisp_report_and_predict_only() -> None:
+    """6. GroundedEL (lambda=1) trains 1 epoch on the synthetic fixture; evaluate.py fills the
+    GO-box crisp_report (not None); --predict-only reproduces the same predictions from the checkpoint."""
+    import json
+    from experiments.deepgose import evaluate as evaluate_mod
+    from experiments.deepgose import train as train_mod
+
+    with tempfile.TemporaryDirectory(dir=_tmp_base_dir(), prefix="deepgose_grounded_") as tmpdir:
+        data_root = Path(tmpdir) / "data"
+        out_dir = Path(tmpdir) / "out"
+        _write_synthetic_deepgose_dataset(data_root, n_proteins=10)
+        common = [
+            "--ont", "cc", "--seed", "0", "--model-id", "0", "--dim", "8", "--K", "1",
+            "--lambda-tbox", "1.0", "--epochs", "1", "--protein-batch", "5", "--tbox-batch", "8",
+            "--device", "cpu", "--data-root", str(data_root), "--out", str(out_dir),
+        ]
+        assert train_mod.main(common) == 0
+        cc_out = out_dir / "cc"
+        pred_p = cc_out / "test_predictions_grounded_esm_0.pkl"
+        assert pred_p.is_file() and (cc_out / "grounded_esm_0.pt").is_file()
+        preds_trained = np.stack(pd.read_pickle(pred_p)["preds"].to_list())
+
+        rc = evaluate_mod.main(
+            ["--ont", "cc", "--model-name", "grounded_esm", "--model-ids", "0", "--n-models", "1",
+             "--combine", "avg", "--data-root", str(data_root), "--out", str(out_dir),
+             "--device", "cpu", "--n-eval", "50"]
+        )
+        assert rc == 0
+        ev = json.loads((cc_out / "eval_grounded_esm_avg_1_ids0.json").read_text(encoding="utf-8"))
+        crisp = ev["crisp_report"]
+        assert isinstance(crisp["region_viol"], float) and 0.0 <= crisp["region_viol"] <= 1.0
+        assert isinstance(crisp["elem_viol"], float)
+        assert isinstance(crisp["n_empty_classes"], int)
+
+        pred_p.unlink()
+        assert train_mod.main(common + ["--predict-only"]) == 0
+        preds_recovered = np.stack(pd.read_pickle(pred_p)["preds"].to_list())
+        np.testing.assert_allclose(preds_recovered, preds_trained, atol=1e-6)
+        m = json.loads((cc_out / "metrics_grounded_esm_0.json").read_text(encoding="utf-8"))
+        assert m["predict_only"] is True and m["best_val_bce_epoch"] == 1

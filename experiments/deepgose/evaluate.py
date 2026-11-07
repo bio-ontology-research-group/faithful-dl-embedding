@@ -509,7 +509,7 @@ def run_evaluation(
         and isinstance(ckpt_meta, dict)
         and "state_dict" in ckpt_meta
         and isinstance(ckpt_meta["state_dict"], Mapping)
-        and any(str(k).startswith("grounded.") for k in ckpt_meta["state_dict"].keys())
+        and {"class_centers", "class_raw_widths"} <= {str(k) for k in ckpt_meta["state_dict"].keys()}
     )
     if is_grounded_ckpt and first_ckpt is not None:
         tbox_report = evaluate_tbox_crisp_report(

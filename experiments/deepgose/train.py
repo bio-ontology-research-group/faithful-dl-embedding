@@ -130,6 +130,7 @@ def run_training(
     out_dir: Union[str, Path] = "/mnt/data/u/hohndor/gfe/runs/deepgose",
     max_train_proteins: Optional[int] = None,
     min_term_annotations: Optional[int] = None,
+    predict_only: bool = False,
 ) -> Dict[str, Any]:
     """Run DeepGO-SE GroundedEL training and write checkpoint, predictions, and metrics JSON."""
     if ont not in ("mf", "bp", "cc"):
@@ -201,10 +202,38 @@ def run_training(
     epoch_records: List[Dict[str, Any]] = []
     valid_labels_np = split_data.valid_labels.numpy()
 
+    epochs_to_run = epochs
+    if predict_only:
+        # Recover a run from its best-validation-BCE checkpoint (e.g. after the job
+        # was killed before it wrote predictions): no training, same outputs.
+        if not ckpt_path.is_file():
+            raise FileNotFoundError(f"--predict-only needs the checkpoint {ckpt_path}")
+        ckpt = th.load(ckpt_path, map_location="cpu", weights_only=False)
+        ckpt_terms = [str(t) for t in ckpt.get("terms", [])]
+        if ckpt_terms and ckpt_terms != [str(t) for t in split_data.terms]:
+            raise ValueError(
+                f"checkpoint terms ({len(ckpt_terms)}) differ from data terms ({len(split_data.terms)})"
+            )
+        best_state_dict = {k: v.detach().cpu().clone() for k, v in ckpt["state_dict"].items()}
+        best_val_bce = float(ckpt.get("best_val_bce", float("nan")))
+        best_val_bce_epoch = int(ckpt.get("best_val_bce_epoch", 0))
+        model.module.load_state_dict({k: v.to(eff_device) for k, v in best_state_dict.items()})
+        val_scores_cpu = predict_in_batches(
+            model, split_data.valid_features, batch_size=max(protein_batch, 256)
+        )
+        best_val_fmax, _ = compute_fast_fmax(val_scores_cpu.numpy(), valid_labels_np)
+        best_val_fmax_epoch = best_val_bce_epoch
+        epochs_to_run = 0
+        print(
+            f"[predict-only] loaded {ckpt_path} (best_val_bce={best_val_bce:.5f} @ ep {best_val_bce_epoch}, "
+            f"val_fmax of checkpoint={best_val_fmax:.4f})",
+            flush=True,
+        )
+
     train_t0 = time.perf_counter()
     global_step = 0
 
-    for epoch in range(epochs):
+    for epoch in range(epochs_to_run):
         ep_t0 = time.perf_counter()
         model.module.train()
 
@@ -353,6 +382,7 @@ def run_training(
         "K": int(K),
         "lambda_tbox": float(lambda_tbox),
         "epochs": int(epochs),
+        "predict_only": bool(predict_only),
         "protein_batch": int(protein_batch),
         "tbox_batch": int(tbox_batch),
         "lr_encoder": float(lr_encoder),
@@ -503,6 +533,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output directory for checkpoints, predictions, and metrics.",
     )
     parser.add_argument(
+        "--predict-only",
+        action="store_true",
+        help="Skip training; load {out}/{ont}/{model_name}_{model_id}.pt and write predictions and metrics.",
+    )
+    parser.add_argument(
         "--max-train-proteins",
         type=int,
         default=None,
@@ -546,6 +581,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         out_dir=args.out,
         max_train_proteins=args.max_train_proteins,
         min_term_annotations=args.min_term_annotations,
+        predict_only=args.predict_only,
     )
     print(
         f"[TRAIN DONE] ont={res['ont']} model={res['model_name']}_{res['model_id']} "
