@@ -1,6 +1,6 @@
 # Objectives & Prisms: `yeast-function`
 
-- Provenance: `experiments` `199295f,385523a,512b186,52d39ae,e7365eb,fc6b75f,fd972f8` (dirty), `mowl` `23c69aa,95cb121,ac6bd30,db4d483,e5d9a42,f61dc5a` (dirty).
+- Provenance: `experiments` `199295f,385523a,512b186,52d39ae,e7365eb,fc6b75f,fd972f8,unknown` (dirty), `mowl` `23c69aa,95cb121,ac6bd30,db4d483,e5d9a42,f61dc5a,unknown` (dirty).
 - Margin semantics: `Mod strict` evaluates GCI losses at `margin = 0`; `Mod@γ` evaluates at the training margin `γ` (`relaxing` for Box²EL/MultiBoxEL, `tightening` for ELBE/MultiELBE/PrismEL).
 - Suite membership: the `suite` column distinguishes `objectives` methods (30 objective-grid methods + `prism`/`prism-init`) from `baseline` 10-29 methods.
 
@@ -22,3 +22,7 @@
 | `multielbe-k2-hybrid` | objectives | multielbe | 2 | hybrid | 0.001 | 50 | 0.0038 ± 0.0000 | 0.0010 ± 0.0000 | 0.0054 ± 0.0004 / 1.0000 ± 0.0000 | — | — | 0.57 ± 0.00 | 3/3 |
 | `prism` | objectives | prism | 1 | axiom | 0.001 | 50 | 0.1610 ± 0.0010 | 0.0904 ± 0.0006 | — | — | — | 0.33 ± 0.00 | 3/3 |
 | `prism-init` | objectives | prism | 1 | axiom | 0.001 | 50 | 0.3092 ± 0.0006 | 0.2039 ± 0.0016 | — | — | — | 0.39 ± 0.00 | 3/3 |
+| `grounded-k1` | baseline | grounded | 1 | axiom | 0.01 | 50 | 0.8879 ± 0.0626 | — | — | — | — | 1.00 ± 0.00 | 3/3 |
+| `grounded-k2` | baseline | grounded | 2 | axiom | 0.01 | 50 | 0.8775 ± 0.0937 | — | — | — | — | 1.07 ± 0.00 | 3/3 |
+| `grounded-k4` | baseline | grounded | 4 | axiom | 0.01 | 50 | 0.9790 ± 0.0120 | — | — | — | — | 1.12 ± 0.00 | 3/3 |
+| `grounded-k8` | baseline | grounded | 8 | axiom | 0.01 | 50 | 0.9757 ± 0.0053 | — | — | — | — | 1.17 ± 0.00 | 3/3 |

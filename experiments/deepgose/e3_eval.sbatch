@@ -11,7 +11,7 @@
 # Post-hoc evaluation for E3: every single-seed model (eval_{model}_avg_1_ids{s}.json)
 # and the S-seed ensembles (avg and min over all seeds present), per ontology and model.
 # Usage: sbatch e3_eval.sbatch            (ONTS="cc mf", MODELS=all four, SEEDS="0 1 2")
-#        ONTS=cc MODELS=grounded_esm sbatch e3_eval.sbatch
+#        ONTS=cc MODELS=grounded_esm sbatch e3_eval.sbatch;  FORCE=1 re-evaluates existing single-seed files
 
 set -uo pipefail
 
@@ -29,7 +29,7 @@ mkdir -p "${LOG_DIR}" "${TMPDIR}"
 cd "${REPO_DIR}"
 
 ONTS="${ONTS:-cc mf}"
-MODELS="${MODELS:-grounded_esm grounded_esm_l0 deepgozero_esm mlp_esm}"
+MODELS="${MODELS:-grounded_esm grounded_esm_l0 deepgozero_esm mlp_esm grounded_esm_tau8 grounded_esm_pre16}"
 SEEDS="${SEEDS:-0 1 2}"
 DEVICE="${DEVICE:-cuda}"
 
@@ -43,7 +43,7 @@ for ont in ${ONTS}; do
       echo "[skip] ${ont} ${model}: no predictions"; continue
     fi
     for s in "${present[@]}"; do
-      if [[ -f "${OUT_DIR}/${ont}/eval_${model}_avg_1_ids${s}.json" ]]; then
+      if [[ -z "${FORCE:-}" && -f "${OUT_DIR}/${ont}/eval_${model}_avg_1_ids${s}.json" ]]; then
         echo "[have] ${ont} ${model} seed ${s}"; continue
       fi
       echo "[eval] ${ont} ${model} seed ${s}"
