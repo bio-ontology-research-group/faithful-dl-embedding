@@ -10,6 +10,20 @@ does. Evaluates validation BCE and validation Fmax every epoch, checkpoints by
 validation BCE (DeepGO-SE's rule), records the best-Fmax epoch, and saves test
 predictions in DeepGO-SE's DataFrame pickle format alongside ``metrics.json``.
 
+E3.2 schedule options (decoupling the TBox from the BCE checkpoint, which is
+typically selected at epoch 7-10 while the default :math:`\\tau` schedule
+spans all epochs):
+
+- ``tau_epochs > 0``: anneal :math:`\\tau` over the first ``tau_epochs`` epochs
+  and hold it at ``tau1`` afterwards.
+- ``box_pretrain_epochs > 0``: run that many TBox-only epochs first (one epoch =
+  the same number of TBox steps as a joint epoch; :math:`\\tau` annealed and the
+  box learning rate cosine-decayed over the pre-training), then train jointly
+  with :math:`\\tau = \\tau_1` and the box group held at ``lr_final``.
+- ``crisp_every > 0``: record the reasoner-free crisp report
+  (``evaluate_model(use_reasoner=False)``) and the validation hierarchy violation
+  of the raw scores every ``crisp_every`` epochs in ``history``.
+
 Guarantees
 ----------
 - Reasoner-free (R1): never imports or calls any OWL reasoner or
@@ -132,6 +146,10 @@ def run_training(
     min_term_annotations: Optional[int] = None,
     predict_only: bool = False,
     tbox_every: int = 1,
+    tau_epochs: int = 0,
+    box_pretrain_epochs: int = 0,
+    crisp_every: int = 1,
+    crisp_n_eval: int = 10000,
 ) -> Dict[str, Any]:
     """Run DeepGO-SE GroundedEL training and write checkpoint, predictions, and metrics JSON."""
     if ont not in ("mf", "bp", "cc"):
@@ -236,19 +254,96 @@ def run_training(
     train_t0 = time.perf_counter()
     global_step = 0
 
+    tau_total = int(tau_epochs) if int(tau_epochs) > 0 else int(epochs)
+    term_pairs_np = split_data.tables.term_subclass_pairs.detach().cpu().numpy()
+
+    def _crisp_record() -> Dict[str, Any]:
+        "Reasoner-free crisp report of the current GO boxes (sampled, chunked; no reasoner)."
+        t0 = time.perf_counter()
+        model.module.eval()
+        with th.no_grad():
+            ev = model.grounded.evaluate_model(use_reasoner=False, n_eval=crisp_n_eval)
+        return {
+            "elem_viol": float(ev["elem_viol"]),
+            "region_viol": float(ev["region_viol"]),
+            "region_viol_tol1e-4": float(ev["region_viol_tol1e-4"]),
+            "exist": float(ev["exist"]),
+            "n_empty_classes": int(ev["n_empty_classes"]),
+            "n_dead_elements": int(ev["n_dead_elements"]),
+            "crisp_sec": float(time.perf_counter() - t0),
+        }
+
+    def _val_hier_viol(scores: th.Tensor) -> float:
+        "Fraction of (protein, direct G <= G2) pairs with s(p,G) > s(p,G2) + 1e-6 in raw scores."
+        if term_pairs_np.shape[0] == 0 or int(scores.shape[0]) == 0:
+            return 0.0
+        s = scores.numpy()
+        sub, sup = term_pairs_np[:, 0], term_pairs_np[:, 1]
+        return float(np.mean(s[:, sub] > s[:, sup] + 1e-6))
+
+    # Optional TBox-only pre-training (E3.2): tau annealed and box LR cosine-decayed over
+    # ``box_pretrain_epochs``; the joint phase then holds tau = tau1 and the box LR at lr_final.
+    pretrain_records: List[Dict[str, Any]] = []
+    n_pre = int(box_pretrain_epochs) if (not predict_only and lambda_tbox > 0.0) else 0
+    tbox_steps_per_epoch = max(1, math.ceil(steps_per_epoch / max(1, int(tbox_every))))
+    for pe in range(n_pre):
+        pe_t0 = time.perf_counter()
+        model.module.train()
+        cur_box_lr = model.grounded.scheduled_lr(
+            pe, n_pre, lr=lr_boxes, lr_final=lr_final, lr_schedule="cosine"
+        )
+        optimizer.param_groups[0]["lr"] = 0.0
+        optimizer.param_groups[1]["lr"] = float(cur_box_lr)
+        cur_tau = model.grounded.step_tau(pe, n_pre)
+        tbox_sum = 0.0
+        for _ in range(tbox_steps_per_epoch):
+            tbox_losses = model.grounded.compute_batch_losses()
+            tbox_total = lambda_tbox * tbox_losses["total"]
+            optimizer.zero_grad()
+            tbox_total.backward()
+            optimizer.step()
+            model.grounded.clamp_dead_logits()
+            tbox_sum += float(tbox_total.detach().item())
+        pre_rec: Dict[str, Any] = {
+            "epoch": pe + 1,
+            "train_tbox": tbox_sum / tbox_steps_per_epoch,
+            "tau": float(cur_tau),
+            "lr_boxes": float(cur_box_lr),
+            "epoch_sec": float(time.perf_counter() - pe_t0),
+        }
+        if crisp_every > 0 and ((pe + 1) % crisp_every == 0 or pe + 1 == n_pre):
+            pre_rec["crisp"] = _crisp_record()
+        pretrain_records.append(pre_rec)
+        cr = pre_rec.get("crisp")
+        cr_txt = (
+            f" region_viol={cr['region_viol']:.4f} elem_viol={cr['elem_viol']:.4f} "
+            f"empty={cr['n_empty_classes']} dead={cr['n_dead_elements']}"
+            if cr else ""
+        )
+        print(
+            f"[Pretrain {pe + 1:03d}/{n_pre:03d}] train_tbox={pre_rec['train_tbox']:.5f} "
+            f"tau={cur_tau:.4f} lr_boxes={cur_box_lr:.2e} time={pre_rec['epoch_sec']:.2f}s{cr_txt}",
+            flush=True,
+        )
+
     for epoch in range(epochs_to_run):
         ep_t0 = time.perf_counter()
         model.module.train()
 
-        # Cosine LR decay on the box group (group 1); encoder group (group 0) stays at lr_encoder
-        cur_box_lr = model.grounded.scheduled_lr(
-            epoch, epochs, lr=lr_boxes, lr_final=lr_final, lr_schedule="cosine"
-        )
+        if n_pre > 0:
+            # Boxes are pre-trained: hold tau at tau1 and the box group at the small final LR.
+            cur_box_lr = float(lr_final)
+            cur_tau = float(model.grounded.tau1)
+            model.grounded.module.set_tau(cur_tau)
+        else:
+            # Cosine LR decay on the box group (group 1); encoder group (group 0) stays at lr_encoder
+            cur_box_lr = model.grounded.scheduled_lr(
+                epoch, epochs, lr=lr_boxes, lr_final=lr_final, lr_schedule="cosine"
+            )
+            # Geometric tau annealing over the first ``tau_total`` epochs, then held at tau1
+            cur_tau = model.grounded.step_tau(min(epoch, tau_total - 1), tau_total)
         optimizer.param_groups[0]["lr"] = float(lr_encoder)
         optimizer.param_groups[1]["lr"] = float(cur_box_lr)
-
-        # Geometric tau annealing on the TBox memberships (as GroundedEL.train does)
-        cur_tau = model.grounded.step_tau(epoch, epochs)
 
         perm = th.randperm(n_train, generator=prot_gen)
         bce_sum = 0.0
@@ -302,7 +397,11 @@ def run_training(
         val_fmax, val_thresh = compute_fast_fmax(
             val_scores_cpu.numpy(), valid_labels_np
         )
+        val_hv = _val_hier_viol(val_scores_cpu)
         ep_sec = float(time.perf_counter() - ep_t0)
+        crisp_rec: Optional[Dict[str, Any]] = None
+        if crisp_every > 0 and ((epoch + 1) % crisp_every == 0 or epoch + 1 == epochs_to_run):
+            crisp_rec = _crisp_record()
 
         if val_bce < best_val_bce:
             best_val_bce = val_bce
@@ -322,6 +421,8 @@ def run_training(
                     "dim": dim,
                     "K": K,
                     "lambda_tbox": lambda_tbox,
+                    "tau_epochs": int(tau_epochs),
+                    "box_pretrain_epochs": int(box_pretrain_epochs),
                     "best_val_bce": best_val_bce,
                     "best_val_bce_epoch": best_val_bce_epoch,
                     "terms": split_data.terms,
@@ -342,6 +443,8 @@ def run_training(
             "val_bce": val_bce,
             "val_fmax": val_fmax,
             "val_best_threshold": val_thresh,
+            "val_hier_viol": val_hv,
+            "crisp": crisp_rec,
             "tau": float(cur_tau),
             "tau_s": float(model.tau_s.detach().item()),
             "lr_encoder": float(lr_encoder),
@@ -354,7 +457,14 @@ def run_training(
             f"train_bce={rec['train_bce']:.5f} train_tbox={rec['train_tbox']:.5f} "
             f"val_bce={val_bce:.5f} (best={best_val_bce:.5f} @ ep {best_val_bce_epoch}) "
             f"val_fmax={val_fmax:.4f} (best={best_val_fmax:.4f} @ ep {best_val_fmax_epoch}) "
-            f"tau={cur_tau:.4f} tau_s={rec['tau_s']:.4f} time={ep_sec:.2f}s",
+            f"val_hier_viol={val_hv:.4f} "
+            f"tau={cur_tau:.4f} tau_s={rec['tau_s']:.4f} time={ep_sec:.2f}s"
+            + (
+                f" | region_viol={crisp_rec['region_viol']:.4f} elem_viol={crisp_rec['elem_viol']:.4f} "
+                f"empty={crisp_rec['n_empty_classes']} dead={crisp_rec['n_dead_elements']} "
+                f"({crisp_rec['crisp_sec']:.1f}s)"
+                if crisp_rec else ""
+            ),
             flush=True,
         )
 
@@ -394,6 +504,10 @@ def run_training(
         "protein_batch": int(protein_batch),
         "tbox_batch": int(tbox_batch),
         "tbox_every": int(tbox_every),
+        "tau_epochs": int(tau_epochs),
+        "box_pretrain_epochs": int(box_pretrain_epochs),
+        "crisp_every": int(crisp_every),
+        "crisp_n_eval": int(crisp_n_eval),
         "lr_encoder": float(lr_encoder),
         "lr_boxes": float(lr_boxes),
         "lr_final": float(lr_final),
@@ -418,6 +532,7 @@ def run_training(
         "checkpoint_path": str(ckpt_path),
         "predictions_path": str(pred_id_path),
         "history": epoch_records,
+        "pretrain_history": pretrain_records,
     }
 
     metrics_id_path = out_ont_dir / f"metrics_{model_name}_{model_id}.json"
@@ -548,6 +663,31 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output directory for checkpoints, predictions, and metrics.",
     )
     parser.add_argument(
+        "--tau-epochs",
+        type=int,
+        default=0,
+        help="Anneal tau over the first N epochs, then hold tau1 (default 0 = over all epochs).",
+    )
+    parser.add_argument(
+        "--box-pretrain-epochs",
+        type=int,
+        default=0,
+        help="TBox-only pre-training epochs before joint training (default 0). Joint phase then "
+        "holds tau = tau1 and the box LR at --lr-final.",
+    )
+    parser.add_argument(
+        "--crisp-every",
+        type=int,
+        default=1,
+        help="Record the reasoner-free crisp report every N epochs (default 1; 0 disables).",
+    )
+    parser.add_argument(
+        "--crisp-n-eval",
+        type=int,
+        default=10000,
+        help="Sample budget of the per-epoch crisp report (default 10000).",
+    )
+    parser.add_argument(
         "--predict-only",
         action="store_true",
         help="Skip training; load {out}/{ont}/{model_name}_{model_id}.pt and write predictions and metrics.",
@@ -598,6 +738,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         max_train_proteins=args.max_train_proteins,
         min_term_annotations=args.min_term_annotations,
         predict_only=args.predict_only,
+        tau_epochs=args.tau_epochs,
+        box_pretrain_epochs=args.box_pretrain_epochs,
+        crisp_every=args.crisp_every,
+        crisp_n_eval=args.crisp_n_eval,
     )
     print(
         f"[TRAIN DONE] ont={res['ont']} model={res['model_name']}_{res['model_id']} "

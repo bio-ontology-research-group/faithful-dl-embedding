@@ -586,6 +586,7 @@ def test_grounded_train_1_epoch_evaluate_crisp_report_and_predict_only() -> None
         common = [
             "--ont", "cc", "--seed", "0", "--model-id", "0", "--dim", "8", "--K", "1",
             "--lambda-tbox", "1.0", "--epochs", "1", "--protein-batch", "5", "--tbox-batch", "8",
+            "--tau-epochs", "1", "--box-pretrain-epochs", "2", "--crisp-every", "1", "--crisp-n-eval", "50",
             "--device", "cpu", "--data-root", str(data_root), "--out", str(out_dir),
         ]
         assert train_mod.main(common) == 0
@@ -593,6 +594,13 @@ def test_grounded_train_1_epoch_evaluate_crisp_report_and_predict_only() -> None
         pred_p = cc_out / "test_predictions_grounded_esm_0.pkl"
         assert pred_p.is_file() and (cc_out / "grounded_esm_0.pt").is_file()
         preds_trained = np.stack(pd.read_pickle(pred_p)["preds"].to_list())
+        m0 = json.loads((cc_out / "metrics_grounded_esm_0.json").read_text(encoding="utf-8"))
+        assert m0["box_pretrain_epochs"] == 2 and len(m0["pretrain_history"]) == 2
+        assert isinstance(m0["pretrain_history"][-1]["crisp"]["region_viol"], float)
+        h0 = m0["history"][0]
+        assert isinstance(h0["val_hier_viol"], float) and 0.0 <= h0["val_hier_viol"] <= 1.0
+        assert isinstance(h0["crisp"]["region_viol"], float) and h0["crisp"]["n_empty_classes"] >= 0
+        assert h0["tau"] == 0.01  # joint phase after pre-training holds tau = tau1
 
         rc = evaluate_mod.main(
             ["--ont", "cc", "--model-name", "grounded_esm", "--model-ids", "0", "--n-models", "1",
@@ -603,6 +611,8 @@ def test_grounded_train_1_epoch_evaluate_crisp_report_and_predict_only() -> None
         ev = json.loads((cc_out / "eval_grounded_esm_avg_1_ids0.json").read_text(encoding="utf-8"))
         crisp = ev["crisp_report"]
         assert isinstance(crisp["region_viol"], float) and 0.0 <= crisp["region_viol"] <= 1.0
+        assert isinstance(ev["min_propagated"]["fmax"], float)
+        assert ev["min_propagated"]["fmax"] <= 1.0 and ev["min_propagated"]["aupr"] <= 1.0
         assert isinstance(crisp["elem_viol"], float)
         assert isinstance(crisp["n_empty_classes"], int)
 

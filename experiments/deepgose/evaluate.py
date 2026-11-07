@@ -190,6 +190,24 @@ def extract_ontology_term_pairs(
     return np.asarray(sorted(pairs), dtype=np.int64)
 
 
+def min_propagate_scores(raw_scores: np.ndarray, subclass_pairs: np.ndarray) -> np.ndarray:
+    """Min-propagate scores down the hierarchy: ``s'(p, G) = min(s(p, G), min_{G ⊑ G'} s(p, G'))``.
+
+    ``subclass_pairs`` must contain all *entailed* ``(sub_col, sup_col)`` pairs
+    (as :func:`extract_ontology_term_pairs` returns), so one pass suffices.
+    The result is hierarchy-consistent by construction (zero violations); it is
+    the dual of DeepGO's max-propagation to ancestors.
+    """
+    out = np.array(raw_scores, copy=True)
+    if subclass_pairs.shape[0] == 0 or out.shape[0] == 0:
+        return out
+    sub = np.asarray(subclass_pairs[:, 0], dtype=np.int64)
+    sup = np.asarray(subclass_pairs[:, 1], dtype=np.int64)
+    out_t = np.ascontiguousarray(out.T)  # (n_terms, N)
+    np.minimum.at(out_t, sub, np.asarray(raw_scores).T[sup])
+    return np.ascontiguousarray(out_t.T)
+
+
 def combine_prediction_matrices(
     matrices: Sequence[np.ndarray],
     combine: str = "avg",
@@ -481,16 +499,21 @@ def run_evaluation(
             axis=0,
         )
 
-    # 1. DeepGO-SE compute_metrics on raw and propagated scores
+    term_pairs = extract_ontology_term_pairs(go, terms_dict)
+    minprop_preds_arr = min_propagate_scores(raw_combined, term_pairs)
+
+    # 1. DeepGO-SE compute_metrics on raw, max-propagated and min-propagated scores
     raw_fmax, raw_smin, raw_tmax, raw_wfmax, raw_wtmax, raw_avg_auc, raw_aupr, raw_avg_ic, _ = (
         compute_metrics(base_test_df, go, terms_dict, terms, ont, raw_preds_arr)
     )
     prop_fmax, prop_smin, prop_tmax, prop_wfmax, prop_wtmax, prop_avg_auc, prop_aupr, prop_avg_ic, _ = (
         compute_metrics(base_test_df, go, terms_dict, terms, ont, prop_preds_arr)
     )
+    mp_fmax, mp_smin, mp_tmax, mp_wfmax, mp_wtmax, mp_avg_auc, mp_aupr, mp_avg_ic, _ = (
+        compute_metrics(base_test_df, go, terms_dict, terms, ont, minprop_preds_arr)
+    )
 
     # 2. Hierarchy consistency of raw scores (§3)
-    term_pairs = extract_ontology_term_pairs(go, terms_dict)
     hier_metrics = compute_hierarchy_consistency(
         raw_scores=raw_combined,
         subclass_pairs=term_pairs,
@@ -562,6 +585,16 @@ def run_evaluation(
             "avg_auc": float(prop_avg_auc),
             "avg_ic": float(prop_avg_ic),
         },
+        "min_propagated": {
+            "fmax": float(mp_fmax),
+            "smin": float(mp_smin),
+            "tmax": float(mp_tmax),
+            "wfmax": float(mp_wfmax),
+            "wtmax": float(mp_wtmax),
+            "aupr": float(mp_aupr),
+            "avg_auc": float(mp_avg_auc),
+            "avg_ic": float(mp_avg_ic),
+        },
         "hierarchy_consistency": hier_metrics,
         "crisp_report": tbox_report,
     }
@@ -612,6 +645,15 @@ def _print_summary_table(payload: Mapping[str, Any]) -> None:
     print(
         f"{'propagated':<12} {prop['fmax']:>8.4f} {prop['smin']:>10.4f} "
         f"{prop['aupr']:>8.4f} {prop['avg_auc']:>8.4f} {prop['tmax']:>7.2f}"
+    )
+    mp = payload.get("min_propagated") or {}
+    if mp:
+        print(
+            f"{'min-prop':<12} {mp['fmax']:>8.4f} {mp['smin']:>10.4f} "
+            f"{mp['aupr']:>8.4f} {mp['avg_auc']:>8.4f} {mp['tmax']:>7.2f}"
+        )
+    print(
+        ""
     )
     print("-" * 58)
     print(

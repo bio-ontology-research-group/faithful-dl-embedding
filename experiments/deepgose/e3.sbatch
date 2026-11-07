@@ -12,9 +12,13 @@
 # Slurm array job for E3 (DeepGO-SE inductive protein function prediction on ORIX).
 # TBox step: TBOX_BATCH rows every TBOX_EVERY protein batches (default 4096 every 4 = same rows per epoch as
 # 1024 every step; the larger, rarer step keeps nvidia-smi utilisation above the 75 % that orix requires).
-# First round (24 cells):
+# Cell line: ONT SEED KIND DIM K LAMBDA_TBOX [TAU_EPOCHS [PRETRAIN_EPOCHS]]  (last two default 0).
+# First round (24 cells, e3_cells.txt):
 #   ont in {cc, mf} x seed in {0, 1, 2} x
 #   {grounded d128 K1 lambda=1, grounded d128 K1 lambda=0, deepgozero_esm, mlp_esm}
+# Second round (E3.2, 12 cells, CELLS_FILE=.../e3r2_cells.txt, --array=0-11):
+#   ont in {cc, mf} x seed in {0, 1, 2} x {grounded_esm_tau8 (tau over 8 epochs), grounded_esm_pre16 (16 TBox-only
+#   pre-training epochs, then tau = 0.01 and box LR 1e-4)}; per-epoch crisp report and validation HierViol.
 
 set -euo pipefail
 
@@ -55,7 +59,10 @@ if [[ -z "${CELL_LINE}" ]]; then
     exit 1
 fi
 
-read -r ONT SEED KIND DIM K LAMBDA_TBOX <<< "${CELL_LINE}"
+read -r ONT SEED KIND DIM K LAMBDA_TBOX TAU_EPOCHS PRETRAIN_EPOCHS _rest <<< "${CELL_LINE}"
+TAU_EPOCHS="${TAU_EPOCHS:-0}"
+PRETRAIN_EPOCHS="${PRETRAIN_EPOCHS:-0}"
+CRISP_EVERY="${CRISP_EVERY:-1}"
 DEVICE="${DEVICE:-cuda}"
 TBOX_BATCH="${TBOX_BATCH:-4096}"
 TBOX_EVERY="${TBOX_EVERY:-4}"
@@ -63,9 +70,9 @@ GROUNDED_EPOCHS="${GROUNDED_EPOCHS:-64}"
 
 cd "${REPO_DIR}"
 
-echo "[RUN] task=${TASK_ID} ont=${ONT} seed=${SEED} kind=${KIND} dim=${DIM} K=${K} lambda_tbox=${LAMBDA_TBOX} device=${DEVICE}"
+echo "[RUN] task=${TASK_ID} ont=${ONT} seed=${SEED} kind=${KIND} dim=${DIM} K=${K} lambda_tbox=${LAMBDA_TBOX} tau_epochs=${TAU_EPOCHS} pretrain=${PRETRAIN_EPOCHS} device=${DEVICE}"
 
-if [[ "${KIND}" == "grounded_esm" || "${KIND}" == "grounded_esm_l0" ]]; then
+if [[ "${KIND}" == grounded_esm* ]]; then
     "${PYTHON}" -m experiments.deepgose.train \
         --ont "${ONT}" \
         --seed "${SEED}" \
@@ -77,6 +84,8 @@ if [[ "${KIND}" == "grounded_esm" || "${KIND}" == "grounded_esm_l0" ]]; then
         --epochs "${GROUNDED_EPOCHS}" \
         --protein-batch 128 \
         --tbox-batch "${TBOX_BATCH}" --tbox-every "${TBOX_EVERY}" \
+        --tau-epochs "${TAU_EPOCHS}" --box-pretrain-epochs "${PRETRAIN_EPOCHS}" \
+        --crisp-every "${CRISP_EVERY}" \
         --lr-encoder 5e-4 \
         --lr-boxes 1e-2 \
         --lr-final 1e-4 \
