@@ -48,6 +48,7 @@ FNAME_RE = re.compile(r"^eval_(?P<model>.+)_(?P<combine>avg|min|max)_(?P<n>\d+)_
 MODEL_ORDER = [
     "mlp_esm", "deepgozero_esm", "grounded_esm_l0", "grounded_esm",
     "grounded_esm_tau8", "grounded_esm_pre16", "grounded_esm_aux_tau8", "grounded_esm_aux_fast",
+    "grounded_esm_aux_tau8_d512", "grounded_esm_aux_tau8_k2",
 ]
 MODEL_LABEL = {
     "mlp_esm": "MLP (ESM2), BCE only",
@@ -58,6 +59,8 @@ MODEL_LABEL = {
     "grounded_esm_pre16": "GroundedEL (ESM2), λ_tbox = 1, 16 TBox-only pre-training epochs, then τ = 0.01",
     "grounded_esm_aux_tau8": "GroundedEL (ESM2), λ_tbox = 1, τ over 8 epochs, + Aux_G ⊑ Aux_G' materialised",
     "grounded_esm_aux_fast": "GroundedEL (ESM2), λ_tbox = 1, τ over 8 epochs, + Aux_G ⊑ Aux_G', constant box LR, TBox every step",
+    "grounded_esm_aux_tau8_d512": "GroundedEL (ESM2), as aux_tau8 with d = 512",
+    "grounded_esm_aux_tau8_k2": "GroundedEL (ESM2), as aux_tau8 with K = 2 boxes per class",
 }
 
 

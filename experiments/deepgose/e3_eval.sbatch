@@ -10,8 +10,10 @@
 
 # Post-hoc evaluation for E3: every single-seed model (eval_{model}_avg_1_ids{s}.json)
 # and the S-seed ensembles (avg and min over all seeds present), per ontology and model.
-# Usage: sbatch e3_eval.sbatch            (ONTS="cc mf", MODELS=all four, SEEDS="0 1 2")
+# Usage: sbatch e3_eval.sbatch            (ONTS="cc mf", MODELS=all known, SEEDS="0 1 2")
 #        ONTS=cc MODELS=grounded_esm sbatch e3_eval.sbatch;  FORCE=1 re-evaluates existing single-seed files
+#        SEEDS="0 1 2 3 4 5 6 7 8 9" TOPN=6 ...  selects the top-TOPN seeds by validation BCE for the ensembles
+#        (DeepGO-SE protocol: S = 10 trained, best 6 combined); TOPN unset = all seeds present.
 
 set -uo pipefail
 
@@ -29,7 +31,8 @@ mkdir -p "${LOG_DIR}" "${TMPDIR}"
 cd "${REPO_DIR}"
 
 ONTS="${ONTS:-cc mf}"
-MODELS="${MODELS:-grounded_esm grounded_esm_l0 deepgozero_esm mlp_esm grounded_esm_tau8 grounded_esm_pre16}"
+MODELS="${MODELS:-grounded_esm grounded_esm_l0 deepgozero_esm mlp_esm grounded_esm_tau8 grounded_esm_pre16 grounded_esm_aux_tau8 grounded_esm_aux_fast grounded_esm_aux_tau8_d512 grounded_esm_aux_tau8_k2}"
+TOPN="${TOPN:-}"
 SEEDS="${SEEDS:-0 1 2}"
 DEVICE="${DEVICE:-cuda}"
 
@@ -53,9 +56,10 @@ for ont in ${ONTS}; do
         2>&1 | tee -a "${LOG_DIR}/${ont}__${model}__eval__s${s}.log"
     done
     n=${#present[@]}
+    if [[ -n "${TOPN}" && ${TOPN} -lt ${n} ]]; then n=${TOPN}; fi
     if [[ ${n} -ge 2 ]]; then
       for comb in avg min; do
-        echo "[ensemble] ${ont} ${model} ${comb} over ${present[*]}"
+        echo "[ensemble] ${ont} ${model} ${comb} top-${n} of ${present[*]}"
         "${PYTHON}" -m experiments.deepgose.evaluate --ont "${ont}" --model-name "${model}" \
           --model-ids "${present[@]}" --n-models "${n}" --combine "${comb}" \
           --data-root "${DATA_ROOT}" --out "${OUT_DIR}" --device "${DEVICE}" \
