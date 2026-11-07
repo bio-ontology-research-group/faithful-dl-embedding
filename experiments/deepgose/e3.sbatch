@@ -12,7 +12,8 @@
 # Slurm array job for E3 (DeepGO-SE inductive protein function prediction on ORIX).
 # TBox step: TBOX_BATCH rows every TBOX_EVERY protein batches (default 4096 every 4 = same rows per epoch as
 # 1024 every step; the larger, rarer step keeps nvidia-smi utilisation above the 75 % that orix requires).
-# Cell line: ONT SEED KIND DIM K LAMBDA_TBOX [TAU_EPOCHS [PRETRAIN_EPOCHS]]  (last two default 0).
+# Cell line: ONT SEED KIND DIM K LAMBDA_TBOX [TAU_EPOCHS [PRETRAIN_EPOCHS [EXTRA train.py args...]]]
+#   (TAU_EPOCHS / PRETRAIN_EPOCHS default 0; EXTRA is appended verbatim, e.g. "--aux-subsumptions --tbox-every 1").
 # First round (24 cells, e3_cells.txt):
 #   ont in {cc, mf} x seed in {0, 1, 2} x
 #   {grounded d128 K1 lambda=1, grounded d128 K1 lambda=0, deepgozero_esm, mlp_esm}
@@ -59,7 +60,8 @@ if [[ -z "${CELL_LINE}" ]]; then
     exit 1
 fi
 
-read -r ONT SEED KIND DIM K LAMBDA_TBOX TAU_EPOCHS PRETRAIN_EPOCHS _rest <<< "${CELL_LINE}"
+read -r ONT SEED KIND DIM K LAMBDA_TBOX TAU_EPOCHS PRETRAIN_EPOCHS EXTRA_ARGS <<< "${CELL_LINE}"
+EXTRA_ARGS="${EXTRA_ARGS:-}"
 TAU_EPOCHS="${TAU_EPOCHS:-0}"
 PRETRAIN_EPOCHS="${PRETRAIN_EPOCHS:-0}"
 CRISP_EVERY="${CRISP_EVERY:-1}"
@@ -70,7 +72,7 @@ GROUNDED_EPOCHS="${GROUNDED_EPOCHS:-64}"
 
 cd "${REPO_DIR}"
 
-echo "[RUN] task=${TASK_ID} ont=${ONT} seed=${SEED} kind=${KIND} dim=${DIM} K=${K} lambda_tbox=${LAMBDA_TBOX} tau_epochs=${TAU_EPOCHS} pretrain=${PRETRAIN_EPOCHS} device=${DEVICE}"
+echo "[RUN] task=${TASK_ID} ont=${ONT} seed=${SEED} kind=${KIND} dim=${DIM} K=${K} lambda_tbox=${LAMBDA_TBOX} tau_epochs=${TAU_EPOCHS} pretrain=${PRETRAIN_EPOCHS} extra='${EXTRA_ARGS}' device=${DEVICE}"
 
 if [[ "${KIND}" == grounded_esm* ]]; then
     "${PYTHON}" -m experiments.deepgose.train \
@@ -92,6 +94,7 @@ if [[ "${KIND}" == grounded_esm* ]]; then
         --device "${DEVICE}" \
         --data-root "${DATA_ROOT}" \
         --out "${OUT_DIR}" \
+        ${EXTRA_ARGS} \
         2>&1 | tee "${LOG_DIR}/${ONT}__${KIND}__d${DIM}__K${K}__s${SEED}.log"
 elif [[ "${KIND}" == "deepgozero_esm" ]]; then
     "${PYTHON}" -m experiments.deepgose.baselines.train_deepgo \

@@ -106,6 +106,7 @@ class GONormTables:
     term_class_ids: th.Tensor
     go_term_class_ids: th.Tensor
     term_subclass_pairs: th.Tensor
+    aux_subsumptions: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialise into a plain dictionary suitable for :func:`torch.save`."""
@@ -124,6 +125,7 @@ class GONormTables:
             "term_class_ids": self.term_class_ids,
             "go_term_class_ids": self.go_term_class_ids,
             "term_subclass_pairs": self.term_subclass_pairs,
+            "aux_subsumptions": bool(self.aux_subsumptions),
         }
 
     @classmethod
@@ -144,6 +146,7 @@ class GONormTables:
             term_class_ids=d["term_class_ids"].to(dtype=th.long),
             go_term_class_ids=d["go_term_class_ids"].to(dtype=th.long),
             term_subclass_pairs=d["term_subclass_pairs"].to(dtype=th.long),
+            aux_subsumptions=bool(d.get("aux_subsumptions", False)),
         )
 
 
@@ -151,8 +154,18 @@ def parse_go_norm(
     norm_file: Union[str, Path],
     terms: Sequence[str],
     cache_path: Optional[Union[str, Path]] = None,
+    aux_subsumptions: bool = False,
 ) -> GONormTables:
     """Parse ``go.norm`` and ``terms`` into :class:`GONormTables` with ``Aux_G`` axioms.
+
+    With ``aux_subsumptions=True`` the *entailed* ``Aux_G SubClassOf Aux_G'`` is
+    materialised in ``gci0`` for every pair of predicted terms with
+    :math:`G \\sqsubseteq^* G'` (reflexive-transitive closure of the ``nf1``
+    axioms over all GO classes, restricted to pairs of predicted terms,
+    ``G != G'``). These are consequences of ``Aux_G ≡ ∃hasFunction.G`` and the
+    stated hierarchy, so adding them is sound; they make the hierarchy of the
+    protein scores (depth in ``Aux_G``) a direct region constraint instead of
+    one enforced only through the role boxes.
 
     Guarantees
     ----------
@@ -165,8 +178,9 @@ def parse_go_norm(
     - Appends one ``Aux_G`` class per term ``G`` in ``terms`` together with
       ``Aux_G SubClassOf hasFunction some G`` in ``gci2`` and
       ``hasFunction some G SubClassOf Aux_G`` in ``gci3``.
-    - If ``cache_path`` is provided and exists with matching ``terms``, loads
-      from ``cache_path``; otherwise writes ``cache_path`` atomically.
+    - If ``cache_path`` is provided and exists with matching ``terms`` and
+      ``aux_subsumptions``, loads from ``cache_path``; otherwise writes
+      ``cache_path`` atomically.
 
     Non-guarantees
     --------------
@@ -178,7 +192,9 @@ def parse_go_norm(
         cp = Path(cache_path)
         if cp.is_file():
             loaded = th.load(cp, map_location="cpu", weights_only=False)
-            if list(loaded.get("terms", [])) == terms_list:
+            if list(loaded.get("terms", [])) == terms_list and bool(
+                loaded.get("aux_subsumptions", False)
+            ) == bool(aux_subsumptions):
                 return GONormTables.from_dict(loaded)
 
     norm_path = Path(norm_file)
@@ -272,6 +288,29 @@ def parse_go_norm(
             sub_pairs_set.add((term_to_col[c_i], term_to_col[d_i]))
     sub_pairs_sorted = sorted(sub_pairs_set)
 
+    n_aux_subsumptions = 0
+    if aux_subsumptions:
+        # Entailed Aux_G <= Aux_G' for predicted terms G <=* G' (closure over all GO nf1 axioms).
+        parents: Dict[int, List[int]] = {}
+        for c_i, d_i in gci0_rows:
+            parents.setdefault(c_i, []).append(d_i)
+        term_to_aux: Dict[int, int] = dict(zip(go_term_class_ids_list, term_class_ids_list))
+        aux_rows: set[Tuple[int, int]] = set()
+        for g_idx in go_term_class_ids_list:
+            seen = {g_idx}
+            stack = [g_idx]
+            while stack:
+                cur = stack.pop()
+                for par in parents.get(cur, ()):
+                    if par not in seen:
+                        seen.add(par)
+                        stack.append(par)
+            for anc in seen:
+                if anc != g_idx and anc in term_to_aux:
+                    aux_rows.add((term_to_aux[g_idx], term_to_aux[anc]))
+        gci0_rows.extend(sorted(aux_rows))
+        n_aux_subsumptions = len(aux_rows)
+
     gci0_t = (
         th.tensor(gci0_rows, dtype=th.long)
         if gci0_rows
@@ -313,7 +352,10 @@ def parse_go_norm(
         term_class_ids=th.tensor(term_class_ids_list, dtype=th.long),
         go_term_class_ids=th.tensor(go_term_class_ids_list, dtype=th.long),
         term_subclass_pairs=term_subclass_pairs_t,
+        aux_subsumptions=bool(aux_subsumptions),
     )
+    if aux_subsumptions:
+        print(f"[go.norm] materialised {n_aux_subsumptions} Aux_G <= Aux_G' subsumptions", flush=True)
 
     if cache_path is not None:
         cp = Path(cache_path)
@@ -379,6 +421,7 @@ def load_deepgose_data(
     cache_dir: Optional[Union[str, Path]] = None,
     max_train_proteins: Optional[int] = None,
     min_term_annotations: Optional[int] = None,
+    aux_subsumptions: bool = False,
 ) -> DeepGOSESplitData:
     """Load ``train/valid/test_data.pkl``, ``terms.pkl``, and ``go.norm`` for ``ont``.
 
@@ -469,9 +512,12 @@ def load_deepgose_data(
     cache_path: Optional[Path] = None
     if cache_dir is not None:
         terms_hash = hashlib.sha1("\n".join(terms).encode("utf-8")).hexdigest()[:10]
-        cache_path = Path(cache_dir) / f"go_norm_tables_{ont}_{len(terms)}_{terms_hash}.pt"
+        suffix = "_auxsub" if aux_subsumptions else ""
+        cache_path = Path(cache_dir) / f"go_norm_tables_{ont}_{len(terms)}_{terms_hash}{suffix}.pt"
 
-    tables = parse_go_norm(norm_file, terms=terms, cache_path=cache_path)
+    tables = parse_go_norm(
+        norm_file, terms=terms, cache_path=cache_path, aux_subsumptions=aux_subsumptions
+    )
     return DeepGOSESplitData(
         ont=ont,
         terms=terms,

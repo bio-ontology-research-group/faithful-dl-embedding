@@ -150,6 +150,9 @@ def run_training(
     box_pretrain_epochs: int = 0,
     crisp_every: int = 1,
     crisp_n_eval: int = 10000,
+    aux_subsumptions: bool = False,
+    box_lr_schedule: str = "cosine",
+    lr_boxes_joint: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Run DeepGO-SE GroundedEL training and write checkpoint, predictions, and metrics JSON."""
     if ont not in ("mf", "bp", "cc"):
@@ -177,8 +180,12 @@ def run_training(
         cache_dir=out_ont_dir,
         max_train_proteins=max_train_proteins,
         min_term_annotations=min_term_annotations,
+        aux_subsumptions=aux_subsumptions,
     )
     load_wall_sec = float(time.perf_counter() - t_load0)
+    if box_lr_schedule not in ("cosine", "constant"):
+        raise ValueError(f"box_lr_schedule must be 'cosine' or 'constant', got {box_lr_schedule!r}")
+    eff_lr_boxes_joint = float(lr_final if lr_boxes_joint is None else lr_boxes_joint)
 
     eff_seed = int(seed)
     th.manual_seed(eff_seed)
@@ -331,15 +338,19 @@ def run_training(
         model.module.train()
 
         if n_pre > 0:
-            # Boxes are pre-trained: hold tau at tau1 and the box group at the small final LR.
-            cur_box_lr = float(lr_final)
+            # Boxes are pre-trained: hold tau at tau1 and the box group at lr_boxes_joint (default lr_final).
+            cur_box_lr = eff_lr_boxes_joint
             cur_tau = float(model.grounded.tau1)
             model.grounded.module.set_tau(cur_tau)
         else:
-            # Cosine LR decay on the box group (group 1); encoder group (group 0) stays at lr_encoder
-            cur_box_lr = model.grounded.scheduled_lr(
-                epoch, epochs, lr=lr_boxes, lr_final=lr_final, lr_schedule="cosine"
-            )
+            # Box group (group 1): cosine decay lr_boxes -> lr_final, or constant lr_boxes;
+            # encoder group (group 0) stays at lr_encoder
+            if box_lr_schedule == "constant":
+                cur_box_lr = float(lr_boxes)
+            else:
+                cur_box_lr = model.grounded.scheduled_lr(
+                    epoch, epochs, lr=lr_boxes, lr_final=lr_final, lr_schedule="cosine"
+                )
             # Geometric tau annealing over the first ``tau_total`` epochs, then held at tau1
             cur_tau = model.grounded.step_tau(min(epoch, tau_total - 1), tau_total)
         optimizer.param_groups[0]["lr"] = float(lr_encoder)
@@ -423,6 +434,8 @@ def run_training(
                     "lambda_tbox": lambda_tbox,
                     "tau_epochs": int(tau_epochs),
                     "box_pretrain_epochs": int(box_pretrain_epochs),
+                    "aux_subsumptions": bool(aux_subsumptions),
+                    "box_lr_schedule": box_lr_schedule,
                     "best_val_bce": best_val_bce,
                     "best_val_bce_epoch": best_val_bce_epoch,
                     "terms": split_data.terms,
@@ -508,6 +521,9 @@ def run_training(
         "box_pretrain_epochs": int(box_pretrain_epochs),
         "crisp_every": int(crisp_every),
         "crisp_n_eval": int(crisp_n_eval),
+        "aux_subsumptions": bool(aux_subsumptions),
+        "box_lr_schedule": box_lr_schedule,
+        "lr_boxes_joint": eff_lr_boxes_joint,
         "lr_encoder": float(lr_encoder),
         "lr_boxes": float(lr_boxes),
         "lr_final": float(lr_final),
@@ -688,6 +704,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Sample budget of the per-epoch crisp report (default 10000).",
     )
     parser.add_argument(
+        "--aux-subsumptions",
+        action="store_true",
+        help="Materialise the entailed Aux_G <= Aux_G' (for predicted terms G <=* G') as gci0 axioms.",
+    )
+    parser.add_argument(
+        "--box-lr-schedule",
+        choices=["cosine", "constant"],
+        default="cosine",
+        help="Box-group LR schedule in the joint phase: cosine lr-boxes -> lr-final (default) or constant.",
+    )
+    parser.add_argument(
+        "--lr-boxes-joint",
+        type=float,
+        default=None,
+        help="Box-group LR in the joint phase after pre-training (default: --lr-final).",
+    )
+    parser.add_argument(
         "--predict-only",
         action="store_true",
         help="Skip training; load {out}/{ont}/{model_name}_{model_id}.pt and write predictions and metrics.",
@@ -742,6 +775,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         box_pretrain_epochs=args.box_pretrain_epochs,
         crisp_every=args.crisp_every,
         crisp_n_eval=args.crisp_n_eval,
+        aux_subsumptions=args.aux_subsumptions,
+        box_lr_schedule=args.box_lr_schedule,
+        lr_boxes_joint=args.lr_boxes_joint,
     )
     print(
         f"[TRAIN DONE] ont={res['ont']} model={res['model_name']}_{res['model_id']} "

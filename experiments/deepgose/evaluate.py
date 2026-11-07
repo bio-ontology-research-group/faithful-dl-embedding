@@ -322,7 +322,12 @@ def evaluate_tbox_crisp_report(
     if not norm_file.is_file():
         norm_file = data_root / ont / "go.norm"
 
-    tables = parse_go_norm(norm_file, terms=terms, cache_path=None)
+    tables = parse_go_norm(
+        norm_file,
+        terms=terms,
+        cache_path=None,
+        aux_subsumptions=bool(ckpt.get("aux_subsumptions", False)),
+    )
     model = build_deepgose_grounded_model(
         tables=tables,
         embed_dim=dim,

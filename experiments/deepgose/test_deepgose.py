@@ -128,6 +128,35 @@ def test_parse_go_norm_20_line_fixture_shapes_and_aux_axioms() -> None:
         assert th.equal(cached_tables.gci2, tables.gci2)
         assert th.equal(cached_tables.gci3, tables.gci3)
 
+        # aux_subsumptions=True: cache with the other flag is not reused; the extra gci0 rows are
+        # exactly the Aux pairs of predicted terms G <=* G' entailed by the nf1 closure.
+        aux_tables = parse_go_norm(
+            norm_path, terms=predicted_terms, cache_path=cache_path, aux_subsumptions=True
+        )
+        assert aux_tables.aux_subsumptions is True
+        parents: dict = {}
+        for c_i, d_i in tables.gci0.tolist():
+            parents.setdefault(c_i, set()).add(d_i)
+        def ancestors(x: int) -> set:
+            out, stack = set(), [x]
+            while stack:
+                cur = stack.pop()
+                for p_ in parents.get(cur, ()):
+                    if p_ not in out:
+                        out.add(p_); stack.append(p_)
+            return out
+        expected = set()
+        for g in predicted_terms:
+            for h in predicted_terms:
+                if g != h and tables.class_index_dict[h] in ancestors(tables.class_index_dict[g]):
+                    expected.add((tables.class_index_dict[aux_class_name(g)], tables.class_index_dict[aux_class_name(h)]))
+        got = {tuple(r) for r in aux_tables.gci0.tolist()} - {tuple(r) for r in tables.gci0.tolist()}
+        assert got == expected and aux_tables.gci0.shape[0] == 8 + len(expected)
+        assert th.equal(aux_tables.term_subclass_pairs, tables.term_subclass_pairs)
+        assert th.equal(aux_tables.gci2, tables.gci2) and th.equal(aux_tables.gci3, tables.gci3)
+        # ... and the cache now holds the aux version; the plain call rebuilds without them
+        assert parse_go_norm(norm_path, terms=predicted_terms, cache_path=cache_path).gci0.shape == (8, 2)
+
 
 def test_data_loss_on_toy_encoder_decreases_over_20_steps() -> None:
     """2. Data loss on a toy encoder decreases monotonically over 20 Adam steps."""
@@ -587,6 +616,7 @@ def test_grounded_train_1_epoch_evaluate_crisp_report_and_predict_only() -> None
             "--ont", "cc", "--seed", "0", "--model-id", "0", "--dim", "8", "--K", "1",
             "--lambda-tbox", "1.0", "--epochs", "1", "--protein-batch", "5", "--tbox-batch", "8",
             "--tau-epochs", "1", "--box-pretrain-epochs", "2", "--crisp-every", "1", "--crisp-n-eval", "50",
+            "--aux-subsumptions", "--box-lr-schedule", "constant", "--lr-boxes-joint", "1e-3",
             "--device", "cpu", "--data-root", str(data_root), "--out", str(out_dir),
         ]
         assert train_mod.main(common) == 0
@@ -601,6 +631,7 @@ def test_grounded_train_1_epoch_evaluate_crisp_report_and_predict_only() -> None
         assert isinstance(h0["val_hier_viol"], float) and 0.0 <= h0["val_hier_viol"] <= 1.0
         assert isinstance(h0["crisp"]["region_viol"], float) and h0["crisp"]["n_empty_classes"] >= 0
         assert h0["tau"] == 0.01  # joint phase after pre-training holds tau = tau1
+        assert h0["lr_boxes"] == 1e-3 and m0["aux_subsumptions"] is True
 
         rc = evaluate_mod.main(
             ["--ont", "cc", "--model-name", "grounded_esm", "--model-ids", "0", "--n-models", "1",

@@ -47,7 +47,7 @@ DEFAULT_OUT = RESULTS_DIR / "DEEPGOSE.md"
 FNAME_RE = re.compile(r"^eval_(?P<model>.+)_(?P<combine>avg|min|max)_(?P<n>\d+)_ids(?P<ids>[\d-]+)\.json$")
 MODEL_ORDER = [
     "mlp_esm", "deepgozero_esm", "grounded_esm_l0", "grounded_esm",
-    "grounded_esm_tau8", "grounded_esm_pre16",
+    "grounded_esm_tau8", "grounded_esm_pre16", "grounded_esm_aux_tau8", "grounded_esm_aux_fast",
 ]
 MODEL_LABEL = {
     "mlp_esm": "MLP (ESM2), BCE only",
@@ -56,6 +56,8 @@ MODEL_LABEL = {
     "grounded_esm": "GroundedEL (ESM2), λ_tbox = 1",
     "grounded_esm_tau8": "GroundedEL (ESM2), λ_tbox = 1, τ annealed over first 8 epochs",
     "grounded_esm_pre16": "GroundedEL (ESM2), λ_tbox = 1, 16 TBox-only pre-training epochs, then τ = 0.01",
+    "grounded_esm_aux_tau8": "GroundedEL (ESM2), λ_tbox = 1, τ over 8 epochs, + Aux_G ⊑ Aux_G' materialised",
+    "grounded_esm_aux_fast": "GroundedEL (ESM2), λ_tbox = 1, τ over 8 epochs, + Aux_G ⊑ Aux_G', constant box LR, TBox every step",
 }
 
 
