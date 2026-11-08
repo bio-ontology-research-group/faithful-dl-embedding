@@ -31,7 +31,7 @@ mkdir -p "${LOG_DIR}" "${TMPDIR}"
 cd "${REPO_DIR}"
 
 ONTS="${ONTS:-cc mf}"
-MODELS="${MODELS:-grounded_esm grounded_esm_l0 deepgozero_esm mlp_esm grounded_esm_tau8 grounded_esm_pre16 grounded_esm_aux_tau8 grounded_esm_aux_fast grounded_esm_aux_tau8_d512 grounded_esm_aux_tau8_k2}"
+MODELS="${MODELS:-grounded_esm grounded_esm_l0 deepgozero_esm mlp_esm grounded_esm_tau8 grounded_esm_pre16 grounded_esm_aux_tau8 grounded_esm_aux_fast grounded_esm_aux_tau8_d512 grounded_esm_aux_tau8_k2 grounded_esm_aux_tau8_fsel grounded_esm_aux_tau8_d512_fsel grounded_esm_aux_tau8_k2_fsel}"
 TOPN="${TOPN:-}"
 SEEDS="${SEEDS:-0 1 2}"
 DEVICE="${DEVICE:-cuda}"

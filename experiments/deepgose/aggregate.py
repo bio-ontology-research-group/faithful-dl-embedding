@@ -36,7 +36,7 @@ import os
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -64,6 +64,24 @@ MODEL_LABEL = {
 }
 
 
+def _base_model(model: str) -> Tuple[str, bool]:
+    """``X_fsel`` (validation-Fmax checkpoint of ``X``) -> (``X``, True); otherwise (model, False)."""
+    if model.endswith("_fsel"):
+        return model[: -len("_fsel")], True
+    return model, False
+
+
+def _model_sort_key(model: str) -> Tuple[int, str, int]:
+    base, fsel = _base_model(model)
+    return (MODEL_ORDER.index(base) if base in MODEL_ORDER else 99, base, int(fsel))
+
+
+def _model_label(model: str) -> str:
+    base, fsel = _base_model(model)
+    label = MODEL_LABEL.get(base, base)
+    return f"{label}, checkpoint by val Fmax" if fsel else label
+
+
 def _load_rows(in_dir: Path) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     for ont_dir in sorted(p for p in in_dir.iterdir() if p.is_dir()):
@@ -82,7 +100,8 @@ def _load_rows(in_dir: Path) -> List[Dict[str, Any]]:
                 mp = ont_dir / f"metrics_{m.group('model')}_{ids[0]}.json"
                 if mp.is_file():
                     try:
-                        best_ep = int(json.loads(mp.read_text(encoding="utf-8")).get("best_val_bce_epoch"))
+                        _mj = json.loads(mp.read_text(encoding="utf-8"))
+                        best_ep = int(_mj.get("selected_epoch", _mj.get("best_val_bce_epoch")))
                     except Exception:
                         best_ep = None
             rows.append(
@@ -170,9 +189,9 @@ def render_markdown(rows: List[Dict[str, Any]]) -> str:
             if r["ont"] != ont:
                 continue
             (single[r["model"]].append(r) if r["n"] == 1 else ens.append(r))
-        models = sorted(single.keys() | {r["model"] for r in ens}, key=lambda m: (MODEL_ORDER.index(m) if m in MODEL_ORDER else 99, m))
+        models = sorted(single.keys() | {r["model"] for r in ens}, key=_model_sort_key)
         for model in models:
-            label = MODEL_LABEL.get(model, model)
+            label = _model_label(model)
             rs = single.get(model, [])
             if rs:
                 eps = sorted(r["best_epoch"] for r in rs if r["best_epoch"] is not None)

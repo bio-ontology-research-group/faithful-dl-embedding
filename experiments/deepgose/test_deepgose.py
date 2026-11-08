@@ -617,12 +617,20 @@ def test_grounded_train_1_epoch_evaluate_crisp_report_and_predict_only() -> None
             "--lambda-tbox", "1.0", "--epochs", "1", "--protein-batch", "5", "--tbox-batch", "8",
             "--tau-epochs", "1", "--box-pretrain-epochs", "2", "--crisp-every", "1", "--crisp-n-eval", "50",
             "--aux-subsumptions", "--box-lr-schedule", "constant", "--lr-boxes-joint", "1e-3",
+            "--fmax-checkpoint",
             "--device", "cpu", "--data-root", str(data_root), "--out", str(out_dir),
         ]
         assert train_mod.main(common) == 0
         cc_out = out_dir / "cc"
         pred_p = cc_out / "test_predictions_grounded_esm_0.pkl"
         assert pred_p.is_file() and (cc_out / "grounded_esm_0.pt").is_file()
+        # --fmax-checkpoint: a second model "grounded_esm_fsel" (best-val-Fmax checkpoint) with its own
+        # checkpoint, predictions and metrics (checkpoint_rule / selected_epoch).
+        assert (cc_out / "grounded_esm_fsel_0.pt").is_file()
+        assert (cc_out / "test_predictions_grounded_esm_fsel_0.pkl").is_file()
+        m_fsel = json.loads((cc_out / "metrics_grounded_esm_fsel_0.json").read_text(encoding="utf-8"))
+        assert m_fsel["checkpoint_rule"] == "val_fmax" and m_fsel["model_name"] == "grounded_esm_fsel"
+        assert m_fsel["selected_epoch"] == m_fsel["best_val_fmax_epoch"] >= 1
         preds_trained = np.stack(pd.read_pickle(pred_p)["preds"].to_list())
         m0 = json.loads((cc_out / "metrics_grounded_esm_0.json").read_text(encoding="utf-8"))
         assert m0["box_pretrain_epochs"] == 2 and len(m0["pretrain_history"]) == 2

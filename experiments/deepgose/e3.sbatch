@@ -20,6 +20,9 @@
 # Second round (E3.2, 12 cells, CELLS_FILE=.../e3r2_cells.txt, --array=0-11):
 #   ont in {cc, mf} x seed in {0, 1, 2} x {grounded_esm_tau8 (tau over 8 epochs), grounded_esm_pre16 (16 TBox-only
 #   pre-training epochs, then tau = 0.01 and box LR 1e-4)}; per-epoch crisp report and validation HierViol.
+# Third round (E3.3, e3r3_cells.txt): + Aux_G <= Aux_G' materialised; aux_fast = constant box LR, TBox every batch.
+# Step 3 (e3r4a_cells.txt: BP baselines; e3r4b_cells.txt: d512, K2, BP, seeds 3-9 of aux_tau8), FSEL=1 adds the
+#   best-val-Fmax checkpoint of every GroundedEL cell as ${KIND}_fsel (evaluated as its own model).
 
 set -euo pipefail
 
@@ -69,6 +72,8 @@ DEVICE="${DEVICE:-cuda}"
 TBOX_BATCH="${TBOX_BATCH:-4096}"
 TBOX_EVERY="${TBOX_EVERY:-4}"
 GROUNDED_EPOCHS="${GROUNDED_EPOCHS:-64}"
+FSEL="${FSEL:-1}"   # 1: GroundedEL cells also keep the best-val-Fmax checkpoint as ${KIND}_fsel and evaluate it
+FSEL_ARG=""; [[ "${FSEL}" == "1" ]] && FSEL_ARG="--fmax-checkpoint"
 
 cd "${REPO_DIR}"
 
@@ -94,7 +99,7 @@ if [[ "${KIND}" == grounded_esm* ]]; then
         --device "${DEVICE}" \
         --data-root "${DATA_ROOT}" \
         --out "${OUT_DIR}" \
-        ${EXTRA_ARGS} \
+        ${FSEL_ARG} ${EXTRA_ARGS} \
         2>&1 | tee "${LOG_DIR}/${ONT}__${KIND}__d${DIM}__K${K}__s${SEED}.log"
 elif [[ "${KIND}" == "deepgozero_esm" ]]; then
     "${PYTHON}" -m experiments.deepgose.baselines.train_deepgo \
@@ -135,3 +140,16 @@ fi
     --out "${OUT_DIR}" \
     --device "${DEVICE}" \
     2>&1 | tee -a "${LOG_DIR}/${ONT}__${KIND}__eval__s${SEED}.log"
+
+if [[ "${KIND}" == grounded_esm* && "${FSEL}" == "1" && -f "${OUT_DIR}/${ONT}/test_predictions_${KIND}_fsel_${SEED}.pkl" ]]; then
+    "${PYTHON}" -m experiments.deepgose.evaluate \
+        --ont "${ONT}" \
+        --model-name "${KIND}_fsel" \
+        --model-ids "${SEED}" \
+        --n-models 1 \
+        --combine avg \
+        --data-root "${DATA_ROOT}" \
+        --out "${OUT_DIR}" \
+        --device "${DEVICE}" \
+        2>&1 | tee -a "${LOG_DIR}/${ONT}__${KIND}_fsel__eval__s${SEED}.log"
+fi

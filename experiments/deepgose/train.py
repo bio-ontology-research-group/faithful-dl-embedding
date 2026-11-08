@@ -153,6 +153,7 @@ def run_training(
     aux_subsumptions: bool = False,
     box_lr_schedule: str = "cosine",
     lr_boxes_joint: Optional[float] = None,
+    fmax_checkpoint: bool = False,
 ) -> Dict[str, Any]:
     """Run DeepGO-SE GroundedEL training and write checkpoint, predictions, and metrics JSON."""
     if ont not in ("mf", "bp", "cc"):
@@ -226,6 +227,12 @@ def run_training(
     best_val_fmax = -1.0
     best_val_fmax_epoch = 0
     best_state_dict: Optional[Dict[str, th.Tensor]] = None
+    # Second checkpoint, selected by validation Fmax (``--fmax-checkpoint``). Written under the model
+    # name ``{model_name}_fsel`` so evaluate.py / aggregate.py treat it as a separate model at no extra
+    # training cost (the annealed TBox moves the BCE minimum to ~ep 10 while val Fmax peaks at ep 20-45).
+    fsel_name = f"{model_name}_fsel"
+    fsel_ckpt_path = out_ont_dir / f"{fsel_name}_{model_id}.pt"
+    best_fmax_state_dict: Optional[Dict[str, th.Tensor]] = None
 
     epoch_records: List[Dict[str, Any]] = []
     valid_labels_np = split_data.valid_labels.numpy()
@@ -447,6 +454,36 @@ def run_training(
         if val_fmax > best_val_fmax:
             best_val_fmax = val_fmax
             best_val_fmax_epoch = epoch + 1
+            if fmax_checkpoint:
+                best_fmax_state_dict = {
+                    k: v.detach().cpu().clone()
+                    for k, v in model.module.state_dict().items()
+                }
+                tmp_ckpt = fsel_ckpt_path.with_suffix(f".pt.tmp.{os.getpid()}")
+                th.save(
+                    {
+                        "state_dict": best_fmax_state_dict,
+                        "ont": ont,
+                        "seed": eff_seed,
+                        "model_id": model_id,
+                        "model_name": fsel_name,
+                        "dim": dim,
+                        "K": K,
+                        "lambda_tbox": lambda_tbox,
+                        "tau_epochs": int(tau_epochs),
+                        "box_pretrain_epochs": int(box_pretrain_epochs),
+                        "aux_subsumptions": bool(aux_subsumptions),
+                        "box_lr_schedule": box_lr_schedule,
+                        "checkpoint_rule": "val_fmax",
+                        "best_val_fmax": best_val_fmax,
+                        "best_val_fmax_epoch": best_val_fmax_epoch,
+                        "best_val_bce": val_bce,
+                        "best_val_bce_epoch": epoch + 1,
+                        "terms": split_data.terms,
+                    },
+                    tmp_ckpt,
+                )
+                tmp_ckpt.replace(fsel_ckpt_path)
 
         rec = {
             "epoch": epoch + 1,
@@ -541,6 +578,9 @@ def run_training(
         "best_val_bce_epoch": int(best_val_bce_epoch),
         "best_val_fmax": float(best_val_fmax),
         "best_val_fmax_epoch": int(best_val_fmax_epoch),
+        "checkpoint_rule": "val_bce",
+        "selected_epoch": int(best_val_bce_epoch),
+        "fmax_checkpoint": bool(fmax_checkpoint),
         "final_tau_s": float(model.tau_s.detach().item()),
         "load_wall_sec": load_wall_sec,
         "train_wall_sec": train_wall_sec,
@@ -559,6 +599,41 @@ def run_training(
             json.dump(metrics_payload, fh, indent=2, sort_keys=True)
             fh.write("\n")
         tmp_m.replace(m_target)
+
+    if fmax_checkpoint and best_fmax_state_dict is not None:
+        # Predictions and metrics of the validation-Fmax checkpoint under ``{model_name}_fsel``.
+        model.module.load_state_dict(
+            {k: v.to(eff_device) for k, v in best_fmax_state_dict.items()}
+        )
+        fsel_scores_np = predict_in_batches(
+            model, split_data.test_features, batch_size=max(protein_batch, 256)
+        ).numpy()
+        fsel_df = split_data.test_df.copy()
+        fsel_df["preds"] = list(fsel_scores_np)
+        fsel_pred_path = out_ont_dir / f"test_predictions_{fsel_name}_{model_id}.pkl"
+        tmp_p = fsel_pred_path.with_suffix(f".pkl.tmp.{os.getpid()}")
+        fsel_df.to_pickle(tmp_p)
+        tmp_p.replace(fsel_pred_path)
+        fsel_payload = dict(metrics_payload)
+        fsel_payload.update(
+            {
+                "model_name": fsel_name,
+                "checkpoint_rule": "val_fmax",
+                "selected_epoch": int(best_val_fmax_epoch),
+                "checkpoint_path": str(fsel_ckpt_path),
+                "predictions_path": str(fsel_pred_path),
+            }
+        )
+        fsel_metrics_path = out_ont_dir / f"metrics_{fsel_name}_{model_id}.json"
+        tmp_m = fsel_metrics_path.with_suffix(f".json.tmp.{os.getpid()}")
+        with open(tmp_m, "w", encoding="utf-8") as fh:
+            json.dump(fsel_payload, fh, indent=2, sort_keys=True)
+            fh.write("\n")
+        tmp_m.replace(fsel_metrics_path)
+        print(
+            f"[fsel] val-Fmax checkpoint @ ep {best_val_fmax_epoch} (val_fmax={best_val_fmax:.4f}) -> "
+            f"{fsel_pred_path.name}"
+        )
 
     return metrics_payload
 
@@ -721,6 +796,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Box-group LR in the joint phase after pre-training (default: --lr-final).",
     )
     parser.add_argument(
+        "--fmax-checkpoint",
+        action="store_true",
+        help="Also keep the best-validation-Fmax checkpoint and write its predictions/metrics under "
+        "{model_name}_fsel (evaluated as a separate model; no extra training).",
+    )
+    parser.add_argument(
         "--predict-only",
         action="store_true",
         help="Skip training; load {out}/{ont}/{model_name}_{model_id}.pt and write predictions and metrics.",
@@ -778,6 +859,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         aux_subsumptions=args.aux_subsumptions,
         box_lr_schedule=args.box_lr_schedule,
         lr_boxes_joint=args.lr_boxes_joint,
+        fmax_checkpoint=bool(args.fmax_checkpoint),
     )
     print(
         f"[TRAIN DONE] ont={res['ont']} model={res['model_name']}_{res['model_id']} "
