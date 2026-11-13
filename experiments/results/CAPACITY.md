@@ -44,9 +44,9 @@ The Box²EL benchmark ontologies (`galen_j24`, `go_j24`, `anatomy_j24`) are left
 
 ## (iii) Budget curve: sound compression under a total interval budget (B2)
 
-Target = n + f·(T_exact − n) intervals (n classes with ≥ 1 interval); the globally smallest gaps are filled first, then the model is re-closed. `protect = disjoint` skips gaps whose filling makes a block unsatisfiable at once (the target may then be unreachable). P/R (live) are over named classes still satisfiable.
+Target = n + f·(T_exact − n) intervals (n classes with ≥ 1 interval); the globally smallest gaps are filled first, then the model is re-closed. `protect = disjoint` skips gaps whose filling makes a block unsatisfiable at once (the target may then be unreachable). `cost` ranks the gaps: `size` = blocks in the gap, `weight` = labels added once subclasses inherit. P/R (live) are over named classes still satisfiable. A status `aborted: out of memory` marks the last model computable under a 40 GB limit.
 
-### pizza, protect = disjoint
+### pizza, protect = disjoint, cost = size
 
 | f | target | achieved intervals | params | max runs | named made unsat | P (live) | R (live) | false pairs / class | label inflation | check_model = 0 | status |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -64,7 +64,25 @@ Target = n + f·(T_exact − n) intervals (n classes with ≥ 1 interval); the g
 | 0.02 | 107 | 120 | 804 | 3 | 0 | 0.7044 | 1.0000 | 0.97 | 1.820 | yes | target not reachable (protected) |
 | 0 | 106 | 120 | 804 | 3 | 0 | 0.7044 | 1.0000 | 0.97 | 1.820 | yes | target not reachable (protected) |
 
-### pizza, protect = none
+### pizza, protect = disjoint, cost = weight
+
+| f | target | achieved intervals | params | max runs | named made unsat | P (live) | R (live) | false pairs / class | label inflation | check_model = 0 | status |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 139 | 139 | 836 | 5 | 0 | 1.0000 | 1.0000 | 0.00 | 1.000 | yes | ok |
+| 0.9 | 136 | 136 | 824 | 5 | 0 | 0.9912 | 1.0000 | 0.02 | 1.006 | yes | ok |
+| 0.8 | 132 | 132 | 816 | 5 | 0 | 0.9912 | 1.0000 | 0.02 | 1.014 | yes | ok |
+| 0.7 | 129 | 129 | 798 | 5 | 0 | 0.9825 | 1.0000 | 0.04 | 1.035 | yes | ok |
+| 0.6 | 126 | 126 | 792 | 4 | 0 | 0.9532 | 1.0000 | 0.11 | 1.076 | yes | ok |
+| 0.5 | 122 | 122 | 784 | 3 | 0 | 0.9372 | 1.0000 | 0.15 | 1.129 | yes | ok |
+| 0.4 | 119 | 119 | 778 | 3 | 0 | 0.9295 | 1.0000 | 0.18 | 1.233 | yes | ok |
+| 0.3 | 116 | 120 | 804 | 3 | 0 | 0.7044 | 1.0000 | 0.97 | 1.820 | yes | target not reachable (protected) |
+| 0.2 | 113 | 120 | 804 | 3 | 0 | 0.7044 | 1.0000 | 0.97 | 1.820 | yes | target not reachable (protected) |
+| 0.1 | 109 | 120 | 804 | 3 | 0 | 0.7044 | 1.0000 | 0.97 | 1.820 | yes | target not reachable (protected) |
+| 0.05 | 108 | 120 | 804 | 3 | 0 | 0.7044 | 1.0000 | 0.97 | 1.820 | yes | target not reachable (protected) |
+| 0.02 | 107 | 120 | 804 | 3 | 0 | 0.7044 | 1.0000 | 0.97 | 1.820 | yes | target not reachable (protected) |
+| 0 | 106 | 120 | 804 | 3 | 0 | 0.7044 | 1.0000 | 0.97 | 1.820 | yes | target not reachable (protected) |
+
+### pizza, protect = none, cost = size
 
 | f | target | achieved intervals | params | max runs | named made unsat | P (live) | R (live) | false pairs / class | label inflation | check_model = 0 | status |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -81,6 +99,94 @@ Target = n + f·(T_exact − n) intervals (n classes with ≥ 1 interval); the g
 | 0.05 | 108 | 45 | 135 | 1 | 59 | 1.0000 | 1.0000 | 0.00 | 1.359 | yes | ok |
 | 0.02 | 107 | 45 | 135 | 1 | 59 | 1.0000 | 1.0000 | 0.00 | 1.359 | yes | ok |
 | 0 | 106 | 45 | 135 | 1 | 59 | 1.0000 | 1.0000 | 0.00 | 1.359 | yes | ok |
+
+### go, protect = disjoint, cost = size
+
+| f | target | achieved intervals | params | max runs | named made unsat | P (live) | R (live) | false pairs / class | label inflation | check_model = 0 | status |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 408,202 | 408,202 | 1,257,320 | 9,958 | 0 | 1.0000 | 1.0000 | 0.00 | 1.000 | yes | ok |
+| 0.9 | 373,001 | 353,819 | 1,102,900 | 3,083 | 5 | 0.9858 | 1.0000 | 0.10 | 1.267 | yes | ok |
+| 0.8 | 337,800 | 347,853 | 1,097,127 | 1,931 | 5 | 0.9605 | 1.0000 | 0.30 | 1.421 | yes | aborted: out of memory in re-closure |
+
+### go, protect = disjoint, cost = weight
+
+| f | target | achieved intervals | params | max runs | named made unsat | P (live) | R (live) | false pairs / class | label inflation | check_model = 0 | status |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 408,202 | 408,202 | 1,257,320 | 9,958 | 0 | 1.0000 | 1.0000 | 0.00 | 1.000 | yes | ok |
+| 0.9 | 373,001 | 372,545 | 1,160,227 | 6,482 | 10 | 0.9761 | 1.0000 | 0.18 | 1.179 | yes | ok |
+| 0.8 | 337,800 | 337,582 | 1,070,762 | 2,664 | 252 | 0.8535 | 1.0000 | 1.23 | 1.608 | yes | ok |
+| 0.7 | 302,598 | 36,273 | 93,282 | 190 | 30,628 | 0.3074 | 1.0000 | 11.75 | 5.191 | yes | ok |
+| 0.6 | 267,397 | 36,273 | 93,282 | 190 | 30,628 | 0.3074 | 1.0000 | 11.75 | 5.191 | yes | ok |
+| 0.5 | 232,196 | 36,273 | 93,282 | 190 | 30,628 | 0.3074 | 1.0000 | 11.75 | 5.191 | yes | ok |
+| 0.4 | 196,995 | 36,273 | 93,282 | 190 | 30,628 | 0.3074 | 1.0000 | 11.75 | 5.191 | yes | ok |
+| 0.3 | 161,794 | 36,273 | 93,282 | 190 | 30,628 | 0.3074 | 1.0000 | 11.75 | 5.191 | yes | ok |
+| 0.2 | 126,592 | 36,273 | 93,282 | 190 | 30,628 | 0.3074 | 1.0000 | 11.75 | 5.191 | yes | ok |
+| 0.1 | 91,391 | 36,273 | 93,282 | 190 | 30,628 | 0.3074 | 1.0000 | 11.75 | 5.191 | yes | ok |
+| 0.05 | 73,791 | 36,273 | 93,282 | 190 | 30,628 | 0.3074 | 1.0000 | 11.75 | 5.191 | yes | ok |
+| 0.02 | 63,230 | 36,273 | 93,282 | 190 | 30,628 | 0.3074 | 1.0000 | 11.75 | 5.191 | yes | ok |
+| 0 | 56,190 | 36,273 | 93,282 | 190 | 30,628 | 0.3074 | 1.0000 | 11.75 | 5.191 | yes | ok |
+
+### go, protect = none, cost = size
+
+| f | target | achieved intervals | params | max runs | named made unsat | P (live) | R (live) | false pairs / class | label inflation | check_model = 0 | status |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 408,202 | 408,202 | 1,257,320 | 9,958 | 0 | 1.0000 | 1.0000 | 0.00 | 1.000 | yes | ok |
+| 0.9 | 373,001 | 353,781 | 1,102,941 | 3,083 | 5 | 0.9856 | 1.0000 | 0.11 | 1.268 | yes | ok |
+| 0.8 | 337,800 | 337,249 | 1,068,881 | 1,774 | 115 | 0.9408 | 1.0000 | 0.45 | 1.515 | yes | ok |
+
+### foodon, protect = disjoint, cost = size
+
+| f | target | achieved intervals | params | max runs | named made unsat | P (live) | R (live) | false pairs / class | label inflation | check_model = 0 | status |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 45,040 | 45,040 | 153,689 | 642 | 0 | 1.0000 | 1.0000 | 0.00 | 1.000 | yes | ok |
+| 0.9 | 43,449 | 43,158 | 147,849 | 475 | 0 | 0.9968 | 1.0000 | 0.01 | 1.010 | yes | ok |
+| 0.8 | 41,859 | 41,859 | 144,240 | 277 | 0 | 0.9873 | 1.0000 | 0.04 | 1.027 | yes | ok |
+| 0.7 | 40,269 | 40,269 | 139,200 | 203 | 0 | 0.9432 | 1.0000 | 0.19 | 1.090 | yes | ok |
+| 0.6 | 38,678 | 38,677 | 133,832 | 125 | 0 | 0.8422 | 1.0000 | 0.60 | 1.230 | yes | ok |
+| 0.5 | 37,087 | 37,079 | 127,885 | 78 | 0 | 0.6564 | 1.0000 | 1.67 | 1.637 | yes | ok |
+| 0.4 | 35,497 | 35,494 | 124,223 | 63 | 0 | 0.4424 | 1.0000 | 4.02 | 2.578 | yes | ok |
+| 0.3 | 33,907 | 33,886 | 120,464 | 44 | 1 | 0.1919 | 1.0000 | 13.42 | 5.688 | yes | ok |
+| 0.2 | 32,316 | 32,711 | 103,531 | 37 | 6 | 0.0217 | 1.0000 | 143.51 | 36.423 | yes | target not reachable (protected) |
+| 0.1 | 30,725 | 32,711 | 103,531 | 37 | 6 | 0.0217 | 1.0000 | 143.51 | 36.423 | yes | target not reachable (protected) |
+| 0.05 | 29,930 | 32,711 | 103,531 | 37 | 6 | 0.0217 | 1.0000 | 143.51 | 36.423 | yes | target not reachable (protected) |
+| 0.02 | 29,453 | 32,711 | 103,531 | 37 | 6 | 0.0217 | 1.0000 | 143.51 | 36.423 | yes | target not reachable (protected) |
+| 0 | 29,135 | 32,711 | 103,531 | 37 | 6 | 0.0217 | 1.0000 | 143.51 | 36.423 | yes | target not reachable (protected) |
+
+### foodon, protect = disjoint, cost = weight
+
+| f | target | achieved intervals | params | max runs | named made unsat | P (live) | R (live) | false pairs / class | label inflation | check_model = 0 | status |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 45,040 | 45,040 | 153,689 | 642 | 0 | 1.0000 | 1.0000 | 0.00 | 1.000 | yes | ok |
+| 0.9 | 43,449 | 43,449 | 149,079 | 498 | 0 | 0.9947 | 1.0000 | 0.02 | 1.010 | yes | ok |
+| 0.8 | 41,859 | 41,852 | 144,484 | 303 | 0 | 0.9709 | 1.0000 | 0.10 | 1.044 | yes | ok |
+| 0.7 | 40,269 | 40,268 | 139,192 | 208 | 0 | 0.8982 | 1.0000 | 0.36 | 1.134 | yes | ok |
+| 0.6 | 38,678 | 38,678 | 133,900 | 131 | 0 | 0.7587 | 1.0000 | 1.01 | 1.348 | yes | ok |
+| 0.5 | 37,087 | 37,087 | 127,268 | 73 | 10 | 0.4813 | 1.0000 | 3.43 | 2.296 | yes | ok |
+| 0.4 | 35,497 | 34,620 | 112,974 | 122 | 1,467 | 0.2989 | 1.0000 | 7.51 | 3.803 | yes | ok |
+| 0.3 | 33,907 | 33,907 | 110,183 | 60 | 1,467 | 0.2981 | 1.0000 | 7.54 | 3.822 | yes | ok |
+| 0.2 | 32,316 | 14,879 | 34,939 | 29 | 14,530 | 0.3046 | 1.0000 | 5.75 | 3.010 | yes | ok |
+| 0.1 | 30,725 | 14,879 | 34,939 | 29 | 14,530 | 0.3046 | 1.0000 | 5.75 | 3.010 | yes | ok |
+| 0.05 | 29,930 | 14,879 | 34,939 | 29 | 14,530 | 0.3046 | 1.0000 | 5.75 | 3.010 | yes | ok |
+| 0.02 | 29,453 | 14,879 | 34,939 | 29 | 14,530 | 0.3046 | 1.0000 | 5.75 | 3.010 | yes | ok |
+| 0 | 29,135 | 14,879 | 34,939 | 29 | 14,530 | 0.3046 | 1.0000 | 5.75 | 3.010 | yes | ok |
+
+### foodon, protect = none, cost = size
+
+| f | target | achieved intervals | params | max runs | named made unsat | P (live) | R (live) | false pairs / class | label inflation | check_model = 0 | status |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 45,040 | 45,040 | 153,689 | 642 | 0 | 1.0000 | 1.0000 | 0.00 | 1.000 | yes | ok |
+| 0.9 | 43,449 | 43,158 | 147,849 | 475 | 0 | 0.9968 | 1.0000 | 0.01 | 1.010 | yes | ok |
+| 0.8 | 41,859 | 41,778 | 143,943 | 278 | 16 | 0.9873 | 1.0000 | 0.04 | 1.027 | yes | ok |
+| 0.7 | 40,269 | 40,197 | 138,921 | 200 | 16 | 0.9441 | 1.0000 | 0.19 | 1.089 | yes | ok |
+| 0.6 | 38,678 | 38,675 | 133,729 | 124 | 17 | 0.8500 | 1.0000 | 0.56 | 1.218 | yes | ok |
+| 0.5 | 37,087 | 37,087 | 128,003 | 72 | 21 | 0.6764 | 1.0000 | 1.52 | 1.576 | yes | ok |
+| 0.4 | 35,497 | 35,307 | 123,363 | 41 | 106 | 0.4740 | 1.0000 | 3.51 | 2.364 | yes | ok |
+| 0.3 | 33,907 | 27,375 | 87,894 | 40 | 4,101 | 0.4051 | 1.0000 | 3.55 | 2.881 | yes | ok |
+| 0.2 | 32,316 | 27,375 | 87,894 | 40 | 4,101 | 0.4051 | 1.0000 | 3.55 | 2.881 | yes | ok |
+| 0.1 | 30,725 | 27,375 | 87,894 | 40 | 4,101 | 0.4051 | 1.0000 | 3.55 | 2.881 | yes | ok |
+| 0.05 | 29,930 | 27,375 | 87,894 | 40 | 4,101 | 0.4051 | 1.0000 | 3.55 | 2.881 | yes | ok |
+| 0.02 | 29,453 | 27,375 | 87,894 | 40 | 4,101 | 0.4051 | 1.0000 | 3.55 | 2.881 | yes | ok |
+| 0 | 29,135 | 27,375 | 87,894 | 40 | 4,101 | 0.4051 | 1.0000 | 3.55 | 2.881 | yes | ok |
 
 ## (iii-b) SUPERSEDED: per-class budget, at most K intervals per class (B2)
 

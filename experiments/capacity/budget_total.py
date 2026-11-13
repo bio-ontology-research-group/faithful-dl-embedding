@@ -78,6 +78,24 @@ from experiments.capacity.common import (
 DEFAULT_OUT = CAPACITY_RAW_DIR / "budget-total"
 FRACTIONS = (1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05, 0.02, 0.0)
 PROTECT_MODES = ("none", "disjoint")
+COSTS = ("size", "weight")
+
+
+def block_weights(lm) -> np.ndarray:
+    """Number of blocks that inherit a new label of block ``b``.
+
+    A fact ``(b, A)`` reaches every block labelled with the class of ``b`` (its
+    subclasses and instances), so the weight of a class block is the size of its
+    class's column (the largest one if several classes share the block); other
+    blocks have weight 1.
+    """
+    col = np.asarray(lm.labels.tocsc().getnnz(axis=0)).ravel().astype(np.int64)
+    w = np.ones(lm.n_blocks, dtype=np.int64)
+    cls = np.arange(lm.nb_classes)
+    if lm.top_id is not None:
+        cls = cls[cls != lm.top_id]
+    np.maximum.at(w, lm.element_map[cls], col[cls])
+    return w
 
 
 def all_gaps(real) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -189,6 +207,7 @@ def compress_total(
     max_iter: int = 200,
     deadline: Optional[float] = None,
     verbose: bool = False,
+    cost: str = "size",
 ) -> Iterator[Dict[str, Any]]:
     """Yield the compressed model of every fraction (descending, warm-started).
 
@@ -207,6 +226,10 @@ def compress_total(
         Cap on fill/re-closure rounds per fraction.
     deadline : float, optional
         ``time.perf_counter()`` value after which the run stops between rounds.
+    cost : str
+        Gap cost that decides the filling order: ``"size"`` (number of blocks in the gap)
+        or ``"weight"`` (sum of :func:`block_weights` over the gap, i.e. an estimate of
+        the number of labels the filling adds once subclasses inherit them).
 
     Yields
     ------
@@ -256,7 +279,14 @@ def compress_total(
                 status = "target not reachable (protected)"
                 break
             size = hi - lo
-            sel = np.lexsort((lo, cls, size))[:excess]
+            if cost == "weight":
+                cw = np.concatenate(([0], np.cumsum(block_weights(lm)[order_r])))
+                gap_cost = cw[hi] - cw[lo]
+            elif cost == "size":
+                gap_cost = size
+            else:
+                raise ValueError(f"cost must be one of {COSTS}")
+            sel = np.lexsort((lo, cls, gap_cost))[:excess]
             lengths = size[sel]
             tot = int(lengths.sum())
             pos = np.repeat(lo[sel], lengths) + (
@@ -267,7 +297,14 @@ def compress_total(
             it += 1
             t0 = time.perf_counter()
             facts = np.stack([np.concatenate(fb), np.concatenate(fc)], axis=1)
-            lm = kb.least_model(method="iteration", extra_facts=facts)
+            try:
+                lm = kb.least_model(method="iteration", extra_facts=facts)
+            except MemoryError:
+                # the re-closure exploded (labels of a general class spread everywhere):
+                # report the last model that could be computed and stop the curve
+                status = "aborted: out of memory in re-closure"
+                fb.pop(), fc.pop(), sizes_filled.pop()
+                break
             log.append({
                 "iteration": it,
                 "excess": excess,
@@ -305,9 +342,11 @@ def compress_total(
             return
 
 
-def out_name(dataset: str, fraction: float, protect: str, order: str = "dfs") -> str:
+def out_name(dataset: str, fraction: float, protect: str, order: str = "dfs",
+             cost: str = "size") -> str:
     """File stem of one result."""
     tag = "" if order == "dfs" else f"__{order}"
+    tag += "" if cost == "size" else f"__{cost}"
     return f"{dataset}__f{fraction:g}__{protect}{tag}"
 
 
@@ -325,6 +364,7 @@ def run_budget_total(
     write: bool = True,
     skip_existing: bool = False,
     keep_facts: bool = False,
+    cost: str = "size",
 ) -> List[Dict[str, Any]]:
     """Run the total-budget curve of one dataset and one protect setting.
 
@@ -355,7 +395,7 @@ def run_budget_total(
     out_dir = Path(out_dir)
     fr = sorted({float(x) for x in fractions}, reverse=True)
     if skip_existing and write and all(
-            (out_dir / f"{out_name(dataset, f, protect, order)}.json").exists() for f in fr):
+            (out_dir / f"{out_name(dataset, f, protect, order, cost)}.json").exists() for f in fr):
         print(f"[budget-total] {dataset} protect={protect}: all results exist, skipped", flush=True)
         return []
     t_start = time.perf_counter()
@@ -375,11 +415,12 @@ def run_budget_total(
     results: List[Dict[str, Any]] = []
     t0 = time.perf_counter()
     for res in compress_total(kb, lm_exact, o, fr, protect=protect, deadline=deadline,
-                              verbose=write):
+                              verbose=write, cost=cost):
         payload: Dict[str, Any] = {
             "dataset": dataset,
             "mode": "total",
             "protect": protect,
+            "cost": cost,
             "order_info": info,
             "sizes": kb.sizes(),
             "reference_available": ref is not None,
@@ -389,7 +430,7 @@ def run_budget_total(
         payload["achieved_total"] = payload["total_intervals"]
         payload["wall_time_s"] = time.perf_counter() - t0
         payload["peak_rss_gb"] = peak_rss_gb()
-        stem = out_name(dataset, res["fraction"], protect, order)
+        stem = out_name(dataset, res["fraction"], protect, order, cost)
         if write:
             write_json(payload, out_dir / f"{stem}.json")
             if not payload["check_model_all_zero"]:
@@ -398,7 +439,7 @@ def run_budget_total(
             payload["facts"] = res["facts"]
         results.append(payload)
         print(
-            f"[budget-total] {dataset} {protect} f={res['fraction']:g}: target={res['target_total']} "
+            f"[budget-total] {dataset} {protect} {cost} f={res['fraction']:g}: target={res['target_total']} "
             f"achieved={payload['achieved_total']} it={res['iterations']} status={res['status']} "
             f"unsat+={payload['n_named_made_unsat']} P_live={payload.get('precision_live')} "
             f"R_live={payload.get('recall_live')} fp/class={payload.get('false_pairs_per_class_live')} "
@@ -417,6 +458,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    help=f"Dataset ids ({', '.join(CAPACITY_DATASETS)}) or 'all'.")
     p.add_argument("--fractions", type=float, nargs="+", default=list(FRACTIONS))
     p.add_argument("--protect", default="disjoint", choices=PROTECT_MODES + ("both",))
+    p.add_argument("--cost", default="size", choices=COSTS,
+                   help="Gap cost: number of blocks, or labels added (subclasses inherit).")
     p.add_argument("--order", default="dfs", help="dfs | identity | best-of-N")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", type=Path, default=DEFAULT_OUT)
@@ -443,9 +486,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             except InconsistentOntology:
                 ref = None
             for mode in modes:
-                run_budget_total(name, fractions=args.fractions, protect=mode, order=args.order,
-                                 seed=args.seed, out_dir=args.out, time_limit=args.time_limit,
-                                 kb=kb, ref=ref, skip_existing=args.skip_existing)
+                try:
+                    run_budget_total(name, fractions=args.fractions, protect=mode,
+                                     order=args.order, seed=args.seed, out_dir=args.out,
+                                     time_limit=args.time_limit, kb=kb, ref=ref,
+                                     skip_existing=args.skip_existing, cost=args.cost)
+                except Exception:  # noqa: BLE001 -- continue with the other protect setting
+                    traceback.print_exc()
+                    failed.append(f"{name}:{mode}")
         except Exception:  # noqa: BLE001 -- report and continue with the others
             traceback.print_exc()
             failed.append(name)

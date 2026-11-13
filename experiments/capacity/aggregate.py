@@ -237,12 +237,15 @@ def budget_total_table(total: List[Dict[str, Any]]) -> str:
     by: Dict[Any, List[Dict[str, Any]]] = defaultdict(list)
     for p in total:
         if p["order_info"]["order"] == "dfs":
-            by[(p["dataset"], p["protect"])].append(p)
+            by[(p["dataset"], p["protect"] + ", cost = " + p.get("cost", "size"))].append(p)
     parts = ["## (iii) Budget curve: sound compression under a total interval budget (B2)\n",
              "Target = n + f·(T_exact − n) intervals (n classes with ≥ 1 interval); the globally "
              "smallest gaps are filled first, then the model is re-closed. `protect = disjoint` "
              "skips gaps whose filling makes a block unsatisfiable at once (the target may then "
-             "be unreachable). P/R (live) are over named classes still satisfiable.\n"]
+             "be unreachable). `cost` ranks the gaps: `size` = blocks in the gap, `weight` = labels "
+             "added once subclasses inherit. P/R (live) are over named classes still "
+             "satisfiable. A status `aborted: out of memory` marks the last model computable "
+             "under a 40 GB limit.\n"]
     for ds, prot in sorted(by, key=lambda k: (_ds_key(k[0]), k[1])):
         rows = []
         for p in sorted(by[(ds, prot)], key=lambda p: -p["fraction"]):
@@ -274,7 +277,8 @@ def csv_rows(exact, budget, base, total=()) -> List[Dict[str, Any]]:
             "modelness": 1.0 if p["check_model_all_zero"] else None,
             "precision": p.get("precision"), "recall": p.get("recall"),
             "precision_live": p.get("precision_live"), "recall_live": p.get("recall_live"),
-            "protect": p["protect"], "n_unsat_named": p["n_unsat_named"], "seed": None,
+            "protect": p["protect"] + ("" if p.get("cost", "size") == "size" else "/" + p["cost"]),
+            "n_unsat_named": p["n_unsat_named"], "seed": None,
         })
     for p in exact:
         d = p["intervals"]["dfs"]
