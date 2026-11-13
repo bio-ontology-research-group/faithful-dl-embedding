@@ -1,0 +1,166 @@
+{
+  "best_tol": 0.2,
+  "config": {
+    "checkpoint": "last",
+    "checkpoint_path": "/mnt/data2/leechuck/tmp/gfe-runs/capacity/tk6__box2el__d4__s2.pt",
+    "dataset": "tk6",
+    "deg_eps": 0.001,
+    "device": "cpu",
+    "dim": 4,
+    "epochs": 2000,
+    "hyperparameters": {
+      "batch_size": 32768,
+      "delta": 2.5,
+      "eval_gci_name": "gci0",
+      "learning_rate": 0.001,
+      "margin": 0.02,
+      "num_negs": 4,
+      "reg_factor": 0.2,
+      "validate_every": 10
+    },
+    "method": "box2el",
+    "model": "BoxSquaredEL",
+    "region_kind": "box",
+    "seed": 2
+  },
+  "crisp": {
+    "false_pairs_per_class_live": 0.36363636363636365,
+    "fn": 79,
+    "fp": 51,
+    "n_degenerate": 3,
+    "n_false_pairs_live": 8,
+    "n_live": 22,
+    "n_pred": 97,
+    "n_pred_live": 25,
+    "n_ref": 125,
+    "n_ref_live": 96,
+    "precision": 0.4742268041237113,
+    "precision_live": 0.68,
+    "recall": 0.368,
+    "recall_live": 0.17708333333333334,
+    "tp": 46,
+    "tp_live": 17
+  },
+  "crisp_closed": {
+    "false_pairs_per_class_live": 0.48,
+    "fn": 101,
+    "fp": 12,
+    "n_degenerate": 0,
+    "n_false_pairs_live": 12,
+    "n_live": 25,
+    "n_pred": 36,
+    "n_pred_live": 36,
+    "n_ref": 125,
+    "n_ref_live": 125,
+    "precision": 0.6666666666666666,
+    "precision_live": 0.6666666666666666,
+    "recall": 0.192,
+    "recall_live": 0.192,
+    "tp": 24,
+    "tp_live": 24
+  },
+  "crisp_tol": {
+    "false_pairs_per_class_live": 0.64,
+    "fn": 88,
+    "fp": 16,
+    "n_degenerate": 0,
+    "n_false_pairs_live": 16,
+    "n_live": 25,
+    "n_pred": 53,
+    "n_pred_live": 53,
+    "n_ref": 125,
+    "n_ref_live": 125,
+    "precision": 0.6981132075471698,
+    "precision_live": 0.6981132075471698,
+    "recall": 0.296,
+    "recall_live": 0.296,
+    "tp": 37,
+    "tp_live": 37
+  },
+  "f1_best_tol": 0.6923076923076923,
+  "false_pairs_per_class_live": 0.36363636363636365,
+  "modelness": {
+    "modelness_all": 0.014492753623188406,
+    "modelness_gci0": 0.027777777777777776,
+    "modelness_gci1": 0.0,
+    "modelness_gci1_bot": 0.0
+  },
+  "modelness_all": 0.014492753623188406,
+  "modelness_train_margin": 0.15942028985507245,
+  "n_named": 25,
+  "n_named_satisfiable_ref": 25,
+  "n_unsat_named": 3,
+  "n_unsat_named_ref": 0,
+  "params": {
+    "n_classes": 27,
+    "n_params_class": 324,
+    "n_params_total": 324
+  },
+  "params_per_class": 12.0,
+  "peak_rss_gb": 0.852148224,
+  "precision": 0.4742268041237113,
+  "precision_best_tol": 0.5775401069518716,
+  "precision_closed": 0.6666666666666666,
+  "precision_live": 0.68,
+  "precision_tol": 0.6981132075471698,
+  "recall": 0.368,
+  "recall_best_tol": 0.864,
+  "recall_closed": 0.192,
+  "recall_live": 0.17708333333333334,
+  "recall_tol": 0.296,
+  "timings": {
+    "eval_s": 0.010192801943048835,
+    "mean_epoch_time_s": 0.00223872589354869,
+    "model_init_s": 0.002201208146288991,
+    "reference_s": 0.00045931502245366573,
+    "train_time_s": 4.489429675042629,
+    "validate_every": 2001,
+    "validated": false,
+    "wall_s": 4.502804793883115
+  },
+  "tol_sweep": {
+    "0": {
+      "f1": 0.2981366459627329,
+      "n_pred": 36,
+      "precision": 0.6666666666666666,
+      "recall": 0.192
+    },
+    "0.01": {
+      "f1": 0.3411764705882353,
+      "n_pred": 45,
+      "precision": 0.6444444444444445,
+      "recall": 0.232
+    },
+    "0.02": {
+      "f1": 0.41573033707865165,
+      "n_pred": 53,
+      "precision": 0.6981132075471698,
+      "recall": 0.296
+    },
+    "0.05": {
+      "f1": 0.5700934579439252,
+      "n_pred": 89,
+      "precision": 0.6853932584269663,
+      "recall": 0.488
+    },
+    "0.1": {
+      "f1": 0.6177606177606176,
+      "n_pred": 134,
+      "precision": 0.5970149253731343,
+      "recall": 0.64
+    },
+    "0.2": {
+      "f1": 0.6923076923076923,
+      "n_pred": 187,
+      "precision": 0.5775401069518716,
+      "recall": 0.864
+    },
+    "0.5": {
+      "f1": 0.6127450980392156,
+      "n_pred": 283,
+      "precision": 0.4416961130742049,
+      "recall": 1.0
+    }
+  },
+  "train_margin": 0.02
+}

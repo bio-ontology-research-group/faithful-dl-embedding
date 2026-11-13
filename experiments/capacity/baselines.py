@@ -4,8 +4,9 @@ Purpose
 -------
 Train the existing single-region methods through the building blocks of the
 experiment harness (:func:`experiments.run._build_model` and
-:func:`experiments.run._train_model_with_chunking`, same hyper-parameters, the same
-best-validation checkpointing on subsumption datasets with a validation split) at
+:func:`experiments.run._train_model_with_chunking`, same hyper-parameters; the model
+after the last epoch is evaluated, ``--checkpoint valid`` restores best-validation
+checkpointing) at
 dimensions ``d in {1, 2, 4, 8, 16, 32, 64, 128}`` and record, per trained model,
 
 - ``modelness_all`` and per-GCI modelness from :func:`experiments.metrics.modelness`
@@ -16,7 +17,13 @@ dimensions ``d in {1, 2, 4, 8, 16, 32, 64, 128}`` and record, per trained model,
   subsumed by every class and containing only unsatisfiable classes; exact
   precision/recall over named classes satisfiable in the reference
   (``CanonicalModel``, as in B1), computed chunk-wise in torch without materialising
-  the predicted pair set;
+  the predicted pair set; ``precision_live``/``recall_live`` restrict both sides to
+  classes with a non-degenerate region (the convention of ``budget.py``);
+- the same under two further readings: ``crisp_closed`` (every region is a non-empty
+  closed set, exact containment) and a tolerance sweep ``tol_sweep`` (closed sets,
+  containment up to a slack; ``crisp_tol`` is the slack equal to the training margin,
+  ``*_best_tol`` the slack with the best F1 against the reference, i.e. the most
+  favourable crisp reading of the trained model);
 - parameter counts: all ``requires_grad`` parameters of the module and, separately,
   those of class-indexed tables (parameter names containing ``class``).
 
@@ -30,8 +37,8 @@ Either one cell (``--dataset --method --dim --seed``) or a cells file
 (``--cells FILE`` with lines ``<dataset> <method> <dim> <seed>``; ``--start``/``--count``
 select a slice). ``--epochs`` overrides the default epochs (harness defaults:
 ``DATASET_EPOCHS`` for pizza and tk3..tk6 = 2000; the other synthetic theories use the
-synthetic default 2000; the Box²EL benchmark ontologies use 300, the harness default
-for the large ontologies GO/FoodOn).
+synthetic default 2000; GO/FoodOn default to the harness value 300, which under-fits
+-- the sweep uses ``--epochs 3000`` for them, see ``baselines.sbatch``).
 
 Outputs
 -------
@@ -69,6 +76,9 @@ DEFAULT_OUT = CAPACITY_RAW_DIR / "baselines"
 BASELINE_METHODS = ("elem", "elbe", "box2el", "transbox")
 BASELINE_DIMS = (1, 2, 4, 8, 16, 32, 64, 128)
 BASELINE_SEEDS = (0, 1, 2)
+# containment slacks of the tolerance sweep (closed-set reading); the best F1 over
+# these is the most favourable crisp reading of a trained model ("oracle tolerance")
+TOL_SWEEP = (0.0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5)
 # No Box²EL benchmark ontologies: corrupt upstream (mOWL issue #178).
 BASELINE_DATASETS = ("pizza", "go", "foodon") + tuple(THEORIES)
 
@@ -206,6 +216,7 @@ def crisp_subsumption_metrics(
     chunk: int = 1024,
     device: str = "cpu",
     dense_until: float = 0.02,
+    tol: float = 0.0,
 ) -> Dict[str, Any]:
     """Exact precision/recall of crisp region containment over a class subset.
 
@@ -227,6 +238,11 @@ def crisp_subsumption_metrics(
     dense_until : float
         Box mode: switch from dense masks to candidate lists once the candidate
         density falls below this.
+    tol : float
+        Containment slack: box ``i`` is in box ``j`` iff ``lo_j - tol <= lo_i`` and
+        ``hi_i <= hi_j + tol`` in every coordinate (balls: ``|c_i - c_j| + r_i <= r_j
+        + tol``). ``0`` is exact containment; the training margin gives the reading
+        under which a zero-loss Box²EL model (loss ``relu(. - gamma)``) is correct.
 
     Returns
     -------
@@ -257,32 +273,47 @@ def crisp_subsumption_metrics(
     def contains(i, j, Ai, Bi, Aj, Bj):
         """Region i contained in region j for index tensors (vectorised)."""
         if kind == "box":
-            return ((Aj <= Ai) & (Bi <= Bj)).all(dim=-1)
+            return ((Aj - tol <= Ai) & (Bi <= Bj + tol)).all(dim=-1)
         dist = torch.linalg.norm(Ai - Aj, dim=-1)
-        return dist + Bi <= Bj
+        return dist + Bi <= Bj + tol
 
-    # count predicted pairs among non-degenerate classes (including self pairs)
+    # count predicted pairs among non-degenerate classes (self pairs excluded below)
     n_pred_good = 0
+    n_self = 0
     for s in range(0, ng, chunk):
         e = min(s + chunk, ng)
         if kind == "ball":
-            dist = torch.cdist(Ag[s:e], Ag)
-            n_pred_good += int((dist + Bg[s:e, None] <= Bg[None, :]).sum().item())
+            # exact differences (the default matmul shortcut of cdist is inexact near 0
+            # and would disagree with ``contains`` on boundary pairs)
+            dist = torch.cdist(Ag[s:e], Ag, compute_mode="donot_use_mm_for_euclid_dist")
+            held = dist + Bg[s:e, None] <= Bg[None, :] + tol
+            n_pred_good += int(held.sum().item())
+            n_self += int(held[torch.arange(e - s, device=held.device),
+                               torch.arange(s, e, device=held.device)].sum().item())
             continue
         d = Ag.shape[1]
-        mask = (Ag[None, :, 0] <= Ag[s:e, None, 0]) & (Bg[s:e, None, 0] <= Bg[None, :, 0])
+        mask = ((Ag[None, :, 0] - tol <= Ag[s:e, None, 0])
+                & (Bg[s:e, None, 0] <= Bg[None, :, 0] + tol))
         k = 1
         while k < d and mask.float().mean().item() > dense_until:
-            mask &= (Ag[None, :, k] <= Ag[s:e, None, k]) & (Bg[s:e, None, k] <= Bg[None, :, k])
+            mask &= ((Ag[None, :, k] - tol <= Ag[s:e, None, k])
+                     & (Bg[s:e, None, k] <= Bg[None, :, k] + tol))
             k += 1
+        if k >= d:  # all coordinates tested densely: count without listing the pairs
+            n_pred_good += int(mask.sum().item())
+            n_self += e - s
+            del mask
+            continue
         ii, jj = torch.nonzero(mask, as_tuple=True)
         del mask
-        if k < d and len(ii):
-            ok = ((Ag[jj, k:] <= Ag[s + ii, k:]) & (Bg[s + ii, k:] <= Bg[jj, k:])).all(dim=1)
+        n_self += e - s
+        if len(ii):
+            ok = ((Ag[jj, k:] - tol <= Ag[s + ii, k:])
+                  & (Bg[s + ii, k:] <= Bg[jj, k:] + tol)).all(dim=1)
             n_pred_good += int(ok.sum().item())
         else:
             n_pred_good += int(len(ii))
-    n_pred_good -= ng  # self pairs
+    n_pred_good -= n_self
     n_deg = n - ng
     n_pred = n_pred_good + n_deg * (n - 1)
 
@@ -292,13 +323,27 @@ def crisp_subsumption_metrics(
     rj = torch.as_tensor(ref.col[keep].astype(np.int64), device=device)
     n_ref = int(len(ri))
     tp = 0
+    tp_live = 0
+    n_ref_live = 0
     for s in range(0, n_ref, 1 << 20):
         i, j = ri[s:s + (1 << 20)], rj[s:s + (1 << 20)]
         di, dj = deg[i], deg[j]
         geo = contains(i, j, A[i], B[i], A[j], B[j])
         held = di | (~dj & geo)
         tp += int(held.sum().item())
+        both = ~di & ~dj
+        n_ref_live += int(both.sum().item())
+        tp_live += int((both & geo).sum().item())
     return {
+        # same convention as budget.py: pairs among classes with a non-empty region
+        "n_live": ng,
+        "n_pred_live": n_pred_good,
+        "n_ref_live": n_ref_live,
+        "tp_live": tp_live,
+        "precision_live": float(tp_live / n_pred_good) if n_pred_good else 1.0,
+        "recall_live": float(tp_live / n_ref_live) if n_ref_live else 1.0,
+        "n_false_pairs_live": n_pred_good - tp_live,
+        "false_pairs_per_class_live": float((n_pred_good - tp_live) / ng) if ng else 0.0,
         "tp": tp,
         "fp": n_pred - tp,
         "fn": n_ref - tp,
@@ -390,8 +435,17 @@ def build_model(bundle, method: str, dim: int, seed: int, device: str, ckpt_path
 
 
 def train_model(model, bundle, epochs: int, seed: int, ckpt_path: Path,
-                validate_every: int = int(DEFAULT_HYPERPARAMS["validate_every"])) -> Dict[str, Any]:
-    """Train like the harness: best-validation checkpoint on subsumption datasets.
+                validate_every: int = int(DEFAULT_HYPERPARAMS["validate_every"]),
+                checkpoint: str = "last") -> Dict[str, Any]:
+    """Train with the harness loop and return the model to evaluate.
+
+    ``checkpoint="last"`` (default) evaluates the model after the last epoch: the
+    capacity experiment asks how well a model represents the theory it was trained
+    on, and the validation split of GO/FoodOn consists of held-out axioms, so the
+    best-validation model is an early-stopped, under-fitted one (GO, Box²EL, d=32:
+    validation loss is minimal near epoch 600 while the training loss still falls
+    at epoch 3000). ``checkpoint="valid"`` restores the harness behaviour
+    (best-validation checkpoint on subsumption datasets).
 
     Parameters
     ----------
@@ -401,6 +455,7 @@ def train_model(model, bundle, epochs: int, seed: int, ckpt_path: Path,
     seed : int
     ckpt_path : Path
     validate_every : int
+    checkpoint : {"last", "valid"}
 
     Returns
     -------
@@ -412,7 +467,10 @@ def train_model(model, bundle, epochs: int, seed: int, ckpt_path: Path,
     from experiments import run as harness
 
     _ = model.training_datasets
-    validated = bundle.task == "subsumption" and bundle.dataset.validation is not None
+    if checkpoint not in ("last", "valid"):
+        raise ValueError(f"checkpoint must be 'last' or 'valid', got {checkpoint!r}")
+    validated = (checkpoint == "valid" and bundle.task == "subsumption"
+                 and bundle.dataset.validation is not None)
     if validated:
         model.eval_gci_name = str(DEFAULT_HYPERPARAMS["eval_gci_name"])
         torch.save(model.module.state_dict(), ckpt_path)
@@ -452,6 +510,7 @@ def run_cell(
     deg_eps: float = 1e-3,
     bundle: Any = None,
     ref: Optional[Reference] = None,
+    checkpoint: str = "last",
 ) -> Dict[str, Any]:
     """Train and evaluate one cell; write its JSON.
 
@@ -497,7 +556,7 @@ def run_cell(
     model = build_model(bundle, method, dim, seed, dev, ckpt)
     _ = model.training_datasets
     init_time = time.monotonic() - t0
-    tr = train_model(model, bundle, n_epochs, seed, ckpt)
+    tr = train_model(model, bundle, n_epochs, seed, ckpt, checkpoint=checkpoint)
 
     t0 = time.monotonic()
     mod = modelness(model, margin=0.0)
@@ -516,6 +575,33 @@ def run_cell(
 
     crisp = crisp_subsumption_metrics(kind, a, b, named[sat_idx], restrict(ref.matrix, sat_idx),
                                       deg_eps=deg_eps, device=dev)
+    # second reading: every box/ball is a non-empty closed set (a zero-width box is a
+    # lower-dimensional box, not the empty set), so no class is counted as unsatisfiable
+    closed = crisp_subsumption_metrics(kind, a, b, named[sat_idx], restrict(ref.matrix, sat_idx),
+                                       deg_eps=float("-inf"), device=dev)
+    # third reading: closed sets with the training margin as containment slack
+    train_margin = 0.1 if method == "transbox" else float(DEFAULT_HYPERPARAMS["margin"])
+    tolerant = crisp_subsumption_metrics(kind, a, b, named[sat_idx],
+                                         restrict(ref.matrix, sat_idx),
+                                         deg_eps=float("-inf"), device=dev, tol=train_margin)
+    sweep: Dict[str, Dict[str, Any]] = {}
+    for t in TOL_SWEEP:
+        if t == 0.0:
+            r = closed
+        elif t == train_margin:
+            r = tolerant
+        else:
+            r = crisp_subsumption_metrics(kind, a, b, named[sat_idx],
+                                          restrict(ref.matrix, sat_idx),
+                                          deg_eps=float("-inf"), device=dev, tol=float(t))
+        pr, rc = float(r["precision"]), float(r["recall"])
+        sweep[f"{t:g}"] = {"precision": pr, "recall": rc, "n_pred": int(r["n_pred"]),
+                           "f1": float(2 * pr * rc / (pr + rc)) if pr + rc > 0 else 0.0}
+    best_tol = max(sweep, key=lambda k: sweep[k]["f1"])
+    try:
+        mod_tm = float(modelness(model, margin=train_margin)["modelness_all"])
+    except Exception:  # noqa: BLE001 -- optional diagnostic
+        mod_tm = None
     deg_all = degenerate_mask(kind, a[torch.as_tensor(named)], b[torch.as_tensor(named)], deg_eps)
     eval_time = time.monotonic() - t0
     pc = parameter_counts(model)
@@ -529,6 +615,7 @@ def run_cell(
             "epochs": n_epochs,
             "device": dev,
             "deg_eps": float(deg_eps),
+            "checkpoint": checkpoint,
             "region_kind": kind,
             "hyperparameters": (
                 "mowl TransBox defaults" if method == "transbox" else dict(DEFAULT_HYPERPARAMS)
@@ -538,8 +625,24 @@ def run_cell(
         "modelness": mod,
         "modelness_all": float(mod["modelness_all"]),
         "crisp": crisp,
+        "crisp_closed": closed,
+        "precision_closed": closed["precision"],
+        "recall_closed": closed["recall"],
+        "crisp_tol": tolerant,
+        "train_margin": train_margin,
+        "precision_tol": tolerant["precision"],
+        "recall_tol": tolerant["recall"],
+        "modelness_train_margin": mod_tm,
+        "tol_sweep": sweep,
+        "best_tol": float(best_tol),
+        "precision_best_tol": sweep[best_tol]["precision"],
+        "recall_best_tol": sweep[best_tol]["recall"],
+        "f1_best_tol": sweep[best_tol]["f1"],
         "precision": crisp["precision"],
         "recall": crisp["recall"],
+        "precision_live": crisp["precision_live"],
+        "recall_live": crisp["recall_live"],
+        "false_pairs_per_class_live": crisp["false_pairs_per_class_live"],
         "n_named": int(len(named)),
         "n_named_satisfiable_ref": int(len(sat_idx)),
         "n_unsat_named": int(deg_all.sum().item()),
@@ -558,7 +661,12 @@ def run_cell(
     write_json(payload, Path(out_dir) / cell_filename(dataset, method, dim, seed))
     print(
         f"[baselines] {dataset} {method} d={dim} s={seed}: modelness={payload['modelness_all']:.4f} "
-        f"P={crisp['precision']:.4f} R={crisp['recall']:.4f} unsat={payload['n_unsat_named']} "
+        f"P={crisp['precision']:.4f} R={crisp['recall']:.4f} "
+        f"P_live={crisp['precision_live']:.4f} R_live={crisp['recall_live']:.4f} "
+        f"P_closed={closed['precision']:.4f} R_closed={closed['recall']:.4f} "
+        f"P_tol={tolerant['precision']:.4f} R_tol={tolerant['recall']:.4f} "
+        f"best tol={best_tol}: P={sweep[best_tol]['precision']:.4f} "
+        f"R={sweep[best_tol]['recall']:.4f} unsat={payload['n_unsat_named']} "
         f"params={pc['n_params_total']} t={payload['timings']['wall_s']:.1f}s",
         flush=True,
     )
@@ -580,6 +688,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--deg-eps", type=float, default=1e-3)
     p.add_argument("--out", type=Path, default=DEFAULT_OUT)
     p.add_argument("--runs-dir", type=Path, default=RUNS_DIR / "capacity")
+    p.add_argument("--checkpoint", choices=("last", "valid"), default="last",
+                   help="Model to evaluate: after the last epoch (default) or best validation.")
     p.add_argument("--skip-existing", action="store_true", help="Skip cells whose JSON exists.")
     p.add_argument("--write-cells", type=Path, default=None,
                    help="Write the full default grid to this file and exit.")
@@ -633,7 +743,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 cache[ds] = load_capacity_dataset(ds)
             run_cell(ds, method, dim, seed, epochs=args.epochs, device=args.device,
                      out_dir=args.out, runs_dir=args.runs_dir, deg_eps=args.deg_eps,
-                     bundle=cache[ds])
+                     bundle=cache[ds], checkpoint=args.checkpoint)
         except Exception:  # noqa: BLE001 -- report and continue with the other cells
             traceback.print_exc()
             failed.append((ds, method, dim, seed))

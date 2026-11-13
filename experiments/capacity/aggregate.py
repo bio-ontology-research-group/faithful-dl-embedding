@@ -62,6 +62,11 @@ CSV_COLUMNS = (
     "recall",
     "precision_live",
     "recall_live",
+    "precision_closed",
+    "recall_closed",
+    "precision_best_tol",
+    "recall_best_tol",
+    "best_tol",
     "protect",
     "n_unsat_named",
     "seed",
@@ -221,14 +226,26 @@ def baseline_table(base: List[Dict[str, Any]], title: str = "## (iv) Single-box 
             key[0], key[1], str(key[2]), str(len(ps)), str(sorted({p["config"]["epochs"] for p in ps})),
             _ms([p["modelness_all"] for p in ps]), _ms([p["precision"] for p in ps]),
             _ms([p["recall"] for p in ps]), _ms([float(p["n_unsat_named"]) for p in ps], 1),
+            _ms([p.get("precision_closed") for p in ps]),
+            _ms([p.get("recall_closed") for p in ps]),
+            _ms([p.get("precision_best_tol") for p in ps]),
+            _ms([p.get("recall_best_tol") for p in ps]),
+            _ms([p.get("f1_best_tol") for p in ps]),
             f"{np.mean([p['params_per_class'] for p in ps]):.0f}",
             _f(int(np.mean([p["params"]["n_params_total"] for p in ps]))),
         ])
     if not rows:
         return f"{title}\n\nNo baseline results yet.\n"
-    return (f"{title}, mean ± sd over seeds\n\n"
+    note = ("Three readings of a trained model. *crisp*: a box/ball thinner than `deg_eps` in "
+            "some coordinate is empty, i.e. an unsatisfiable class (subsumed by everything). "
+            "*closed*: every box/ball is a non-empty closed set, exact containment. *best tol*: "
+            "closed, containment up to a slack chosen per model to maximise F1 against the "
+            "reference (the most favourable reading; slacks 0–0.5). The model after the last "
+            "epoch is evaluated.\n\n")
+    return (f"{title}, mean ± sd over seeds\n\n" + note
             + _table(["dataset", "method", "d", "seeds", "epochs", "modelness_all", "P (crisp)",
-                      "R (crisp)", "unsat named", "params / class", "params total"], rows)
+                      "R (crisp)", "unsat named", "P (closed)", "R (closed)", "P (best tol)",
+                      "R (best tol)", "F1 (best tol)", "params / class", "params total"], rows)
             + "\n")
 
 
@@ -312,13 +329,23 @@ def csv_rows(exact, budget, base, total=()) -> List[Dict[str, Any]]:
             "capacity": c["dim"], "params_per_class": p["params_per_class"],
             "params_total": p["params"]["n_params_total"], "modelness": p["modelness_all"],
             "precision": p["precision"], "recall": p["recall"],
-            "precision_live": p["precision"], "recall_live": p["recall"],
+            "precision_live": p.get("precision_live", p["precision"]),
+            "recall_live": p.get("recall_live", p["recall"]),
+            "precision_closed": p.get("precision_closed"),
+            "recall_closed": p.get("recall_closed"),
+            "precision_best_tol": p.get("precision_best_tol"),
+            "recall_best_tol": p.get("recall_best_tol"), "best_tol": p.get("best_tol"),
             "n_unsat_named": p["n_unsat_named"], "seed": c["seed"],
         })
     for r in rows:
         r.setdefault("precision_live", r.get("precision"))
         r.setdefault("recall_live", r.get("recall"))
         r.setdefault("protect", None)
+        # solver families are exact models: all readings coincide with the live one
+        for a, b in (("precision_closed", "precision_live"), ("recall_closed", "recall_live"),
+                     ("precision_best_tol", "precision_live"), ("recall_best_tol", "recall_live")):
+            r.setdefault(a, r.get(b))
+        r.setdefault("best_tol", None)
     return rows
 
 

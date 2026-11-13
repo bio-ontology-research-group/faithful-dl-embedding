@@ -4,8 +4,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=12
 #SBATCH --mem=96G
-#SBATCH --time=24:00:00
-#SBATCH --array=0-239
+#SBATCH --time=06:00:00
+#SBATCH --array=0-31
 #SBATCH --output=/mnt/data/u/hohndor/gfe/logs/capacity-baselines/baselines_%A_%a.out
 #SBATCH --error=/mnt/data/u/hohndor/gfe/logs/capacity-baselines/baselines_%A_%a.err
 
@@ -15,11 +15,13 @@
 # (lines TASK_ID*CELLS_PER_JOB .. TASK_ID*CELLS_PER_JOB+CELLS_PER_JOB-1, one cell
 # "<dataset> <method> <dim> <seed>" per line) and runs them CONCURRENTLY on the one
 # GPU of the job (jobs with low GPU utilisation are cancelled on this cluster).
-# The default grid has 1440 cells; with CELLS_PER_JOB=6 that is 240 array tasks
-# (--array=0-239). For another CELLS_PER_JOB submit with
-#   N=$(grep -cv '^\s*\(#\|$\)' experiments/capacity/baselines_cells.txt)
-#   sbatch --array=0-$(( (N + CELLS_PER_JOB - 1) / CELLS_PER_JOB - 1 )) \
-#          --export=ALL,CELLS_PER_JOB=${CELLS_PER_JOB} experiments/capacity/baselines.sbatch
+# The full grid (baselines_cells.txt, 1344 cells) is split: pizza and the synthetic
+# theories take seconds per cell and run on a workstation CPU (run_baselines_small.sh);
+# GO and FoodOn (baselines_cells_large.txt, 192 cells) run here, 6 cells per GPU,
+# 32 array tasks, with 3000 epochs (the harness default of 300 under-fits):
+#   sbatch --array=0-31 --export=ALL,EPOCHS=3000,\
+#CELLS_FILE=$REPO_DIR/experiments/capacity/baselines_cells_large.txt \
+#          experiments/capacity/baselines.sbatch
 # Cells whose JSON already exists are skipped, so failed tasks can be resubmitted.
 # Recommended once before the array (downloads data, builds CanonicalModel caches):
 #   ${PYTHON} -m experiments.capacity.baselines --prepare pizza go foodon

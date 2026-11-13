@@ -177,6 +177,9 @@ def test_crisp_box_containment():
     assert m["n_pred"] == 5 and m["n_ref"] == 4 and m["tp"] == 3
     assert m["precision"] == pytest.approx(0.6) and m["recall"] == pytest.approx(0.75)
     assert m["n_degenerate"] == 1
+    # live convention: only classes 0, 1, 2; reference pair (1, 2) is missed
+    assert (m["n_live"], m["n_pred_live"], m["n_ref_live"], m["tp_live"]) == (3, 2, 3, 2)
+    assert m["precision_live"] == 1.0 and m["recall_live"] == pytest.approx(2 / 3)
     # dense-to-sparse switch gives the same counts
     m2 = crisp_subsumption_metrics("box", lo, hi, np.arange(4), ref, dense_until=1.1)
     assert (m2["n_pred"], m2["tp"]) == (m["n_pred"], m["tp"])
@@ -197,6 +200,27 @@ def test_crisp_ball_containment():
     m = crisp_subsumption_metrics("ball", c, r, np.arange(3), ref)
     assert (m["n_pred"], m["tp"]) == (1, 1)
     assert m["precision"] == 1.0 and m["recall"] == 0.5
+    assert m["precision_live"] == 1.0 and m["recall_live"] == 0.5
+
+
+def test_crisp_ball_counts_match_brute_force_on_many_balls():
+    """More than 25 balls (cdist would switch to its inexact shortcut), incl. duplicates."""
+    import torch
+
+    from experiments.capacity.baselines import crisp_subsumption_metrics
+
+    g = torch.Generator().manual_seed(0)
+    c = torch.randn(60, 3, generator=g) * 100.0
+    r = torch.rand(60, generator=g) * 150.0
+    c[40:] = c[:20]  # same centres: containment decided by the radius alone
+    r[50:] = r[10:20]  # exact duplicates contain each other
+    n = 60
+    brute = [(i, j) for i in range(n) for j in range(n)
+             if i != j and float(torch.linalg.norm(c[i] - c[j]) + r[i]) <= float(r[j])]
+    ref = bool_csr(np.array([i for i, _ in brute]), np.array([j for _, j in brute]), (n, n))
+    m = crisp_subsumption_metrics("ball", c, r, np.arange(n), ref, chunk=16)
+    assert len(brute) > 20
+    assert (m["n_pred"], m["tp"], m["n_pred_live"]) == (len(brute), len(brute), len(brute))
 
 
 def test_parameter_counts_and_regions_on_hand_set_box_module():

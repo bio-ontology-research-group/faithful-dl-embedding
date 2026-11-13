@@ -1,0 +1,166 @@
+{
+  "best_tol": 0.05,
+  "config": {
+    "checkpoint": "last",
+    "checkpoint_path": "/mnt/data2/leechuck/tmp/gfe-runs/capacity/tk7__elbe__d64__s0.pt",
+    "dataset": "tk7",
+    "deg_eps": 0.001,
+    "device": "cpu",
+    "dim": 64,
+    "epochs": 2000,
+    "hyperparameters": {
+      "batch_size": 32768,
+      "delta": 2.5,
+      "eval_gci_name": "gci0",
+      "learning_rate": 0.001,
+      "margin": 0.02,
+      "num_negs": 4,
+      "reg_factor": 0.2,
+      "validate_every": 10
+    },
+    "method": "elbe",
+    "model": "ELBE",
+    "region_kind": "box",
+    "seed": 0
+  },
+  "crisp": {
+    "false_pairs_per_class_live": 0.0,
+    "fn": 100,
+    "fp": 259,
+    "n_degenerate": 12,
+    "n_false_pairs_live": 0,
+    "n_live": 21,
+    "n_pred": 384,
+    "n_pred_live": 0,
+    "n_ref": 225,
+    "n_ref_live": 90,
+    "precision": 0.3255208333333333,
+    "precision_live": 1.0,
+    "recall": 0.5555555555555556,
+    "recall_live": 0.0,
+    "tp": 125,
+    "tp_live": 0
+  },
+  "crisp_closed": {
+    "false_pairs_per_class_live": 0.0,
+    "fn": 224,
+    "fp": 0,
+    "n_degenerate": 0,
+    "n_false_pairs_live": 0,
+    "n_live": 33,
+    "n_pred": 1,
+    "n_pred_live": 1,
+    "n_ref": 225,
+    "n_ref_live": 225,
+    "precision": 1.0,
+    "precision_live": 1.0,
+    "recall": 0.0044444444444444444,
+    "recall_live": 0.0044444444444444444,
+    "tp": 1,
+    "tp_live": 1
+  },
+  "crisp_tol": {
+    "false_pairs_per_class_live": 0.21212121212121213,
+    "fn": 135,
+    "fp": 7,
+    "n_degenerate": 0,
+    "n_false_pairs_live": 7,
+    "n_live": 33,
+    "n_pred": 97,
+    "n_pred_live": 97,
+    "n_ref": 225,
+    "n_ref_live": 225,
+    "precision": 0.9278350515463918,
+    "precision_live": 0.9278350515463918,
+    "recall": 0.4,
+    "recall_live": 0.4,
+    "tp": 90,
+    "tp_live": 90
+  },
+  "f1_best_tol": 0.9464668094218416,
+  "false_pairs_per_class_live": 0.0,
+  "modelness": {
+    "modelness_all": 0.28125,
+    "modelness_gci0": 0.02,
+    "modelness_gci1": 0.2,
+    "modelness_gci1_bot": 1.0
+  },
+  "modelness_all": 0.28125,
+  "modelness_train_margin": 0.0,
+  "n_named": 33,
+  "n_named_satisfiable_ref": 33,
+  "n_unsat_named": 12,
+  "n_unsat_named_ref": 0,
+  "params": {
+    "n_classes": 35,
+    "n_params_class": 4480,
+    "n_params_total": 4480
+  },
+  "params_per_class": 128.0,
+  "peak_rss_gb": 0.893988864,
+  "precision": 0.3255208333333333,
+  "precision_best_tol": 0.9132231404958677,
+  "precision_closed": 1.0,
+  "precision_live": 1.0,
+  "precision_tol": 0.9278350515463918,
+  "recall": 0.5555555555555556,
+  "recall_best_tol": 0.9822222222222222,
+  "recall_closed": 0.0044444444444444444,
+  "recall_live": 0.0,
+  "recall_tol": 0.4,
+  "timings": {
+    "eval_s": 0.04307766514830291,
+    "mean_epoch_time_s": 0.0025310864312341435,
+    "model_init_s": 0.0021626008674502373,
+    "reference_s": 0.0006218340713530779,
+    "train_time_s": 5.074182199081406,
+    "validate_every": 2001,
+    "validated": false,
+    "wall_s": 5.120405829045922
+  },
+  "tol_sweep": {
+    "0": {
+      "f1": 0.008849557522123894,
+      "n_pred": 1,
+      "precision": 1.0,
+      "recall": 0.0044444444444444444
+    },
+    "0.01": {
+      "f1": 0.14049586776859505,
+      "n_pred": 17,
+      "precision": 1.0,
+      "recall": 0.07555555555555556
+    },
+    "0.02": {
+      "f1": 0.5590062111801242,
+      "n_pred": 97,
+      "precision": 0.9278350515463918,
+      "recall": 0.4
+    },
+    "0.05": {
+      "f1": 0.9464668094218416,
+      "n_pred": 242,
+      "precision": 0.9132231404958677,
+      "recall": 0.9822222222222222
+    },
+    "0.1": {
+      "f1": 0.8928571428571428,
+      "n_pred": 279,
+      "precision": 0.8064516129032258,
+      "recall": 1.0
+    },
+    "0.2": {
+      "f1": 0.648414985590778,
+      "n_pred": 469,
+      "precision": 0.47974413646055436,
+      "recall": 1.0
+    },
+    "0.5": {
+      "f1": 0.3534956794972506,
+      "n_pred": 1048,
+      "precision": 0.21469465648854963,
+      "recall": 1.0
+    }
+  },
+  "train_margin": 0.02
+}
