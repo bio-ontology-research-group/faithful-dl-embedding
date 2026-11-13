@@ -1,0 +1,226 @@
+{
+  "check_model": {
+    "class_assertion": 0,
+    "gci0": 0,
+    "gci0_bot": 0,
+    "gci1": 0,
+    "gci1_bot": 0,
+    "gci2": 0,
+    "gci3": 0,
+    "gci3_bot": 0,
+    "non_degenerate_violations": 0,
+    "object_property_assertion": 0,
+    "role_chain": 0,
+    "role_inclusion": 0
+  },
+  "check_model_all_zero": true,
+  "check_model_time_s": 0.002097145188599825,
+  "dataset": "unsat_mix",
+  "geometric": {
+    "elem_viol": 0.0,
+    "embed_dim": 2,
+    "epochs": 0,
+    "evaluate_model": {
+      "dead_ok": true,
+      "elem_viol": 0.0,
+      "exact": true,
+      "exact_tol1e-4": true,
+      "exist": 1.0,
+      "faithful_named": [
+        1.0,
+        1.0
+      ],
+      "faithful_named_precision": 1.0,
+      "faithful_named_recall": 1.0,
+      "n_dead_elements": 1,
+      "n_empty_classes": 1,
+      "n_false_dead": 0,
+      "region_viol": 0.0,
+      "region_viol_tol1e-4": 0.0
+    },
+    "exact": true,
+    "faithful_named_precision": 1.0,
+    "faithful_named_recall": 1.0,
+    "n_axioms_violated_by_depth": {
+      "0": 0,
+      "1e-2": 0,
+      "1e-3": 0,
+      "1e-4": 0,
+      "1e-5": 0
+    },
+    "n_components": 10,
+    "n_dead_elements": 1,
+    "n_empty_classes": 1,
+    "nb_elements": 10,
+    "region_viol": 0.0,
+    "time_s": 0.16942436597310007
+  },
+  "intervals": {
+    "dfs": {
+      "all_classes": {
+        "hist": {
+          "1": 7,
+          "2": 1
+        },
+        "max": 2,
+        "mean": 1.125,
+        "median": 1.0,
+        "n": 8,
+        "p95": 1.6499999999999995,
+        "share_one": 0.875,
+        "total": 9
+      },
+      "membership_equals_labels": true,
+      "n_parameters": 18,
+      "named_classes": {
+        "hist": {
+          "1": 6,
+          "2": 1
+        },
+        "max": 2,
+        "mean": 1.1428571428571428,
+        "median": 1.0,
+        "n": 7,
+        "p95": 1.6999999999999993,
+        "share_one": 0.8571428571428571,
+        "total": 8
+      },
+      "order": "dfs",
+      "role_products": 0,
+      "time_s": 0.0004952750168740749,
+      "total_intervals": 9
+    },
+    "identity": {
+      "all_classes": {
+        "hist": {
+          "1": 6,
+          "2": 1,
+          "3": 1
+        },
+        "max": 3,
+        "mean": 1.375,
+        "median": 1.0,
+        "n": 8,
+        "p95": 2.6499999999999995,
+        "share_one": 0.75,
+        "total": 11
+      },
+      "membership_equals_labels": true,
+      "n_parameters": 22,
+      "named_classes": {
+        "hist": {
+          "1": 5,
+          "2": 1,
+          "3": 1
+        },
+        "max": 3,
+        "mean": 1.4285714285714286,
+        "median": 1.0,
+        "n": 7,
+        "p95": 2.6999999999999993,
+        "share_one": 0.7142857142857143,
+        "total": 10
+      },
+      "order": "identity",
+      "role_products": 0,
+      "time_s": 0.0002258040476590395,
+      "total_intervals": 11
+    }
+  },
+  "least_model": {
+    "consistent": true,
+    "method": "iteration",
+    "n_blocks": 10,
+    "n_edges": 0,
+    "n_live_blocks": 8,
+    "n_sweeps": 3,
+    "n_unsat_classes": 1,
+    "n_unsat_named": 1,
+    "nnz_labels": 21,
+    "peak_rss_gb_after": 0.730394624,
+    "peak_rss_gb_before": 0.730394624,
+    "wall_time_s": 0.0060692341066896915
+  },
+  "lp": {
+    "all_equal": true,
+    "max_fractionality": 0.0,
+    "n_constraints_est": 140,
+    "n_variables": 110,
+    "runs": [
+      {
+        "equal_to_iteration": true,
+        "lp_max_fractionality": 0.0,
+        "lp_objective": 32.0,
+        "objective": "ones",
+        "wall_time_s": 0.005807663081213832
+      },
+      {
+        "equal_to_iteration": true,
+        "lp_max_fractionality": 0.0,
+        "lp_objective": 17.84378598877399,
+        "objective": "random_seed1",
+        "wall_time_s": 0.005126856965944171
+      },
+      {
+        "equal_to_iteration": true,
+        "lp_max_fractionality": 0.0,
+        "lp_objective": 15.111076498826812,
+        "objective": "random_seed2",
+        "wall_time_s": 0.0050703841261565685
+      },
+      {
+        "equal_to_iteration": true,
+        "lp_max_fractionality": 0.0,
+        "lp_objective": 13.801217320801943,
+        "objective": "random_seed3",
+        "wall_time_s": 0.005211072042584419
+      }
+    ]
+  },
+  "peak_rss_gb": 0.732491776,
+  "reference": {
+    "compare_time_s": 0.0017763760406523943,
+    "exact_agreement": true,
+    "fn": 0,
+    "fp": 0,
+    "n_entailed_pairs": 6,
+    "n_named_satisfiable_ref": 7,
+    "n_pred_pairs": 6,
+    "n_unsat_named_disagree": 0,
+    "n_unsat_named_lm": 1,
+    "n_unsat_named_ref": 1,
+    "precision": 1.0,
+    "recall": 1.0,
+    "reference_time_s": 0.0013478889595717192,
+    "source": "cm_cache",
+    "tp": 6,
+    "unsat_named_agree": true,
+    "unsat_named_ref_iris": [
+      "http://mowl.borg/geo#Q"
+    ]
+  },
+  "seed": 0,
+  "sizes": {
+    "n_aux_classes": 0,
+    "n_classes": 10,
+    "n_individuals": 0,
+    "n_named_classes": 8,
+    "n_roles": 0,
+    "rows": {
+      "class_assertion": 0,
+      "gci0": 8,
+      "gci0_bot": 0,
+      "gci1": 3,
+      "gci1_bot": 3,
+      "gci2": 0,
+      "gci3": 0,
+      "gci3_bot": 0,
+      "object_property_assertion": 0,
+      "role_chain": 0,
+      "role_inclusion": 0
+    }
+  },
+  "table_build_time_s": 0.009118362097069621,
+  "table_source": "GroundedEL(dataset, embed_dim=1, n_components=1, n_role_components=1)",
+  "total_time_s": 0.22234247904270887
+}

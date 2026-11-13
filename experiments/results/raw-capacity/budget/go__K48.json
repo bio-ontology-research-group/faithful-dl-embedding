@@ -1,0 +1,134 @@
+{
+  "K": 48,
+  "check_model": {
+    "class_assertion": 0,
+    "gci0": 0,
+    "gci0_bot": 0,
+    "gci1": 0,
+    "gci1_bot": 0,
+    "gci2": 0,
+    "gci3": 0,
+    "gci3_bot": 0,
+    "non_degenerate_violations": 0,
+    "object_property_assertion": 0,
+    "role_chain": 0,
+    "role_inclusion": 0
+  },
+  "check_model_all_zero": true,
+  "consistent": true,
+  "dataset": "go",
+  "exact_max_runs": 9958,
+  "exact_n_parameters": 1257320,
+  "exact_total_intervals": 408202,
+  "fn": 0,
+  "fp": 1021098627,
+  "iteration_log": [
+    {
+      "iteration": 1,
+      "least_model_time_s": 86.5894411765039,
+      "max_runs_before": 9958,
+      "n_dead_blocks": 35008,
+      "n_over": 1174,
+      "new_facts": 4331643
+    },
+    {
+      "iteration": 2,
+      "least_model_time_s": 87.10550624132156,
+      "max_runs_before": 173,
+      "n_dead_blocks": 35013,
+      "n_over": 14,
+      "new_facts": 14001
+    },
+    {
+      "iteration": 3,
+      "least_model_time_s": 87.11477107182145,
+      "max_runs_before": 110,
+      "n_dead_blocks": 35013,
+      "n_over": 11,
+      "new_facts": 13324
+    },
+    {
+      "iteration": 4,
+      "least_model_time_s": 87.25549083948135,
+      "max_runs_before": 76,
+      "n_dead_blocks": 35013,
+      "n_over": 8,
+      "new_facts": 6594
+    },
+    {
+      "iteration": 5,
+      "least_model_time_s": 87.14247908070683,
+      "max_runs_before": 76,
+      "n_dead_blocks": 35013,
+      "n_over": 8,
+      "new_facts": 4272
+    },
+    {
+      "iteration": 6,
+      "least_model_time_s": 87.29605653136969,
+      "max_runs_before": 61,
+      "n_dead_blocks": 35013,
+      "n_over": 8,
+      "new_facts": 2816
+    },
+    {
+      "iteration": 7,
+      "least_model_time_s": 87.22373772785068,
+      "max_runs_before": 58,
+      "n_dead_blocks": 35013,
+      "n_over": 4,
+      "new_facts": 764
+    }
+  ],
+  "iterations": 7,
+  "label_inflation": 2.994684731631058,
+  "lossless": false,
+  "max_runs": 48,
+  "n_dead_blocks": 35013,
+  "n_dead_blocks_exact": 1,
+  "n_entailed_pairs": 318173,
+  "n_extra_facts": 4373414,
+  "n_held_pairs": 1021416800,
+  "n_named_live": 21162,
+  "n_named_made_unsat": 23082,
+  "n_named_satisfiable_exact": 44244,
+  "n_parameters": 85916,
+  "n_unsat_named": 23082,
+  "n_unsat_named_exact": 0,
+  "nnz_labels": 459744,
+  "nnz_labels_exact": 741800,
+  "order_info": {
+    "order": "dfs"
+  },
+  "peak_rss_gb": 7.389106176,
+  "precision": 0.00031150163185097405,
+  "precision_live": 0.5566838285466162,
+  "recall": 1.0,
+  "recall_live": 1.0,
+  "reference_available": true,
+  "role_products": 3510,
+  "sizes": {
+    "n_aux_classes": 11945,
+    "n_classes": 56191,
+    "n_individuals": 0,
+    "n_named_classes": 44244,
+    "n_roles": 9,
+    "rows": {
+      "class_assertion": 0,
+      "gci0": 61503,
+      "gci0_bot": 0,
+      "gci1": 11880,
+      "gci1_bot": 30,
+      "gci2": 19996,
+      "gci3": 11878,
+      "gci3_bot": 0,
+      "object_property_assertion": 0,
+      "role_chain": 6,
+      "role_inclusion": 3
+    }
+  },
+  "status": "ok",
+  "total_intervals": 37693,
+  "tp": 318173,
+  "wall_time_s": 612.8958327174187
+}

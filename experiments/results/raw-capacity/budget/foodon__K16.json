@@ -1,0 +1,107 @@
+{
+  "K": 16,
+  "check_model": {
+    "class_assertion": 0,
+    "gci0": 0,
+    "gci0_bot": 0,
+    "gci1": 0,
+    "gci1_bot": 0,
+    "gci2": 0,
+    "gci3": 0,
+    "gci3_bot": 0,
+    "non_degenerate_violations": 0,
+    "object_property_assertion": 0,
+    "role_chain": 0,
+    "role_inclusion": 0
+  },
+  "check_model_all_zero": true,
+  "consistent": true,
+  "dataset": "foodon",
+  "exact_max_runs": 642,
+  "exact_n_parameters": 153689,
+  "exact_total_intervals": 45040,
+  "fn": 0,
+  "fp": 13062228,
+  "iteration_log": [
+    {
+      "iteration": 1,
+      "least_model_time_s": 53.64116415800527,
+      "max_runs_before": 642,
+      "n_dead_blocks": 599,
+      "n_over": 180,
+      "new_facts": 319881
+    },
+    {
+      "iteration": 2,
+      "least_model_time_s": 62.012405548011884,
+      "max_runs_before": 150,
+      "n_dead_blocks": 599,
+      "n_over": 27,
+      "new_facts": 25337
+    },
+    {
+      "iteration": 3,
+      "least_model_time_s": 37.33922947617248,
+      "max_runs_before": 18,
+      "n_dead_blocks": 599,
+      "n_over": 9,
+      "new_facts": 880
+    },
+    {
+      "iteration": 4,
+      "least_model_time_s": 37.01041195192374,
+      "max_runs_before": 19,
+      "n_dead_blocks": 599,
+      "n_over": 1,
+      "new_facts": 266
+    }
+  ],
+  "iterations": 4,
+  "label_inflation": 2.9489902921017923,
+  "lossless": false,
+  "max_runs": 16,
+  "n_dead_blocks": 599,
+  "n_dead_blocks_exact": 1,
+  "n_entailed_pairs": 89839,
+  "n_extra_facts": 346364,
+  "n_held_pairs": 13152067,
+  "n_named_made_unsat": 459,
+  "n_named_satisfiable_exact": 28182,
+  "n_parameters": 118052,
+  "n_unsat_named": 459,
+  "n_unsat_named_exact": 0,
+  "nnz_labels": 545575,
+  "nnz_labels_exact": 194299,
+  "order_info": {
+    "order": "dfs"
+  },
+  "peak_rss_gb": 2.625650688,
+  "precision": 0.0068307894112765695,
+  "recall": 1.0,
+  "reference_available": true,
+  "role_products": 16362,
+  "sizes": {
+    "n_aux_classes": 952,
+    "n_classes": 29136,
+    "n_individuals": 359,
+    "n_named_classes": 28182,
+    "n_roles": 82,
+    "rows": {
+      "class_assertion": 0,
+      "gci0": 21795,
+      "gci0_bot": 0,
+      "gci1": 1267,
+      "gci1_bot": 495,
+      "gci2": 10719,
+      "gci3": 897,
+      "gci3_bot": 0,
+      "object_property_assertion": 0,
+      "role_chain": 18,
+      "role_inclusion": 59
+    }
+  },
+  "status": "ok",
+  "total_intervals": 34483,
+  "tp": 89839,
+  "wall_time_s": 191.35635848599486
+}

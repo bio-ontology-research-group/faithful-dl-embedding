@@ -1,0 +1,182 @@
+{
+  "K": 64,
+  "check_model": {
+    "class_assertion": 0,
+    "gci0": 0,
+    "gci0_bot": 0,
+    "gci1": 0,
+    "gci1_bot": 0,
+    "gci2": 0,
+    "gci3": 0,
+    "gci3_bot": 0,
+    "non_degenerate_violations": 0,
+    "object_property_assertion": 0,
+    "role_chain": 0,
+    "role_inclusion": 0
+  },
+  "check_model_all_zero": true,
+  "consistent": true,
+  "dataset": "go",
+  "exact_max_runs": 9958,
+  "exact_n_parameters": 1257320,
+  "exact_total_intervals": 408202,
+  "fn": 0,
+  "fp": 40014600,
+  "iteration_log": [
+    {
+      "iteration": 1,
+      "least_model_time_s": 69.13488242030144,
+      "max_runs_before": 9958,
+      "n_dead_blocks": 890,
+      "n_over": 961,
+      "new_facts": 3039460
+    },
+    {
+      "iteration": 2,
+      "least_model_time_s": 77.61325553804636,
+      "max_runs_before": 1472,
+      "n_dead_blocks": 959,
+      "n_over": 812,
+      "new_facts": 1506812
+    },
+    {
+      "iteration": 3,
+      "least_model_time_s": 90.29406981915236,
+      "max_runs_before": 925,
+      "n_dead_blocks": 1219,
+      "n_over": 390,
+      "new_facts": 1667343
+    },
+    {
+      "iteration": 4,
+      "least_model_time_s": 89.79836859181523,
+      "max_runs_before": 395,
+      "n_dead_blocks": 1219,
+      "n_over": 217,
+      "new_facts": 531941
+    },
+    {
+      "iteration": 5,
+      "least_model_time_s": 91.0495295599103,
+      "max_runs_before": 217,
+      "n_dead_blocks": 1219,
+      "n_over": 98,
+      "new_facts": 103597
+    },
+    {
+      "iteration": 6,
+      "least_model_time_s": 91.777028799057,
+      "max_runs_before": 211,
+      "n_dead_blocks": 1219,
+      "n_over": 54,
+      "new_facts": 49001
+    },
+    {
+      "iteration": 7,
+      "least_model_time_s": 91.58986893296242,
+      "max_runs_before": 182,
+      "n_dead_blocks": 1219,
+      "n_over": 47,
+      "new_facts": 31795
+    },
+    {
+      "iteration": 8,
+      "least_model_time_s": 91.62084960192442,
+      "max_runs_before": 245,
+      "n_dead_blocks": 1219,
+      "n_over": 18,
+      "new_facts": 25899
+    },
+    {
+      "iteration": 9,
+      "least_model_time_s": 91.64290056750178,
+      "max_runs_before": 127,
+      "n_dead_blocks": 1219,
+      "n_over": 16,
+      "new_facts": 11330
+    },
+    {
+      "iteration": 10,
+      "least_model_time_s": 92.09269877523184,
+      "max_runs_before": 167,
+      "n_dead_blocks": 1219,
+      "n_over": 13,
+      "new_facts": 9178
+    },
+    {
+      "iteration": 11,
+      "least_model_time_s": 91.77091166004539,
+      "max_runs_before": 75,
+      "n_dead_blocks": 1219,
+      "n_over": 13,
+      "new_facts": 1229
+    },
+    {
+      "iteration": 12,
+      "least_model_time_s": 91.84044203907251,
+      "max_runs_before": 70,
+      "n_dead_blocks": 1219,
+      "n_over": 6,
+      "new_facts": 601
+    },
+    {
+      "iteration": 13,
+      "least_model_time_s": 91.66454727947712,
+      "max_runs_before": 70,
+      "n_dead_blocks": 1219,
+      "n_over": 2,
+      "new_facts": 160
+    }
+  ],
+  "iterations": 13,
+  "label_inflation": 19.10346085091169,
+  "lossless": false,
+  "max_runs": 64,
+  "n_dead_blocks": 1219,
+  "n_dead_blocks_exact": 1,
+  "n_entailed_pairs": 318173,
+  "n_extra_facts": 6978346,
+  "n_held_pairs": 40332773,
+  "n_named_live": 43384,
+  "n_named_made_unsat": 860,
+  "n_named_satisfiable_exact": 44244,
+  "n_parameters": 694093,
+  "n_unsat_named": 860,
+  "n_unsat_named_exact": 0,
+  "nnz_labels": 13358095,
+  "nnz_labels_exact": 741800,
+  "order_info": {
+    "order": "dfs"
+  },
+  "peak_rss_gb": 7.389106176,
+  "precision": 0.007888696371062808,
+  "precision_live": 0.13421672205181387,
+  "recall": 1.0,
+  "recall_live": 1.0,
+  "reference_available": true,
+  "role_products": 86305,
+  "sizes": {
+    "n_aux_classes": 11945,
+    "n_classes": 56191,
+    "n_individuals": 0,
+    "n_named_classes": 44244,
+    "n_roles": 9,
+    "rows": {
+      "class_assertion": 0,
+      "gci0": 61503,
+      "gci0_bot": 0,
+      "gci1": 11880,
+      "gci1_bot": 30,
+      "gci2": 19996,
+      "gci3": 11878,
+      "gci3_bot": 0,
+      "object_property_assertion": 0,
+      "role_chain": 6,
+      "role_inclusion": 3
+    }
+  },
+  "status": "ok",
+  "total_intervals": 217589,
+  "tp": 318173,
+  "wall_time_s": 1187.3197327554226
+}

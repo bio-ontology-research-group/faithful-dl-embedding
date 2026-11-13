@@ -1,0 +1,64 @@
+{
+  "config": {
+    "checkpoint_path": "/mnt/data2/leechuck/tmp/gfe-runs/capacity-smoke/tk3__box2el__d2__s0.pt",
+    "dataset": "tk3",
+    "deg_eps": 0.001,
+    "device": "cpu",
+    "dim": 2,
+    "epochs": 200,
+    "hyperparameters": {
+      "batch_size": 32768,
+      "delta": 2.5,
+      "eval_gci_name": "gci0",
+      "learning_rate": 0.001,
+      "margin": 0.02,
+      "num_negs": 4,
+      "reg_factor": 0.2,
+      "validate_every": 10
+    },
+    "method": "box2el",
+    "model": "BoxSquaredEL",
+    "region_kind": "box",
+    "seed": 0
+  },
+  "crisp": {
+    "fn": 6,
+    "fp": 0,
+    "n_degenerate": 0,
+    "n_pred": 0,
+    "n_ref": 6,
+    "precision": 1.0,
+    "recall": 0.0,
+    "tp": 0
+  },
+  "modelness": {
+    "modelness_all": 0.0,
+    "modelness_gci0": 0.0,
+    "modelness_gci1": 0.0,
+    "modelness_gci1_bot": 0.0
+  },
+  "modelness_all": 0.0,
+  "n_named": 7,
+  "n_named_satisfiable_ref": 7,
+  "n_unsat_named": 0,
+  "n_unsat_named_ref": 0,
+  "params": {
+    "n_classes": 9,
+    "n_params_class": 54,
+    "n_params_total": 54
+  },
+  "params_per_class": 6.0,
+  "peak_rss_gb": 0.794488832,
+  "precision": 1.0,
+  "recall": 0.0,
+  "timings": {
+    "eval_s": 0.004447542829439044,
+    "mean_epoch_time_s": 0.003127256412990391,
+    "model_init_s": 0.02065275516360998,
+    "reference_s": 0.0016029919497668743,
+    "train_time_s": 0.6286825370043516,
+    "validate_every": 201,
+    "validated": false,
+    "wall_s": 0.6552122340071946
+  }
+}

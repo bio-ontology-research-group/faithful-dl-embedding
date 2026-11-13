@@ -1,0 +1,242 @@
+{
+  "check_model": {
+    "class_assertion": 0,
+    "gci0": 0,
+    "gci0_bot": 0,
+    "gci1": 0,
+    "gci1_bot": 0,
+    "gci2": 0,
+    "gci3": 0,
+    "gci3_bot": 0,
+    "non_degenerate_violations": 0,
+    "object_property_assertion": 0,
+    "role_chain": 0,
+    "role_inclusion": 0
+  },
+  "check_model_all_zero": true,
+  "check_model_time_s": 0.009277821984142065,
+  "dataset": "pizza",
+  "geometric": {
+    "elem_viol": 0.0,
+    "embed_dim": 2,
+    "epochs": 0,
+    "evaluate_model": {
+      "dead_ok": true,
+      "elem_viol": 0.0,
+      "exact": true,
+      "exact_tol1e-4": true,
+      "exist": 1.0,
+      "faithful_named": [
+        1.0,
+        1.0
+      ],
+      "faithful_named_precision": 1.0,
+      "faithful_named_recall": 1.0,
+      "n_dead_elements": 2,
+      "n_empty_classes": 2,
+      "n_false_dead": 0,
+      "region_viol": 0.0,
+      "region_viol_tol1e-4": 0.0
+    },
+    "exact": true,
+    "faithful_named_precision": 1.0,
+    "faithful_named_recall": 1.0,
+    "n_axioms_violated_by_depth": {
+      "0": 0,
+      "1e-2": 0,
+      "1e-3": 0,
+      "1e-4": 0,
+      "1e-5": 0
+    },
+    "n_components": 109,
+    "n_dead_elements": 2,
+    "n_empty_classes": 2,
+    "nb_elements": 109,
+    "region_viol": 0.0,
+    "time_s": 26.311291344929487
+  },
+  "intervals": {
+    "dfs": {
+      "all_classes": {
+        "hist": {
+          "1": 95,
+          "2": 3,
+          "4": 2,
+          "5": 6
+        },
+        "max": 5,
+        "mean": 1.3113207547169812,
+        "median": 1.0,
+        "n": 106,
+        "p95": 4.75,
+        "share_one": 0.8962264150943396,
+        "total": 139
+      },
+      "membership_equals_labels": true,
+      "n_parameters": 836,
+      "named_classes": {
+        "hist": {
+          "1": 90,
+          "2": 2,
+          "4": 2,
+          "5": 3
+        },
+        "max": 5,
+        "mean": 1.2061855670103092,
+        "median": 1.0,
+        "n": 97,
+        "p95": 2.3999999999999773,
+        "share_one": 0.9278350515463918,
+        "total": 117
+      },
+      "order": "dfs",
+      "role_products": 186,
+      "time_s": 0.002901399042457342,
+      "total_intervals": 139
+    },
+    "identity": {
+      "all_classes": {
+        "hist": {
+          "1": 75,
+          "17-32": 6,
+          "2": 10,
+          "3": 5,
+          "4": 3,
+          "5": 1,
+          "6": 1,
+          "7": 3,
+          "9-16": 2
+        },
+        "max": 25,
+        "mean": 2.8679245283018866,
+        "median": 1.0,
+        "n": 106,
+        "p95": 15.5,
+        "share_one": 0.7075471698113207,
+        "total": 304
+      },
+      "membership_equals_labels": true,
+      "n_parameters": 1634,
+      "named_classes": {
+        "hist": {
+          "1": 73,
+          "17-32": 5,
+          "2": 10,
+          "3": 2,
+          "4": 3,
+          "5": 1,
+          "6": 1,
+          "9-16": 2
+        },
+        "max": 25,
+        "mean": 2.597938144329897,
+        "median": 1.0,
+        "n": 97,
+        "p95": 12.199999999999932,
+        "share_one": 0.7525773195876289,
+        "total": 252
+      },
+      "order": "identity",
+      "role_products": 342,
+      "time_s": 0.0004480790812522173,
+      "total_intervals": 304
+    }
+  },
+  "least_model": {
+    "consistent": true,
+    "method": "iteration",
+    "n_blocks": 109,
+    "n_edges": 389,
+    "n_live_blocks": 106,
+    "n_sweeps": 6,
+    "n_unsat_classes": 2,
+    "n_unsat_named": 2,
+    "nnz_labels": 490,
+    "peak_rss_gb_after": 0.707022848,
+    "peak_rss_gb_before": 0.68702208,
+    "wall_time_s": 0.9061858679633588
+  },
+  "lp": {
+    "all_equal": true,
+    "max_fractionality": 0.0,
+    "n_constraints_est": 2906594,
+    "n_variables": 107038,
+    "runs": [
+      {
+        "equal_to_iteration": true,
+        "lp_max_fractionality": 0.0,
+        "lp_objective": 899.0,
+        "objective": "ones",
+        "wall_time_s": 23.077248332090676
+      },
+      {
+        "equal_to_iteration": true,
+        "lp_max_fractionality": 0.0,
+        "lp_objective": 450.74195062455243,
+        "objective": "random_seed1",
+        "wall_time_s": 24.043719365959987
+      },
+      {
+        "equal_to_iteration": true,
+        "lp_max_fractionality": 0.0,
+        "lp_objective": 455.22344356650797,
+        "objective": "random_seed2",
+        "wall_time_s": 21.679378407076
+      },
+      {
+        "equal_to_iteration": true,
+        "lp_max_fractionality": 0.0,
+        "lp_objective": 449.59536835619633,
+        "objective": "random_seed3",
+        "wall_time_s": 22.05726594501175
+      }
+    ]
+  },
+  "peak_rss_gb": 5.9087872,
+  "reference": {
+    "compare_time_s": 0.002413237001746893,
+    "exact_agreement": true,
+    "fn": 0,
+    "fp": 0,
+    "n_entailed_pairs": 224,
+    "n_named_satisfiable_ref": 97,
+    "n_pred_pairs": 224,
+    "n_unsat_named_disagree": 0,
+    "n_unsat_named_lm": 2,
+    "n_unsat_named_ref": 2,
+    "precision": 1.0,
+    "recall": 1.0,
+    "reference_time_s": 0.01428317604586482,
+    "source": "cm_cache",
+    "tp": 224,
+    "unsat_named_agree": true,
+    "unsat_named_ref_iris": [
+      "http://www.co-ode.org/ontologies/pizza/pizza.owl#CheeseyVegetableTopping",
+      "http://www.co-ode.org/ontologies/pizza/pizza.owl#IceCream"
+    ]
+  },
+  "seed": 0,
+  "sizes": {
+    "n_aux_classes": 8,
+    "n_classes": 109,
+    "n_individuals": 0,
+    "n_named_classes": 99,
+    "n_roles": 8,
+    "rows": {
+      "class_assertion": 0,
+      "gci0": 58,
+      "gci0_bot": 0,
+      "gci1": 6,
+      "gci1_bot": 398,
+      "gci2": 153,
+      "gci3": 9,
+      "gci3_bot": 0,
+      "object_property_assertion": 0,
+      "role_chain": 2,
+      "role_inclusion": 4
+    }
+  },
+  "table_build_time_s": 0.3259653188288212,
+  "table_source": "GroundedEL(dataset, embed_dim=1, n_components=1, n_role_components=1)",
+  "total_time_s": 121.96020425506867
+}

@@ -1,0 +1,66 @@
+{
+  "config": {
+    "checkpoint_path": "/mnt/data2/leechuck/tmp/gfe-runs/capacity-smoke/pizza__elbe__d2__s0.pt",
+    "dataset": "pizza",
+    "deg_eps": 0.001,
+    "device": "cpu",
+    "dim": 2,
+    "epochs": 200,
+    "hyperparameters": {
+      "batch_size": 32768,
+      "delta": 2.5,
+      "eval_gci_name": "gci0",
+      "learning_rate": 0.001,
+      "margin": 0.02,
+      "num_negs": 4,
+      "reg_factor": 0.2,
+      "validate_every": 10
+    },
+    "method": "elbe",
+    "model": "ELBE",
+    "region_kind": "box",
+    "seed": 0
+  },
+  "crisp": {
+    "fn": 195,
+    "fp": 626,
+    "n_degenerate": 6,
+    "n_pred": 655,
+    "n_ref": 224,
+    "precision": 0.044274809160305344,
+    "recall": 0.12946428571428573,
+    "tp": 29
+  },
+  "modelness": {
+    "modelness_all": 0.08012820512820513,
+    "modelness_gci0": 0.08620689655172414,
+    "modelness_gci1": 0.0,
+    "modelness_gci1_bot": 0.09045226130653267,
+    "modelness_gci2": 0.0196078431372549,
+    "modelness_gci3": 0.6666666666666666
+  },
+  "modelness_all": 0.08012820512820513,
+  "n_named": 99,
+  "n_named_satisfiable_ref": 97,
+  "n_unsat_named": 6,
+  "n_unsat_named_ref": 2,
+  "params": {
+    "n_classes": 109,
+    "n_params_class": 436,
+    "n_params_total": 452
+  },
+  "params_per_class": 4.0,
+  "peak_rss_gb": 0.79403008,
+  "precision": 0.044274809160305344,
+  "recall": 0.12946428571428573,
+  "timings": {
+    "eval_s": 0.003330250969156623,
+    "mean_epoch_time_s": 0.0045409629307687285,
+    "model_init_s": 0.006714914925396442,
+    "reference_s": 0.0006310059688985348,
+    "train_time_s": 0.910722330911085,
+    "validate_every": 10,
+    "validated": true,
+    "wall_s": 0.9245029950980097
+  }
+}

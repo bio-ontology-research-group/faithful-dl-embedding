@@ -1,0 +1,218 @@
+{
+  "check_model": {
+    "class_assertion": 0,
+    "gci0": 0,
+    "gci0_bot": 0,
+    "gci1": 0,
+    "gci1_bot": 0,
+    "gci2": 0,
+    "gci3": 0,
+    "gci3_bot": 0,
+    "non_degenerate_violations": 0,
+    "object_property_assertion": 0,
+    "role_chain": 0,
+    "role_inclusion": 0
+  },
+  "check_model_all_zero": true,
+  "check_model_time_s": 0.0021083110477775335,
+  "dataset": "box2el_t1",
+  "geometric": {
+    "elem_viol": 0.0,
+    "embed_dim": 2,
+    "epochs": 0,
+    "evaluate_model": {
+      "dead_ok": true,
+      "elem_viol": 0.0,
+      "exact": true,
+      "exact_tol1e-4": true,
+      "exist": 1.0,
+      "faithful_named": [
+        1.0,
+        1.0
+      ],
+      "faithful_named_precision": 1.0,
+      "faithful_named_recall": 1.0,
+      "n_dead_elements": 0,
+      "n_empty_classes": 0,
+      "n_false_dead": 0,
+      "region_viol": 0.0,
+      "region_viol_tol1e-4": 0.0
+    },
+    "exact": true,
+    "faithful_named_precision": 1.0,
+    "faithful_named_recall": 1.0,
+    "n_axioms_violated_by_depth": {
+      "0": 0,
+      "1e-2": 0,
+      "1e-3": 0,
+      "1e-4": 0,
+      "1e-5": 0
+    },
+    "n_components": 7,
+    "n_dead_elements": 0,
+    "n_empty_classes": 0,
+    "nb_elements": 7,
+    "region_viol": 0.0,
+    "time_s": 0.11380719789303839
+  },
+  "intervals": {
+    "dfs": {
+      "all_classes": {
+        "hist": {
+          "1": 6
+        },
+        "max": 1,
+        "mean": 1.0,
+        "median": 1.0,
+        "n": 6,
+        "p95": 1.0,
+        "share_one": 1.0,
+        "total": 6
+      },
+      "membership_equals_labels": true,
+      "n_parameters": 15,
+      "named_classes": {
+        "hist": {
+          "1": 5
+        },
+        "max": 1,
+        "mean": 1.0,
+        "median": 1.0,
+        "n": 5,
+        "p95": 1.0,
+        "share_one": 1.0,
+        "total": 5
+      },
+      "order": "dfs",
+      "role_products": 1,
+      "time_s": 0.00046011898666620255,
+      "total_intervals": 6
+    },
+    "identity": {
+      "all_classes": {
+        "hist": {
+          "1": 6
+        },
+        "max": 1,
+        "mean": 1.0,
+        "median": 1.0,
+        "n": 6,
+        "p95": 1.0,
+        "share_one": 1.0,
+        "total": 6
+      },
+      "membership_equals_labels": true,
+      "n_parameters": 15,
+      "named_classes": {
+        "hist": {
+          "1": 5
+        },
+        "max": 1,
+        "mean": 1.0,
+        "median": 1.0,
+        "n": 5,
+        "p95": 1.0,
+        "share_one": 1.0,
+        "total": 5
+      },
+      "order": "identity",
+      "role_products": 1,
+      "time_s": 0.00026874011382460594,
+      "total_intervals": 6
+    }
+  },
+  "least_model": {
+    "consistent": true,
+    "method": "iteration",
+    "n_blocks": 7,
+    "n_edges": 1,
+    "n_live_blocks": 6,
+    "n_sweeps": 2,
+    "n_unsat_classes": 0,
+    "n_unsat_named": 0,
+    "nnz_labels": 11,
+    "peak_rss_gb_after": 0.704237568,
+    "peak_rss_gb_before": 0.703778816,
+    "wall_time_s": 0.004582122899591923
+  },
+  "lp": {
+    "all_equal": true,
+    "max_fractionality": 0.0,
+    "n_constraints_est": 161,
+    "n_variables": 105,
+    "runs": [
+      {
+        "equal_to_iteration": true,
+        "lp_max_fractionality": 0.0,
+        "lp_objective": 14.0,
+        "objective": "ones",
+        "wall_time_s": 0.00607004901394248
+      },
+      {
+        "equal_to_iteration": true,
+        "lp_max_fractionality": 0.0,
+        "lp_objective": 8.409441618252433,
+        "objective": "random_seed1",
+        "wall_time_s": 0.005104757845401764
+      },
+      {
+        "equal_to_iteration": true,
+        "lp_max_fractionality": 0.0,
+        "lp_objective": 6.817680965135784,
+        "objective": "random_seed2",
+        "wall_time_s": 0.004856254905462265
+      },
+      {
+        "equal_to_iteration": true,
+        "lp_max_fractionality": 0.0,
+        "lp_objective": 7.1543638556797875,
+        "objective": "random_seed3",
+        "wall_time_s": 0.004872556077316403
+      }
+    ]
+  },
+  "peak_rss_gb": 0.706347008,
+  "reference": {
+    "compare_time_s": 0.0016278389375656843,
+    "exact_agreement": true,
+    "fn": 0,
+    "fp": 0,
+    "n_entailed_pairs": 0,
+    "n_named_satisfiable_ref": 5,
+    "n_pred_pairs": 0,
+    "n_unsat_named_disagree": 0,
+    "n_unsat_named_lm": 0,
+    "n_unsat_named_ref": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "reference_time_s": 0.001941006164997816,
+    "source": "cm_cache",
+    "tp": 0,
+    "unsat_named_agree": true,
+    "unsat_named_ref_iris": []
+  },
+  "seed": 0,
+  "sizes": {
+    "n_aux_classes": 0,
+    "n_classes": 7,
+    "n_individuals": 0,
+    "n_named_classes": 5,
+    "n_roles": 1,
+    "rows": {
+      "class_assertion": 0,
+      "gci0": 0,
+      "gci0_bot": 0,
+      "gci1": 0,
+      "gci1_bot": 1,
+      "gci2": 1,
+      "gci3": 2,
+      "gci3_bot": 0,
+      "object_property_assertion": 0,
+      "role_chain": 0,
+      "role_inclusion": 0
+    }
+  },
+  "table_build_time_s": 0.011639988981187344,
+  "table_source": "GroundedEL(dataset, embed_dim=1, n_components=1, n_role_components=1)",
+  "total_time_s": 0.17163634905591607
+}

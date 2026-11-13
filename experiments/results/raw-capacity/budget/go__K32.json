@@ -1,0 +1,110 @@
+{
+  "K": 32,
+  "check_model": {
+    "class_assertion": 0,
+    "gci0": 0,
+    "gci0_bot": 0,
+    "gci1": 0,
+    "gci1_bot": 0,
+    "gci2": 0,
+    "gci3": 0,
+    "gci3_bot": 0,
+    "non_degenerate_violations": 0,
+    "object_property_assertion": 0,
+    "role_chain": 0,
+    "role_inclusion": 0
+  },
+  "check_model_all_zero": true,
+  "consistent": true,
+  "dataset": "go",
+  "exact_max_runs": 9958,
+  "exact_n_parameters": 1257320,
+  "exact_total_intervals": 408202,
+  "fn": 0,
+  "fp": 1279220404,
+  "iteration_log": [
+    {
+      "iteration": 1,
+      "least_model_time_s": 119.81832376867533,
+      "max_runs_before": 9958,
+      "n_dead_blocks": 40851,
+      "n_over": 1629,
+      "new_facts": 7223964
+    },
+    {
+      "iteration": 2,
+      "least_model_time_s": 119.61420260369778,
+      "max_runs_before": 71,
+      "n_dead_blocks": 40851,
+      "n_over": 4,
+      "new_facts": 3183
+    },
+    {
+      "iteration": 3,
+      "least_model_time_s": 119.8496116399765,
+      "max_runs_before": 43,
+      "n_dead_blocks": 40851,
+      "n_over": 3,
+      "new_facts": 2238
+    },
+    {
+      "iteration": 4,
+      "least_model_time_s": 121.23866022005677,
+      "max_runs_before": 35,
+      "n_dead_blocks": 40851,
+      "n_over": 3,
+      "new_facts": 90
+    }
+  ],
+  "iterations": 4,
+  "label_inflation": 3.231919191919192,
+  "lossless": false,
+  "max_runs": 32,
+  "n_dead_blocks": 40851,
+  "n_dead_blocks_exact": 1,
+  "n_entailed_pairs": 318173,
+  "n_extra_facts": 7229475,
+  "n_held_pairs": 1279538577,
+  "n_named_live": 15327,
+  "n_named_made_unsat": 28917,
+  "n_named_satisfiable_exact": 44244,
+  "n_parameters": 49416,
+  "n_unsat_named": 28917,
+  "n_unsat_named_exact": 0,
+  "nnz_labels": 335958,
+  "nnz_labels_exact": 741800,
+  "order_info": {
+    "order": "dfs"
+  },
+  "peak_rss_gb": 7.389106176,
+  "precision": 0.0002486622957050556,
+  "precision_live": 0.4817488936239961,
+  "recall": 1.0,
+  "recall_live": 1.0,
+  "reference_available": true,
+  "role_products": 966,
+  "sizes": {
+    "n_aux_classes": 11945,
+    "n_classes": 56191,
+    "n_individuals": 0,
+    "n_named_classes": 44244,
+    "n_roles": 9,
+    "rows": {
+      "class_assertion": 0,
+      "gci0": 61503,
+      "gci0_bot": 0,
+      "gci1": 11880,
+      "gci1_bot": 30,
+      "gci2": 19996,
+      "gci3": 11878,
+      "gci3_bot": 0,
+      "object_property_assertion": 0,
+      "role_chain": 6,
+      "role_inclusion": 3
+    }
+  },
+  "status": "ok",
+  "total_intervals": 23259,
+  "tp": 318173,
+  "wall_time_s": 482.78346533328295
+}

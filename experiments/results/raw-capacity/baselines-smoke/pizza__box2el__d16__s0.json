@@ -1,0 +1,66 @@
+{
+  "config": {
+    "checkpoint_path": "/mnt/data2/leechuck/tmp/gfe-runs/capacity-smoke/pizza__box2el__d16__s0.pt",
+    "dataset": "pizza",
+    "deg_eps": 0.001,
+    "device": "cpu",
+    "dim": 16,
+    "epochs": 200,
+    "hyperparameters": {
+      "batch_size": 32768,
+      "delta": 2.5,
+      "eval_gci_name": "gci0",
+      "learning_rate": 0.001,
+      "margin": 0.02,
+      "num_negs": 4,
+      "reg_factor": 0.2,
+      "validate_every": 10
+    },
+    "method": "box2el",
+    "model": "BoxSquaredEL",
+    "region_kind": "box",
+    "seed": 0
+  },
+  "crisp": {
+    "fn": 33,
+    "fp": 7393,
+    "n_degenerate": 79,
+    "n_pred": 7584,
+    "n_ref": 224,
+    "precision": 0.025184599156118145,
+    "recall": 0.8526785714285714,
+    "tp": 191
+  },
+  "modelness": {
+    "modelness_all": 0.0,
+    "modelness_gci0": 0.0,
+    "modelness_gci1": 0.0,
+    "modelness_gci1_bot": 0.0,
+    "modelness_gci2": 0.0,
+    "modelness_gci3": 0.0
+  },
+  "modelness_all": 0.0,
+  "n_named": 99,
+  "n_named_satisfiable_ref": 97,
+  "n_unsat_named": 81,
+  "n_unsat_named_ref": 2,
+  "params": {
+    "n_classes": 109,
+    "n_params_class": 5232,
+    "n_params_total": 5744
+  },
+  "params_per_class": 48.0,
+  "peak_rss_gb": 0.793526272,
+  "precision": 0.025184599156118145,
+  "recall": 0.8526785714285714,
+  "timings": {
+    "eval_s": 0.025522510055452585,
+    "mean_epoch_time_s": 0.005893446832196787,
+    "model_init_s": 0.006373509997501969,
+    "reference_s": 0.0006066120695322752,
+    "train_time_s": 1.1813408110756427,
+    "validate_every": 10,
+    "validated": true,
+    "wall_s": 1.217673263978213
+  }
+}
