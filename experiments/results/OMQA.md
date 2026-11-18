@@ -129,3 +129,9 @@ t 0.3 .723 / .547. Rule closure: decay 1, no score floor, nothing tuned; orix jo
 Other diagnostics (LUBM plain, unfiltered TBox): K 1 vs K 2 boxes D .43–.47 vs .46–.48; of the hard D answers of the
 K 2 seed-0 model 48 % are in the top 3, 6 % are true in the model but outranked, 47 % are not true in the model
 (`ensemble.py --diagnose`, job 398953).
+
+Three seeds, verified TBox (LUBM, K 2): plain D .476 ± .009, I+D .343; enriched D .760 ± .001, I+D .546.
+K sweep (LUBM plain, unfiltered TBox, D): K 1 .455 (3 seeds), K 2 .463 (5), K 4 .476 (3), K 8 .493 (3), K 16 .491 (1).
+Ensembles of the five K 2 models (`runs/qa/ensembles/ens_lubm_plain_K2_s0-4.json`, D / I+D): single .466 / .335;
+mean of scores .519 / .382; z-mean .501 / .372; RRF .508 / .369; Borda .507 / .368; min .495 / .359; median .494 / .360;
+vote .489 / .365; max .473 / .339. Hard D answers true in all five models .457, in at least one .523.
