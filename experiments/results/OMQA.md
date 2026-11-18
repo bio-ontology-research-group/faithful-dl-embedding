@@ -89,3 +89,43 @@ published NELL numbers (which use a strong link predictor plus query rewriting);
 .66), and I+D inherits that. The remaining NELL gap sits in the role-composition shapes (3p ≈ .32, up ≈ .29), not in search (beam
 width settled), seeds (sd ≤ .005) or checkpoint selection. Schedule is the main lever on both KBs: LUBM saturates near 400 epochs (D .720), NELL ρ = 1 reaches D .707 at 200 epochs and
 is still rising; seeds for both and a 400-epoch NELL run are in progress (2026-11-10) and will replace the headline rows.
+
+## Query2Box, our runs of the released code (orix jobs 390577/390578, 2026-11-15)
+
+Authors' `code_q2b_onto` with the `example.sh` settings (d 400, γ 24, batch 512, 128 negatives, lr 1e-4, 450,000 steps,
+one seed); macro HITS@3 over the nine shapes at step 450,000. `plain` = plain training queries, `gen` = the benchmark's
+ontology-generalised training queries.
+
+| KB | training queries | D | I+D |
+|---|---|---|---|
+| LUBM | plain | 0.166 | 0.167 |
+| LUBM | gen | 0.435 | 0.412 |
+| NELL | plain | 0.523 | 0.458 |
+| NELL | gen | 0.734 | 0.641 |
+
+O2B (`--tbox --mean_gen`) did not finish: about 5,000–15,000 of 450,000 steps after 7 hours in the same jobs
+(NELL `gen` cell: BrokenPipeError in the data loader). The published O2B numbers are used instead.
+
+## Verified TBox and "deduce from predicted facts" (2026-11-18; code in `experiments/omqa/hybrid/`)
+
+The TBox mined from the generalisation files contains 33 LUBM axioms (24 range axioms, 9 class inclusions) that do not
+hold in the benchmark's own enriched training answers (`hybrid/tbox.py`, list in `~/tmp/gfe/hybrid/tbox_lubm.verify.log`;
+NELL: all axioms hold). Verified TBox: `~/tmp/gfe/hybrid/tbox_{lubm,nell}.json`; tables `*_vt` (`build_eomqa.py --tbox-json`).
+All LUBM numbers above this section use the unfiltered TBox.
+
+Macro HITS@3 (D / I+D), one seed / one run each:
+
+| KB | input | exact reasoning (`hybrid/exact_ceiling.py`) | GroundedEL (K 2, d 128, 400 ep, beam 16) | QTO | QTO + rule closure (`hybrid/closure_adj.py`) |
+|---|---|---|---|---|---|
+| LUBM | plain | .740 / .491 (unfiltered TBox .696 / .479) | .488 / .352 (unfiltered .461 / .332) | .076 / .095 | .847 / .702 |
+| LUBM | enriched | .845 / .558 (unfiltered .779 / .531) | .758 / .547 (unfiltered .707 / .490) | .876 / .720 | .905 / .747 |
+| NELL | plain | .730 / .497 | .516 / .437 | .527 / .494 | .968 / .837 |
+| NELL | enriched | .924 / .595 | .743 / .574 | .952 / .813 | .997 / .848 |
+
+GroundedEL with predicted facts added to the enriched LUBM input (QTO adjacency score ≥ t, at most 3 per (h, r);
+`hybrid/predicted_facts.py`): verified TBox t 0.5 .752 / .568, t 0.3 .740 / .575; unfiltered TBox t 0.5 .721 / .533,
+t 0.3 .723 / .547. Rule closure: decay 1, no score floor, nothing tuned; orix jobs 399149, 399150, 399310, 399372.
+
+Other diagnostics (LUBM plain, unfiltered TBox): K 1 vs K 2 boxes D .43–.47 vs .46–.48; of the hard D answers of the
+K 2 seed-0 model 48 % are in the top 3, 6 % are true in the model but outranked, 47 % are not true in the model
+(`ensemble.py --diagnose`, job 398953).

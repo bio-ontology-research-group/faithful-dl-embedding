@@ -212,6 +212,46 @@ def mine_tbox(root: Path) -> Dict[str, Any]:
     }
 
 
+def read_extra_triples(files: Iterable[str]) -> Set[Tuple[int, int, int]]:
+    """Read ``h<TAB>r<TAB>t[<TAB>score]`` lines (score ignored) into a set of int triples."""
+    out: Set[Tuple[int, int, int]] = set()
+    for f in files:
+        with open(f) as fh:
+            for line in fh:
+                parts = line.split()
+                if parts:
+                    out.add((int(parts[0]), int(parts[1]), int(parts[2])))
+    return out
+
+
+_TBOX_JSON_KEYS = {"class_inclusion": "class_inclusion", "range_axiom": "range_axiom_exists_rinv_sub_A", "role_inclusion": "role_inclusion"}
+
+
+def read_tbox_json(path: str, mined: Dict[str, Any]) -> Tuple[Dict[str, List[Tuple[int, int]]], Dict[str, Any]]:
+    """Axioms of a resolved tbox json (``experiments.omqa.hybrid.tbox``) replacing the mined ones in the tables.
+
+    Returns ``({kind: sorted axioms}, report)`` for kind in class_inclusion / range_axiom / role_inclusion, with the
+    report giving per kind the number of axioms used and the numbers dropped / added relative to the mined TBox.
+    Only the axioms are taken from the file: classes, relations and the inverse pairing stay those of the build.
+    """
+    d = json.loads(Path(path).read_text())
+    if d.get("T_inverse_type") != mined["type_inv"]:
+        raise ValueError(f"{path}: T_inverse_type {d.get('T_inverse_type')} != mined type_inv {mined['type_inv']}")
+    axioms: Dict[str, List[Tuple[int, int]]] = {}
+    rep: Dict[str, Any] = {"file": str(path)}
+    for kind, key in _TBOX_JSON_KEYS.items():
+        if key not in d:
+            raise ValueError(f"{path}: missing key {key!r}")
+        got = {(int(a), int(b)) for a, b in d[key]}
+        ref = {(int(a), int(b)) for a, b in mined[kind]}
+        axioms[kind] = sorted(got)
+        rep[kind] = {"mined": len(ref), "used": len(got), "dropped": len(ref - got), "added": len(got - ref),
+                     "dropped_axioms": sorted(ref - got), "added_axioms": sorted(got - ref)}
+    # the file's inverse pairing is not used (the build's pairing is), only compared with it in main()
+    rep["_json_inverse"] = {int(k): (None if v is None else int(v)) for k, v in d.get("inverse", {}).items()}
+    return axioms, rep
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--data-root", required=True, help="e.g. .../data_lubm (contains train_plain/, test_ded/, ...)")
@@ -221,6 +261,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--even-odd-inverses", action="store_true", help="force the (2j, 2j+1) inverse convention")
     ap.add_argument("--inverse-method", choices=["threshold", "matching"], default="matching",
                     help="threshold: accept s=inv(r) when the one-sided match >= --inverse-min-match; matching: greedy perfect matching on the symmetric score")
+    ap.add_argument("--extra-triples", nargs="+", default=None, metavar="FILE",
+                    help="tsv files 'h<TAB>r<TAB>t[<TAB>score]' (score ignored) merged into the ABox triples as if they were 1p "
+                         "training answers (inverse pairing and TBox mining are not affected)")
+    ap.add_argument("--tbox-json", default=None, metavar="FILE",
+                    help="resolved tbox json (experiments.omqa.hybrid.tbox): its class inclusions, range axioms and role "
+                         "inclusions replace the mined ones in gci0 / gci3 / role_inclusion; classes, roles, ids, inverse "
+                         "pairing and ABox are unchanged")
     args = ap.parse_args(argv)
     root = Path(args.data_root)
     out = Path(args.out)
@@ -228,11 +275,26 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     tbox = mine_tbox(root)
     t_inv = tbox["type_inv"]
+    # axioms of the tables: the mined ones, or those of --tbox-json (everything below except gci0 / gci3 /
+    # role_inclusion is computed from the mined TBox, so classes, roles and ids do not depend on this choice)
+    ax: Dict[str, Any] = tbox
+    tbox_json_report = None
+    if args.tbox_json:
+        ax, tbox_json_report = read_tbox_json(args.tbox_json, tbox)
     train_sets = [("train_plain", "train", ("answers",))]
     if args.setting == "onto":
         train_sets.append(("train_onto", "train", ("answers",)))
     abox_1p = collect_1p(root, train_sets)
     triples = {(e, r, a) for (e, r), ans in abox_1p.items() for a in ans}
+    extra_report = None
+    if args.extra_triples:
+        extra = read_extra_triples(args.extra_triples)
+        n_new = len(extra - triples)
+        type_heads = {e for e, r, _ in triples if r == t_inv} if t_inv is not None else set()
+        new_class_heads = ({e for e, r, _ in extra if r == t_inv} - type_heads - set(tbox["classes"])) if t_inv is not None else set()
+        triples |= extra
+        extra_report = {"files": [str(f) for f in args.extra_triples], "n_read": len(extra), "n_new": n_new,
+                        "n_new_class_entities_from_type_inv_heads": len(new_class_heads)}
     # all 1p pairs incl. valid/test easy+hard answers, only for inverse inference (never for training)
     all_sets = train_sets + [(d, p, ("easy-answers", "hard-answers")) for d in ("test_ind", "test_ded", "test_ind_ded") for p in ("valid", "test")]
     all_1p = collect_1p(root, all_sets)
@@ -292,11 +354,16 @@ def main(argv: Optional[List[str]] = None) -> int:
             role_assertion.add((iid[e], rid[r], iid[a]))
             if inv.get(r) is not None and inv[r] in rid:
                 role_assertion.add((iid[a], rid[inv[r]], iid[e]))
-    gci0 = sorted({(cid[a], cid[b]) for a, b in tbox["class_inclusion"] if a in cid and b in cid})
-    gci3 = sorted({(rid[inv[r]], top_id, cid[A]) for r, A in tbox["range_axiom"] if r in rid and inv.get(r) in rid and A in cid})
+    if tbox_json_report is not None:
+        json_inv = tbox_json_report.pop("_json_inverse")
+        tbox_json_report["inverse_differs_from_build"] = sorted(r for r, s in json_inv.items() if s is not None and r in inv and inv[r] != s)
+        tbox_json_report["class_inclusion_unexpressed"] = [(a, b) for a, b in ax["class_inclusion"] if not (a in cid and b in cid)]
+        tbox_json_report["role_inclusion_unexpressed"] = [(r, s) for r, s in ax["role_inclusion"] if not (r in rid and s in rid)]
+    gci0 = sorted({(cid[a], cid[b]) for a, b in ax["class_inclusion"] if a in cid and b in cid})
+    gci3 = sorted({(rid[inv[r]], top_id, cid[A]) for r, A in ax["range_axiom"] if r in rid and inv.get(r) in rid and A in cid})
     # range axiom ∃r⁻ ⊑ A could not be expressed when r has no inverse id: record them
-    gci3_unexpressed = [(r, A) for r, A in tbox["range_axiom"] if not (r in rid and inv.get(r) in rid and A in cid)]
-    role_inclusion = sorted({(rid[r], rid[s]) for r, s in tbox["role_inclusion"] if r in rid and s in rid})
+    gci3_unexpressed = [(r, A) for r, A in ax["range_axiom"] if not (r in rid and inv.get(r) in rid and A in cid)]
+    role_inclusion = sorted({(rid[r], rid[s]) for r, s in ax["role_inclusion"] if r in rid and s in rid})
 
     tables = {
         "class_index_dict": class_index, "individual_index_dict": ind_index, "object_property_index_dict": role_index,
@@ -318,6 +385,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         "n_role_inclusion": len(role_inclusion), "inverse_method": "even-odd" if args.even_odd_inverses else args.inverse_method,
         "role_inclusions_with_inverse_counterpart": f"{incl_consistent}/{len(incl)}", "mined_counts": {k: len(v) for k, v in tbox.items() if isinstance(v, list)},
     }
+    if extra_report is not None:
+        report["extra_triples"] = extra_report
+    if tbox_json_report is not None:
+        report["tbox_json"] = tbox_json_report
     (out / "build_report.json").write_text(json.dumps(report, indent=1))
     print(json.dumps({k: v for k, v in report.items() if k not in ("relations", "inverse_match")}, indent=1))
     return 0
